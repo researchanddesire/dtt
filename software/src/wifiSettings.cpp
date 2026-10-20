@@ -219,6 +219,11 @@ void notifyTrainingTask(void *pvParameters) {
         vTaskDelete(nullptr);
         return;
     }
+    if (trainerId.isEmpty()) {
+        ESP_LOGD(WIFI_TAG, "no trainer ID yet, skipping notifyTrainingTask");
+        vTaskDelete(nullptr);
+        return;
+    }
 
     JsonDocument doc;
     doc["trainerId"] = trainerId;
@@ -240,11 +245,15 @@ void notifyTrainingTask(void *pvParameters) {
 }
 #endif  // PROVISION
 
-#ifdef PROVISION
 String provisionError = "";
 
 void provisionTask(void *pvParameters) {
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    provisionError = "";
+    // Production arrives here already online; only the factory image may
+    // need to wait for Wi-Fi to settle.
+    if (WiFiClass::status() != WL_CONNECTED) {
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
 
     int retries = 0;
     while (WiFiClass::status() != WL_CONNECTED && retries < 10) {
@@ -315,13 +324,15 @@ bool getTrainerIdAndSerial() {
         return false;
     }
 
-    saveToEEPROM(String(trainerIdFromJson), serialNumberFromJson);
+    if (!saveToEEPROM(String(trainerIdFromJson), serialNumberFromJson)) {
+        provisionError = "Save failed";
+        return false;
+    }
     // Force the update step to resolve once using the newly provisioned
     // trainer ID.
     invalidateFirmwareUpdateDecision();
     return true;
 }
-#endif  // PROVISION
 
 #ifndef PROVISION
 void sessionFromJson(JsonDocument sessionJson) {
@@ -823,6 +834,11 @@ void getIsPaired() {
     // if not connected to wifi, return
     if (WiFiClass::status() != WL_CONNECTED) {
         dashboardState.isPaired = true;
+        return;
+    }
+    // Nothing to check against yet; provisioning runs before pairing.
+    if (trainerId.isEmpty()) {
+        dashboardState.isPaired = false;
         return;
     }
     JsonDocument doc;

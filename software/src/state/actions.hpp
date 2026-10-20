@@ -191,16 +191,8 @@ constexpr auto updateDevice = []() {
     }
 };
 
-#ifdef PROVISION
-constexpr auto drawProvisionSuccess = []() {
-    drawTextPage(TextPage{.header = "Provisioning",
-                          .content = "ID: " + trainerIdShort + String("\n #") +
-                                     String(serialNumber),
-                          .rightFooter = "Update",
-                          .showButton = true,
-                          .timeout = 0,
-                          .center = true,
-                          .y = 10});
+constexpr auto provisionTimedOut = []() {
+    provisionError = "Timed out";
 };
 
 constexpr auto drawProvisionError = []() {
@@ -211,6 +203,18 @@ constexpr auto drawProvisionError = []() {
                           .showButton = true,
                           .timeout = 0,
                           .center = true});
+};
+
+#ifdef PROVISION
+constexpr auto drawProvisionSuccess = []() {
+    drawTextPage(TextPage{.header = "Provisioning",
+                          .content = "ID: " + trainerIdShort + String("\n #") +
+                                     String(serialNumber),
+                          .rightFooter = "Update",
+                          .showButton = true,
+                          .timeout = 0,
+                          .center = true,
+                          .y = 10});
 };
 
 constexpr auto drawProvisionUpdateError = []() {

@@ -91,12 +91,11 @@ void drawTextPage(TextPage page);
 void drawQRCodePage(TextPage page);
 
 // Provisioning Page
-#ifdef PROVISION
 static const TextPage provisioningPage = {
     .header = "Provisioning",
-    .content = "One second, getting your trainer ID...",
+    .content = "Getting your trainer ID...",
+    .timeout = 45000,
     .center = true,
     .y = 10};
-#endif
 
 #endif  // TEXT_PAGES_H
