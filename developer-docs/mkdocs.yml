@@ -1,0 +1,31 @@
+site_name: DT Trainer Developer Docs
+site_url: https://dev.researchanddesire.com/dtt/
+repo_url: https://github.com/researchanddesire/DT_Trainer
+repo_name: DT_Trainer
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: cyan
+
+nav:
+  - Overview: index.md
+  - Architecture: architecture.md
+  - Testing: testing.md
+  - Hardware:
+      - Overview: hardware/overview.md
+      - Accessory Port: hardware/accessory-port.md
+      - Distance Sensor: hardware/distance-sensor.md
+  - Firmware:
+      - Device States: firmware/device-states.md
+      - Flashing & Streams: firmware/flashing.md
+      - Error Catalog: firmware/error-catalog.md
+      - Offline Cache: firmware/offline-cache.md
+      - Screen Capture: firmware/development-screen-capture.md
+      - Serial Identity: firmware/serial-identity.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences

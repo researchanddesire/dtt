@@ -1,0 +1,16 @@
+.pio/
+__pycache__/
+*.pyc
+local.settings.json
+.env
+.env.*
+compile_commands.json
+*.elf
+*.bin
+*.map
+*.log
+.DS_Store
+
+# Local development display captures
+captures/
+software/test/report.json

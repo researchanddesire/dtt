@@ -1,0 +1,78 @@
+{
+  "id": "session_881",
+  "settingsId": "settings_123",
+  "name": "DTT Master",
+  "description": "remove your gag",
+  "finalText": "Nice! You didn't choke!",
+  "toy": {
+    "id": "toy_590",
+    "name": "6\" Pink",
+    "description": "Our favorite toy!"
+  },
+  "segmentCount": 4,
+  "pageIdx": 0,
+  "durationMinutes": 30,
+  "segments": [
+    {
+      "id": "segment_004",
+      "name": "Custom Name 4",
+      "difficulty": "hard",
+      "type": "freeform",
+      "params": {
+        "target": 100,
+        "startPosition": 20,
+        "endPosition": 10,
+        "trainingDepthIncrease": 1,
+        "trainingSpeed": 100,
+        "targetWindow": 3
+      }
+    },
+    {
+      "id": "segment_001",
+      "name": "Repetition",
+      "difficulty": "easy",
+      "type": "repetition",
+      "params": {
+        "target": 3,
+        "startPosition": 18,
+        "endPosition": 0,
+        "trainingDepthIncrease": 2,
+        "trainingSpeed": 25,
+        "targetWindow": 3
+      }
+    },
+    {
+      "id": "segment_002",
+      "name": "Custom Name 2",
+      "difficulty": "expert",
+      "type": "bounce",
+      "params": {
+        "target": 5,
+        "startPosition": 20,
+        "endPosition": 10,
+        "trainingDepthIncrease": 0,
+        "trainingSpeed": 25,
+        "targetWindow": 3
+      },
+      "passFail": {
+        "enabled": true,
+        "threshold": 75,
+        "failureText": "Not fast enough! Try harder!"
+      }
+    },
+    {
+      "id": "segment_003",
+      "name": "Custom Name 3",
+      "difficulty": "medium",
+      "type": "endurance",
+      "params": {
+        "target": 30,
+        "startPosition": 20,
+        "endPosition": 10,
+        "trainingDepthIncrease": 0,
+        "trainingSpeed": 100,
+        "targetWindow": 3
+      }
+    }
+  ]
+}

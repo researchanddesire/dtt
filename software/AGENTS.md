@@ -1,0 +1,50 @@
+# AGENTS.md
+
+## Authorized Supabase Projects
+
+- Production/main firmware project ref: `acjajruwevyyatztbkdf`.
+- Staging firmware project ref: `meuaxbjzqrszxdvmacug`.
+- Every remote firmware publication or Supabase operation must explicitly
+  target the ref matching its named release track. Never use implicit CLI
+  linked-project state.
+
+## Branch and Release Policy
+
+- Persistent branches are lowercase `staging` and `main`.
+- Fetch before branching. Start feature and release work from `origin/staging`, then open the pull request back into `staging`.
+- Only urgent production bug fixes may target `main` directly. Start them from `origin/main`, open the pull request into `main`, and make the standalone word `hotfix` the first word of the PR title (case-insensitive).
+- Promote normal releases with a same-repository `staging` to `main` pull request only after every required build, unit, integration, artifact-verification, and DTT hardware validation succeeds.
+- Immediately merge every main hotfix back into `staging` with a `main` to `staging` pull request.
+- Squash feature and hotfix pull requests into one focused commit with a concise, imperative title. Merge long-lived branch synchronization pull requests (`staging` to `main` and `main` to `staging`) with a merge commit; never squash or rebase them.
+- Use matching branch names and linked pull requests for changes spanning RAD App or another firmware repository.
+- Staging firmware reports the `staging` track and checks `https://staging.researchanddesire.com`. Main firmware reports `main` and checks `https://dashboard.researchanddesire.com`.
+- Firmware is update-eligible only after its immutable Supabase artifacts and all required validation records verify. Missing hardware runners leave a release in `validating`; never bypass a gate.
+
+## Development Safety
+
+- Keep stable `hashId`, physical flash size, partition layout, migration hops, checksum, reboot, and rollback behavior covered by native and hardware tests.
+- Never commit credentials, local build products, or generated secrets.
+
+## PR hardware validation
+
+- Every PR into staging or main builds all hardware variants, including docs-only changes.
+- Install the exact staging bundle for the PR merge SHA; production still builds.
+- Require Build validation and Hardware validation in addition to existing checks.
+- Firmware bundles and hardware evidence are Actions artifacts, never tracked files.
+- The reviewed harness and fixture inventory live outside the runner work directory.
+- Never infer product identity or flash capacity from a COM port or advertising name.
+- Follow scripts/hil/README.md for enrollment, shared-device locks, and rollout.
+- Keep Wi-Fi credentials, fixture identities, and raw device logs outside the repository.
+- A missing device or incomplete three-minute observation must fail validation.
+
+## Development display capture
+
+- Development builds expose the read-only USB `screen` command; staging and production omit it.
+- Follow ../developer-docs/docs/firmware/development-screen-capture.md; use the display mutex for snapshots and keep serial transmission outside it.
+- Preserve the capture mirror when adding TFT bulk drawing paths. Keep capture files outside Git.
+
+## Serial identity
+
+- All firmware tracks expose the read-only boot/`info` identity described in ../developer-docs/docs/firmware/serial-identity.md.
+- Keep one serial input reader; development screen commands register with it.
+- Report target memory and measured memory separately; a label never authorizes flashing or motion.

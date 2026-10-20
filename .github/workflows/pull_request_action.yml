@@ -1,0 +1,150 @@
+name: PlatformIO CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: software
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Check PlatformIO Project
+        run: |
+          pio check --skip-packages --fail-on-defect high -e development -f src
+
+      - name: Run native publishing metadata tests
+        run: pio test -e test_native
+
+      - name: Build staging and production V1/V2 firmware and migration bridges
+        run: |
+          pio run -e staging-v1 -j 1
+          pio run -e staging-v2 -j 1
+          pio run -e migration-staging -j 1
+          pio run -e production-v1 -j 1
+          pio run -e production-v2 -j 1
+          pio run -e migration-production -j 1
+
+      - name: Verify firmware fits each approved OTA partition
+        run: |
+          python ../.github/scripts/check_firmware_size.py \
+            --environment staging-v1 \
+            --partition partition-v1.csv \
+            --partition-binary .pio/build/staging-v1/partitions.bin \
+            --firmware .pio/build/staging-v1/firmware.bin \
+            --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
+            --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
+          python ../.github/scripts/check_firmware_size.py \
+            --environment staging-v2 \
+            --partition partition-v2.csv \
+            --partition-binary .pio/build/staging-v2/partitions.bin \
+            --firmware .pio/build/staging-v2/firmware.bin \
+            --expected-partition-blob 87b066320a83be1d390fd4cdfea9d1b5b6bccea4 \
+            --expected-partition-binary-sha256 df8bb78d1134d502246d4ae7de59d397bc1d2529fa9c4affdd68aa78514e6c09
+          python ../.github/scripts/check_firmware_size.py \
+            --environment migration-staging \
+            --partition partition-v1.csv \
+            --partition-binary .pio/build/migration-staging/partitions.bin \
+            --firmware .pio/build/migration-staging/firmware.bin \
+            --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
+            --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
+          python ../.github/scripts/check_firmware_size.py \
+            --environment production-v1 \
+            --partition partition-v1.csv \
+            --partition-binary .pio/build/production-v1/partitions.bin \
+            --firmware .pio/build/production-v1/firmware.bin \
+            --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
+            --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
+          python ../.github/scripts/check_firmware_size.py \
+            --environment production-v2 \
+            --partition partition-v2.csv \
+            --partition-binary .pio/build/production-v2/partitions.bin \
+            --firmware .pio/build/production-v2/firmware.bin \
+            --expected-partition-blob 87b066320a83be1d390fd4cdfea9d1b5b6bccea4 \
+            --expected-partition-binary-sha256 df8bb78d1134d502246d4ae7de59d397bc1d2529fa9c4affdd68aa78514e6c09
+          python ../.github/scripts/check_firmware_size.py \
+            --environment migration-production \
+            --partition partition-v1.csv \
+            --partition-binary .pio/build/migration-production/partitions.bin \
+            --firmware .pio/build/migration-production/firmware.bin \
+            --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
+            --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
+          python ../.github/scripts/check_migration_image.py \
+            --expected-flash-size-bytes 4194304 \
+            .pio/build/staging-v1/firmware.bin
+          python ../.github/scripts/check_migration_image.py \
+            --expected-flash-size-bytes 16777216 \
+            .pio/build/staging-v2/firmware.bin
+          python ../.github/scripts/check_migration_image.py \
+            --expected-flash-size-bytes 16777216 \
+            .pio/build/migration-staging/firmware.bin
+          python ../.github/scripts/check_migration_image.py \
+            --expected-flash-size-bytes 4194304 \
+            .pio/build/production-v1/firmware.bin
+          python ../.github/scripts/check_migration_image.py \
+            --expected-flash-size-bytes 16777216 \
+            .pio/build/production-v2/firmware.bin
+          python ../.github/scripts/check_migration_image.py \
+            --expected-flash-size-bytes 16777216 \
+            .pio/build/migration-production/firmware.bin
+
+      - name: Build and validate staging and production web installers
+        run: |
+          for environment in staging-v1 production-v1; do
+            python ../.github/scripts/build_web_installer.py \
+              --profile esp32-4mb \
+              --build-dir ".pio/build/$environment" \
+              --output ".pio/build/$environment/web-installer.bin"
+          done
+          for environment in staging-v2 production-v2; do
+            python ../.github/scripts/build_web_installer.py \
+              --profile esp32-16mb \
+              --build-dir ".pio/build/$environment" \
+              --output ".pio/build/$environment/web-installer.bin"
+          done
+
+      - name: Test immutable publisher
+        run: |
+          python ../.github/scripts/test_check_firmware_size.py
+          python ../.github/scripts/test_check_migration_image.py
+          python ../.github/scripts/test_build_web_installer.py
+          python ../.github/scripts/test_download_verified_release.py
+          python ../.github/scripts/test_publish_immutable_firmware.py
+          python ../.github/scripts/test_release_workflow.py
+          python scripts/test_release_version.py
+
+  check_docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: software
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify legacy documentation remains retired
+        run: |
+          if [[ -d Documentation ]]; then
+            echo "The retired in-repository documentation workspace was restored"
+            exit 1
+          fi

@@ -1,0 +1,4 @@
+# legacy-region-sha256 migrated-region-sha256 image-size hash-offset old-header new-header
+# The migrated image is the byte-exact deployed bootloader with only its
+# 4 MiB flash-size header changed to 16 MiB and its validation hash recomputed.
+5bb2ac0d7967c9489c68f20079b8f5e420443c488a9f2a2f72c5874ecafad1b8 5e0ac2523a9093bdbfea824a55b6cdbe9f68bcfb61e0596c4f0e2234569af011 17536 17504 20 40

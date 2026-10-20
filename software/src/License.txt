@@ -1,0 +1,3 @@
+First-party firmware source is licensed under Mozilla Public License 2.0.
+See the root LICENSE and LICENSES/MPL-2.0.txt.
+Existing copyright notices and third-party licenses remain applicable.

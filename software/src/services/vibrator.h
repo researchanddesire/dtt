@@ -1,0 +1,33 @@
+#ifndef VIBRATOR_H
+#define VIBRATOR_H
+
+#ifndef PROVISION
+
+#define VIBRATOR_TAG "Vibrator"
+
+#include "services/board.hpp"
+
+class Vibrator {
+  private:
+    unsigned long previousTickTime = 0;
+    double currentPercentagePower = 0.0;
+    double targetPercentagePower = 0.0;
+    double fadeStartPower = 0.0;
+    unsigned long fadeStartTime = 0;
+    bool isFading = false;
+
+  public:
+    Vibrator() = default;
+
+    static void off();
+
+    static void tick();
+};
+
+extern Vibrator vibratorInstance;
+
+void initVibratorService();
+
+#endif  // PROVISION
+
+#endif  // VIBRATOR_H

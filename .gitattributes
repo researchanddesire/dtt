@@ -1,0 +1,18 @@
+* -text
+*.step filter=lfs diff=lfs merge=lfs -text
+*.stp filter=lfs diff=lfs merge=lfs -text
+*.stl filter=lfs diff=lfs merge=lfs -text
+*.kicad_pcb filter=lfs diff=lfs merge=lfs -text
+*.kicad_pro filter=lfs diff=lfs merge=lfs -text
+*.kicad_sch filter=lfs diff=lfs merge=lfs -text
+
+# Keep the released DTT assembly downloadable without Git LFS.
+hardware/cad/DTT.step -filter -diff -merge -text
+
+# Keep the editable PCB and browser preview directly downloadable.
+hardware/pcb/kicad-rev4/217A_dttrainer_rev4/*.kicad_pcb -filter -diff -merge -text
+hardware/pcb/kicad-rev4/217A_dttrainer_rev4/*.kicad_pro -filter -diff -merge -text
+hardware/pcb/kicad-rev4/217A_dttrainer_rev4/*.kicad_sch -filter -diff -merge -text
+assembly-docs/assets/kicanvas/kicad-rev4/217A_dttrainer_rev4/*.kicad_pcb -filter -diff -merge -text
+# Preserve Simple Docs formatting, including Markdown hard line breaks.
+docs/** whitespace=-blank-at-eol,-blank-at-eof

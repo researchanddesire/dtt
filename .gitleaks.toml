@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+# Release builds receive the dashboard API credential from the environment.
+[[rules]]
+id = "dtt-dashboard-api-credential"
+description = "DTT dashboard API credential committed as a build flag"
+regex = '''RAD_PUBLIC_KEY="\\"([A-Za-z0-9+/_-]{16,}={0,2})\\""'''
+secretGroup = 1
+keywords = ["rad_public_key"]
+
+[[allowlists]]
+description = "Published non-secret ES256 provenance test vector"
+paths = ['''^\.github/scripts/firmware_provenance_test_vector\.json$''']

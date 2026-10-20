@@ -1,0 +1,70 @@
+Reference,Value,Footprint,LCSC,Populate
+C1,470uF / 6.3V,217A_dttrainer_rev4:C1,DNP,No
+C2,10uF,217A_dttrainer_rev4:C2,C237435,Yes
+C3,100nF,217A_dttrainer_rev4:C3,C519438,Yes
+C4,1uF,217A_dttrainer_rev4:C4,C106248,Yes
+C5,100nF,217A_dttrainer_rev4:C5,C108079,Yes
+C6,100nF,217A_dttrainer_rev4:C6,C108079,Yes
+C7,10uF,217A_dttrainer_rev4:C7,C109457,Yes
+C8,10uF,217A_dttrainer_rev4:C8,C89827,Yes
+C9,1uF,217A_dttrainer_rev4:C9,C106248,Yes
+C10,100nF,217A_dttrainer_rev4:C10,C108079,Yes
+C11,100uF,217A_dttrainer_rev4:C11,C15008,Yes
+C12,100uF,217A_dttrainer_rev4:C12,C15008,Yes
+C13,100uF,217A_dttrainer_rev4:C13,C15008,Yes
+C14,100uF,217A_dttrainer_rev4:C14,C15008,Yes
+C15,100uF,217A_dttrainer_rev4:C15,C15008,Yes
+C16,1uF,217A_dttrainer_rev4:C16,C106248,Yes
+C17,10uF,217A_dttrainer_rev4:C17,C89827,Yes
+C18,10uF,217A_dttrainer_rev4:C18,C89827,Yes
+C19,1uF,217A_dttrainer_rev4:C19,C106248,Yes
+D1,B5819W,217A_dttrainer_rev4:D1,C22463588,Yes
+D2,CHARGE,217A_dttrainer_rev4:D2,C94868,Yes
+J1,TYPE-C-31-M-12,217A_dttrainer_rev4:J1,C165948,Yes
+J2,HC-ZH-7PLT,217A_dttrainer_rev4:J2,HC-ZH-7PLT,Yes
+J3,ESP PROG/NC,217A_dttrainer_rev4:J3,DNP,No
+J4,ANA/NC,217A_dttrainer_rev4:J4,DNP,No
+J5,3.5mm Jack,217A_dttrainer_rev4:J5,C431535,Yes
+J6,LiPo,217A_dttrainer_rev4:J6,C2763702,Yes
+M1,ESP32-WROOM-32D,217A_dttrainer_rev4:M1,C701343,Yes
+Q1,BC817,217A_dttrainer_rev4:Q1,C8658,Yes
+Q2,BC817,217A_dttrainer_rev4:Q2,C8658,Yes
+Q3,Si2301,217A_dttrainer_rev4:Q3,C727151,Yes
+Q4,MMBT4403,217A_dttrainer_rev4:Q4,C78864,Yes
+Q5,BC817,217A_dttrainer_rev4:Q5,C8658,Yes
+Q6,MMBT4403,217A_dttrainer_rev4:Q6,C78864,Yes
+Q7,BC817,217A_dttrainer_rev4:Q7,C8658,Yes
+R1,1K,217A_dttrainer_rev4:R1,C14676,Yes
+R2,10K,217A_dttrainer_rev4:R2,C99198,Yes
+R3,100R,217A_dttrainer_rev4:R3,C110091,Yes
+R4,10K,217A_dttrainer_rev4:R4,C99198,Yes
+R5,10K,217A_dttrainer_rev4:R5,C99198,Yes
+R6,5.1K,217A_dttrainer_rev4:R6,C105580,Yes
+R7,5.1K,217A_dttrainer_rev4:R7,C105580,Yes
+R8,100R,217A_dttrainer_rev4:R8,C110091,Yes
+R9,10K,217A_dttrainer_rev4:R9,C99198,Yes
+R10,0R,217A_dttrainer_rev4:R10,DNP,No
+R11,10K,217A_dttrainer_rev4:R11,C99198,Yes
+R12,2K,217A_dttrainer_rev4:R12,C105581,Yes
+R13,10K,217A_dttrainer_rev4:R13,C99198,Yes
+R14,10K,217A_dttrainer_rev4:R14,C99198,Yes
+R15,1K,217A_dttrainer_rev4:R15,C14676,Yes
+R16,300R,217A_dttrainer_rev4:R16,C137637,Yes
+R17,1K,217A_dttrainer_rev4:R17,C14676,Yes
+R18,10K,217A_dttrainer_rev4:R18,C99198,Yes
+R19,2K,217A_dttrainer_rev4:R19,C105581,Yes
+R20,100K,217A_dttrainer_rev4:R20,C14675,Yes
+R21,10K,217A_dttrainer_rev4:R21,C99198,Yes
+R22,100K,217A_dttrainer_rev4:R22,C14675,Yes
+R23,1K,217A_dttrainer_rev4:R23,C14676,Yes
+R24,1K,217A_dttrainer_rev4:R24,C14676,Yes
+R25,1K,217A_dttrainer_rev4:R25,C14676,Yes
+S1,JS102011JAQN,217A_dttrainer_rev4:S1,C221658,Yes
+S2,WAKE,217A_dttrainer_rev4:S2,C381038,Yes
+U1,CP2102,217A_dttrainer_rev4:U1,C6568,Yes
+U2,TP4054,217A_dttrainer_rev4:U2,C32574,Yes
+U3,ME6211C33,217A_dttrainer_rev4:U3,C82942,Yes
+U4,VDD331MCTA,217A_dttrainer_rev4:U4,DNP,No
+U5,WS2813 / C5359034,217A_dttrainer_rev4:U5,C5359034,Yes
+U6,WS2813 / C5359034,217A_dttrainer_rev4:U6,C5359034,Yes
+U7,WS2813 / C5359034,217A_dttrainer_rev4:U7,C5359034,Yes

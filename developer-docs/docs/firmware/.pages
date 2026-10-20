@@ -1,0 +1,6 @@
+title: Firmware
+nav:
+  - device-states.md
+  - flashing.md
+  - error-catalog.md
+  - offline-cache.md

@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "system_error": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "vector": "cpp",
+        "initializer_list": "cpp",
+        "functional": "cpp",
+        "exception": "cpp",
+        "*.tpp": "cpp"
+    },
+    "sonarlint.connectedMode.project": {
+        "connectionId": "researchanddesire",
+        "projectKey": "researchanddesire_DT_Trainer"
+    }
+}

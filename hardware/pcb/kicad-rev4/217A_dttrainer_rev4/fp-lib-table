@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "217A_dttrainer_rev4")(type "KiCad")(uri "$(KIPRJMOD)/217A_dttrainer_rev4.pretty")(options "")(descr ""))
+)
