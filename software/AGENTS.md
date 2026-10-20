@@ -1,24 +1,20 @@
-# AGENTS.md
+# DTT firmware
 
-## Authorized Supabase Projects
+Repository-wide rules (branches, Supabase projects, releases, secrets,
+documentation) are in `../AGENTS.md`.
 
-- Production/main firmware project ref: `acjajruwevyyatztbkdf`.
-- Staging firmware project ref: `meuaxbjzqrszxdvmacug`.
-- Every remote firmware publication or Supabase operation must explicitly
-  target the ref matching its named release track. Never use implicit CLI
-  linked-project state.
+## Build
 
-## Branch and Release Policy
-
-- Persistent branches are lowercase `staging` and `main`.
-- Fetch before branching. Start feature and release work from `origin/staging`, then open the pull request back into `staging`.
-- Only urgent production bug fixes may target `main` directly. Start them from `origin/main`, open the pull request into `main`, and make the standalone word `hotfix` the first word of the PR title (case-insensitive).
-- Promote normal releases with a same-repository `staging` to `main` pull request only after every required build, unit, integration, artifact-verification, and DTT hardware validation succeeds.
-- Immediately merge every main hotfix back into `staging` with a `main` to `staging` pull request.
-- Squash feature and hotfix pull requests into one focused commit with a concise, imperative title. Merge long-lived branch synchronization pull requests (`staging` to `main` and `main` to `staging`) with a merge commit; never squash or rebase them.
-- Use matching branch names and linked pull requests for changes spanning RAD App or another firmware repository.
-- Staging firmware reports the `staging` track and checks `https://staging.researchanddesire.com`. Main firmware reports `main` and checks `https://dashboard.researchanddesire.com`.
-- Firmware is update-eligible only after its immutable Supabase artifacts and all required validation records verify. Missing hardware runners leave a release in `validating`; never bypass a gate.
+- Run `pio` from this directory. Release environments are `staging-v1`,
+  `staging-v2`, `production-v1`, and `production-v2`; `migration-staging` and
+  `migration-production` build the legacy-layout bridge.
+- Staging firmware reports the `staging` track and checks
+  `https://staging.researchanddesire.com`. Main firmware reports `main` and
+  checks `https://dashboard.researchanddesire.com`.
+- Environments marked `custom_rad_public_key = environment` take
+  `RAD_PUBLIC_KEY` from the build environment (`pre_build_script.py`); all
+  others, and builds without it, use the `DEV_KEY_123` default. Never write the
+  credential into `platformio.ini`.
 
 ## Development Safety
 
