@@ -155,6 +155,9 @@ void drawQRCodePage(TextPage page) {
         static QRCode qrcode;
         constexpr int scale = 2;
         constexpr int version = 3;
+        // The encoder has no bounds check: text longer than its fixed
+        // version-3 codeword buffer runs past it on the stack.
+        constexpr unsigned int maxTextLength = 64;
         // This Version of QR Codes can handle ~61 alphanumeric characters with
         // ECC LEVEL M
 
@@ -166,8 +169,12 @@ void drawQRCodePage(TextPage page) {
                          ? page.url
                          : "https://docs.researchanddesire.com";
 
-        if (page.url.length() > 0 && page.url.indexOf("dashboard") >= 0) {
+        if (page.url.length() > 0 && page.url.indexOf("dashboard") >= 0 &&
+            trainerIdShort.length() > 0) {
             url += "?dtt=" + trainerIdShort;
+        }
+        if (url.length() > maxTextLength) {
+            url = url.substring(0, maxTextLength);
         }
 
         qrcode_initText(&qrcode, qrcodeData, version, ECC_LOW, url.c_str());

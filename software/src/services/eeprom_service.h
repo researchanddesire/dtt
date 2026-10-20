@@ -13,8 +13,7 @@ extern bool isAlphaVersion;
 void initEEPROM();
 void toggleIsAlpha();
 
-#ifdef PROVISION
-void saveToEEPROM(const String &trainerId, const int serialNumber);
-#endif
+// Returns false when the identity could not be written and read back.
+bool saveToEEPROM(const String &trainerId, const int serialNumber);
 
 #endif  // EEPROM_SERVICE_H

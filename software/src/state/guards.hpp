@@ -25,6 +25,10 @@ constexpr auto hasUpdate =
     [](const Event &) -> bool { return dashboardState.hasUpdate; };
 
 template <typename Event = done>
+constexpr auto hasTrainerId =
+    [](const Event &) -> bool { return !trainerId.isEmpty(); };
+
+template <typename Event = done>
 constexpr auto preflightPending =
     [](const Event &) -> bool { return dashboardState.preflightPending; };
 

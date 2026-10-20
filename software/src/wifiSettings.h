@@ -24,8 +24,12 @@ int postJson(const String &endpoint, const JsonDocument &doc,
 
 void getIsPaired();
 
-#ifdef PROVISION
+// Self-provisioning: ask the server for this trainer's identity by hardware
+// address and store it. Used by the factory image and by production firmware
+// that finds its stored identity blank.
 extern String provisionError;
+
+#ifdef PROVISION
 bool getTrainerIdAndSerial();
 void provisionTask(void *pvParameters);
 #else
