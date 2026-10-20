@@ -34,8 +34,34 @@ jobs:
         run: |
           pio check --skip-packages --fail-on-defect high -e development -f src
 
-      - name: Run native publishing metadata tests
+      - name: Run native metadata, update protocol, and session tests
         run: pio test -e test_native
+
+      - name: Test release build guards and EEPROM parsing
+        run: |
+          python scripts/test_private_build_security.py
+          python scripts/test_eeprom_security.py
+
+      - name: Verify quiet firmware skips state logging work
+        run: python test/security_state_logger/test_source_behaviour.py
+
+      # Native tests above install ArduinoJson and Unity for these host checks.
+      - name: Test dashboard transport and session cache boundaries
+        run: python test/security_dashboard_transport/test_source_behaviour.py
+
+      - name: Test captive portal isolation and deadlines
+        run: python test/native_wifi_portal/test_portal_safety.py
+
+      - name: Test certificate dates and the bounded DHCP parser
+        run: |
+          python test/security_certificate_dates/test_source_behaviour.py
+          python test/security_dhcp_parser/test_parser.py
+          python scripts/test_check_dhcp_patch.py
+
+      - name: Check session lifetime and mutex behavior with sanitizers
+        run: |
+          sh test/test_session_security/run_sanitized.sh
+          sh test/native_session_mutex/run.sh
 
       - name: Build staging and production V1/V2 firmware and migration bridges
         run: |

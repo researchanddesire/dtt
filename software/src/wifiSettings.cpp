@@ -2,10 +2,13 @@
 #include <NetworkRequestLock.h>
 
 #include <errno.h>
-#include <memory>
 #include <stdlib.h>
+#include <time.h>
+#include <algorithm>
+#include <memory>
 
 #include "SPIFFS.h"
+#include "CertificateDateClient.h"
 #include "FirmwareProvenance.h"
 #include "esp_flash.h"
 #include "services/upload_queue.h"
@@ -18,6 +21,7 @@
 #include "constants/strings.h"
 #ifndef PROVISION
 #include "uuid.hpp"
+#include <SessionValidation.h>
 #endif
 
 #define WIFI_TAG "WIFI"
@@ -66,13 +70,133 @@ int resultsHttpCode = -1;
 #endif
 #endif  // PROVISION
 
-// Helper to POST JSON to Bubble server
+namespace {
+constexpr size_t MAX_DASHBOARD_RESPONSE_BYTES = 64 * 1024;
+constexpr size_t MAX_DASHBOARD_WIRE_BYTES =
+    MAX_DASHBOARD_RESPONSE_BYTES + 8 * 1024;
+constexpr time_t MINIMUM_DASHBOARD_UTC = 1704067200;  // 2024-01-01 UTC
+extern const uint8_t dashboardCaBundle[] asm("_binary_x509_crt_bundle_start");
+
+bool dashboardUtcReady() {
+    // OTA uses the same system clock and CA bundle. Reuse its synchronized
+    // clock when available; never disable certificate checks to recover.
+    if (time(nullptr) >= MINIMUM_DASHBOARD_UTC) return true;
+    configTime(0, 0, "time.cloudflare.com", "pool.ntp.org");
+    const uint32_t startedAt = millis();
+    while (millis() - startedAt < 10000) {
+        if (time(nullptr) >= MINIMUM_DASHBOARD_UTC) return true;
+        delay(250);
+    }
+    return false;
+}
+
+// HTTPClient's body reader has no timeout while a connected peer sends no
+// bytes. Enforce a total deadline and a wire budget below both its header and
+// body parsers, including unknown-length and chunked responses.
+template <typename ClientType>
+class DashboardClient final : public ClientType {
+   public:
+    explicit DashboardClient(uint32_t timeoutMs)
+        : startedAt_(millis()), timeoutMs_(timeoutMs) {}
+
+    bool failed() { return !withinBudget(); }
+    int available() override {
+        if (!withinBudget()) return 0;
+        return ClientType::available();
+    }
+    uint8_t connected() override {
+        return withinBudget() ? ClientType::connected() : 0;
+    }
+    int read() override {
+        uint8_t value;
+        return read(&value, 1) == 1 ? value : -1;
+    }
+    int read(uint8_t *buffer, size_t size) override {
+        if (!withinBudget()) return -1;
+        const int result = ClientType::read(
+            buffer, std::min(size, MAX_DASHBOARD_WIRE_BYTES - received_));
+        if (result > 0) received_ += result;
+        return result;
+    }
+    size_t write(uint8_t value) override { return write(&value, 1); }
+    size_t write(const uint8_t *buffer, size_t size) override {
+        return withinBudget() ? ClientType::write(buffer, size) : 0;
+    }
+
+   private:
+    bool withinBudget() {
+        if (failed_ || millis() - startedAt_ >= timeoutMs_ ||
+            received_ >= MAX_DASHBOARD_WIRE_BYTES) {
+            failed_ = true;
+            // Stream::timedRead also needs to stop immediately if it is
+            // waiting for a delimiter when the deadline/budget is reached.
+            this->Stream::setTimeout(0);
+            ClientType::stop();
+            return false;
+        }
+        return true;
+    }
+    const uint32_t startedAt_;
+    const uint32_t timeoutMs_;
+    size_t received_ = 0;
+    bool failed_ = false;
+};
+
+class DashboardResponseSink final : public Stream {
+   public:
+    explicit DashboardResponseSink(String *output) : output_(output) {}
+    size_t write(uint8_t value) override { return write(&value, 1); }
+    size_t write(const uint8_t *buffer, size_t size) override {
+        if (failed_ || size > MAX_DASHBOARD_RESPONSE_BYTES - received_ ||
+            (output_ && !output_->concat(
+                            reinterpret_cast<const char *>(buffer), size))) {
+            failed_ = true;
+            setWriteError();
+            return 0;
+        }
+        received_ += size;
+        return size;
+    }
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override {}
+    bool failed() const { return failed_; }
+
+   private:
+    String *output_;
+    size_t received_ = 0;
+    bool failed_ = false;
+};
+}  // namespace
+
+// All dashboard credentials remain scoped to the configured API origin.
 int postJson(const String &endpoint, const JsonDocument &doc,
              String *responsePayload, const int timeoutMs) {
     NetworkRequestLock requestLock;
+    if (responsePayload) *responsePayload = "";
+    if (timeoutMs <= 0 || timeoutMs > 30000 || doc.overflowed())
+        return HTTPC_ERROR_TOO_LESS_RAM;
+
+    String origin = RAD_SERVER;
+    while (origin.endsWith("/")) origin.remove(origin.length() - 1);
+    const String apiRoot = origin + "/api/dtt/v2";
     String url = endpoint;
-    if (!endpoint.startsWith("http")) {
-        url = String(RAD_SERVER) + "/api/dtt/v2" + endpoint;
+    if (endpoint.startsWith("/") && !endpoint.startsWith("//")) {
+        url = apiRoot + endpoint;
+    }
+    if (!url.startsWith(apiRoot + "/"))
+        return HTTPC_ERROR_CONNECTION_REFUSED;
+    const bool secure = url.startsWith("https://");
+    bool allowPlaintext = false;
+#if defined(VERSIONDEV) || defined(DTT_ALLOW_LOCAL_HTTP) || \
+    defined(DTT_MIGRATION_LAB_INSECURE_HTTP)
+    allowPlaintext = origin.startsWith("http://");
+#endif
+    if (!secure && !allowPlaintext) return HTTPC_ERROR_CONNECTION_REFUSED;
+    if (secure && !dashboardUtcReady()) {
+        ESP_LOGE(WIFI_TAG, "verified dashboard transport needs a valid clock");
+        return HTTPC_ERROR_CONNECTION_REFUSED;
     }
 
     int memRetries = 0;
@@ -84,47 +208,41 @@ int postJson(const String &endpoint, const JsonDocument &doc,
         memRetries++;
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+    if (ESP.getFreeHeap() < 20000) return HTTPC_ERROR_TOO_LESS_RAM;
 
     // HTTPClient retains a borrowed pointer even after some end()/begin()
-    // paths. Declare its owner first so the transport outlives HTTP cleanup,
+    // paths. Declare the owners first so the transport outlives HTTP cleanup,
     // including early returns after a failed setup or request.
-    std::unique_ptr<WiFiClient> currentClient;
-    WiFiClientSecure *secureClient = nullptr;
+    std::unique_ptr<DashboardClient<firmware::CertificateDateClient>> secureClient;
+    std::unique_ptr<DashboardClient<WiFiClient>> plainClient;
+    WiFiClient *currentClient;
     HTTPClient http;
     bool began = false;
-
-    // Use appropriate client based on protocol
-    if (url.startsWith("https://")) {
-        secureClient = new WiFiClientSecure();
-        secureClient->setInsecure();
-        currentClient.reset(secureClient);
-        http.setTimeout(timeoutMs);
-        http.setConnectTimeout(timeoutMs);
+    http.setTimeout(timeoutMs);
+    http.setConnectTimeout(timeoutMs);
+    http.setReuse(false);
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    if (secure) {
+        secureClient.reset(
+            new DashboardClient<firmware::CertificateDateClient>(timeoutMs));
+        secureClient->setCACertBundle(dashboardCaBundle);
+        secureClient->setHandshakeTimeout((timeoutMs + 999) / 1000);
+        currentClient = secureClient.get();
         began = http.begin(*secureClient, url);
     } else {
-        currentClient.reset(new WiFiClient());
-        http.setTimeout(timeoutMs);
-        http.setConnectTimeout(timeoutMs);
-        began = http.begin(*currentClient, url);
+        plainClient.reset(new DashboardClient<WiFiClient>(timeoutMs));
+        currentClient = plainClient.get();
+        began = http.begin(*plainClient, url);
     }
 
-    auto logNetworkState = []() {
-        ESP_LOGE(
-            WIFI_TAG,
-            "network status=%d ip=%s gateway=%s dns=%s rssi=%d "
-            "heap=%u max_alloc=%u min_heap=%u",
-            static_cast<int>(WiFi.status()), WiFi.localIP().toString().c_str(),
-            WiFi.gatewayIP().toString().c_str(),
-            WiFi.dnsIP().toString().c_str(), WiFi.RSSI(), ESP.getFreeHeap(),
-            ESP.getMaxAllocHeap(), ESP.getMinFreeHeap());
-    };
-
     if (!began) {
-        ESP_LOGE(WIFI_TAG, "HTTP setup failed for %s", url.c_str());
-        logNetworkState();
+        ESP_LOGE(WIFI_TAG, "dashboard HTTP setup failed");
         currentClient->stop();
         return HTTPC_ERROR_CONNECTION_REFUSED;
     }
+    const char *responseHeaders[] = {"Content-Encoding"};
+    http.collectHeaders(responseHeaders, 1);
+    http.addHeader("Accept-Encoding", "identity");
     http.addHeader("Content-Type", "application/json");
     http.addHeader("Authorization", "Bearer " + String(RAD_PUBLIC_KEY));
     http.addHeader("ngrok-skip-browser-warning", "true");
@@ -138,15 +256,14 @@ int postJson(const String &endpoint, const JsonDocument &doc,
                        firmware::provenance::currentImageSha256().c_str());
     }
 
-    if (url.indexOf("ngrok") != -1) {
-        http.addHeader("ngrok-skip-browser-warning", "true");
-    }
-
     String requestBody;
-    serializeJson(doc, requestBody);
-
-    ESP_LOGD(WIFI_TAG, "POSTing to %s", url.c_str());
-    ESP_LOGD(WIFI_TAG, "with body %s", requestBody.c_str());
+    const size_t requestSize = measureJson(doc);
+    if (!requestBody.reserve(requestSize) ||
+        serializeJson(doc, requestBody) != requestSize) {
+        http.end();
+        currentClient->stop();
+        return HTTPC_ERROR_TOO_LESS_RAM;
+    }
     int httpResponseCode = -1;
 
 #if defined(RAD_HIL_VARIANT)
@@ -158,9 +275,8 @@ int postJson(const String &endpoint, const JsonDocument &doc,
     if (httpResponseCode < 0) {
         const String transportError =
             HTTPClient::errorToString(httpResponseCode);
-        ESP_LOGE(WIFI_TAG, "POST %s failed: %d (%s)", url.c_str(),
+        ESP_LOGE(WIFI_TAG, "dashboard POST failed: %d (%s)",
                  httpResponseCode, transportError.c_str());
-        logNetworkState();
 
         // Avoid linking the full TLS error-string table when error logs are
         // compiled out. The BLE staging diagnostic still records its TLS code.
@@ -181,11 +297,25 @@ int postJson(const String &endpoint, const JsonDocument &doc,
 #endif
     }
 
-    if (responsePayload) {
-        *responsePayload = http.getString();
-    } else {
-        http.getString();  // discard
+    if (httpResponseCode > 0) {
+        const String encoding = http.header("Content-Encoding");
+        const int responseSize = http.getSize();
+        DashboardResponseSink sink(responsePayload);
+        if (responseSize > static_cast<int>(MAX_DASHBOARD_RESPONSE_BYTES) ||
+            (!encoding.isEmpty() && !encoding.equalsIgnoreCase("identity"))) {
+            httpResponseCode = HTTPC_ERROR_TOO_LESS_RAM;
+        } else if (responseSize != 0) {
+            const int received = http.writeToStream(&sink);
+            if (received < 0 || sink.failed())
+                httpResponseCode = received < 0 ? received
+                                               : HTTPC_ERROR_TOO_LESS_RAM;
+        }
     }
+    if ((secureClient && secureClient->failed()) ||
+        (plainClient && plainClient->failed()))
+        httpResponseCode = HTTPC_ERROR_READ_TIMEOUT;
+    // Never let partial or rejected bodies reach a settings/provision parser.
+    if (httpResponseCode < 0 && responsePayload) *responsePayload = "";
     http.end();
     currentClient->stop();
     return httpResponseCode;
@@ -230,8 +360,7 @@ void notifyTrainingTask(void *pvParameters) {
 
     String payload;
     int httpResponseCode = postJson("/training-started", doc, &payload);
-    ESP_LOGD(WIFI_TAG, "training-started HTTP %d: %s", httpResponseCode,
-             payload.c_str());
+    ESP_LOGD(WIFI_TAG, "training-started HTTP %d", httpResponseCode);
 
 #ifdef PIO_UNIT_TESTING
     // Test observability hooks (see wifiSettings.h). Order matters:
@@ -296,7 +425,7 @@ bool getTrainerIdAndSerial() {
 
     String payload = "{}";
     const int httpResponseCode = postJson("/provision", doc, &payload, 15000);
-    ESP_LOGD(WIFI_TAG, "HTTP %d: %s", httpResponseCode, payload.c_str());
+    ESP_LOGD(WIFI_TAG, "provision HTTP %d", httpResponseCode);
 
     if (httpResponseCode != 200) {
         if (httpResponseCode < 0) {
@@ -335,51 +464,36 @@ bool getTrainerIdAndSerial() {
 }
 
 #ifndef PROVISION
-void sessionFromJson(JsonDocument sessionJson) {
-    ESP_LOGD(WIFI_TAG, "=== Parsing session from JSON ===");
+static void sessionFromJson(JsonDocument &sessionJson) {
 
     // the session id is set on device boot.
-    session.id = session.id;
     session.settingsId = sessionJson["settingsId"].as<String>();
     session.name = sessionJson["name"].as<String>();
     session.tagline = sessionJson["tagline"] | "";
 
-    ESP_LOGD(WIFI_TAG, "Session ID: %s", session.id.c_str());
-    ESP_LOGD(WIFI_TAG, "Session name: %s", session.name.c_str());
-    ESP_LOGD(WIFI_TAG, "Session tagline: %s", session.tagline.c_str());
-
     if (sessionJson["iconSetId"].isNull() ||
         !sessionJson["iconSetId"].is<String>()) {
         session.iconId.reset();
-        ESP_LOGD(WIFI_TAG, "iconSetId: null or not a string, reset");
     } else {
         const String iconSetIdStr = sessionJson["iconSetId"].as<String>();
-        ESP_LOGD(WIFI_TAG, "iconSetId raw string: %s", iconSetIdStr.c_str());
         errno = 0;
         char *endPtr = nullptr;
         const long parsedIconId = strtol(iconSetIdStr.c_str(), &endPtr, 10);
         if (endPtr != iconSetIdStr.c_str() && errno == 0) {
             session.iconId = static_cast<int>(parsedIconId);
-            ESP_LOGD(WIFI_TAG, "iconSetId parsed: %d", session.iconId.value());
         } else {
             session.iconId.reset();
-            ESP_LOGD(WIFI_TAG, "iconSetId parse failed, reset");
         }
     }
 
     session.description = sessionJson["description"].as<String>();
     session.finalText = sessionJson["finalText"].as<String>();
 
-    ESP_LOGD(WIFI_TAG, "Description: %s", session.description.c_str());
-    ESP_LOGD(WIFI_TAG, "Final text: %s", session.finalText.c_str());
-
     // Parse finalColor if present (LED color for final page)
     if (sessionJson["finalColor"].is<int>()) {
         session.finalColor = sessionJson["finalColor"].as<int>();
-        ESP_LOGD(WIFI_TAG, "Final color: 0x%06X", session.finalColor.value());
     } else {
         session.finalColor.reset();
-        ESP_LOGD(WIFI_TAG, "Final color: not set");
     }
 
     // Parse icon configuration if present
@@ -387,17 +501,13 @@ void sessionFromJson(JsonDocument sessionJson) {
         JsonObject iconJson = sessionJson["icon"];
         session.icon.set = iconJson["set"].as<String>();
         session.icon.set_id = iconJson["set_id"].as<int>();
-        ESP_LOGD(WIFI_TAG, "Icon config: set=%s, set_id=%d",
-                 session.icon.set.c_str(), session.icon.set_id);
     } else {
         // Use default values if not provided
         session.icon = defaultIconConfig;
-        ESP_LOGD(WIFI_TAG, "Using default icon config");
     }
 
     if (sessionJson["toy"].is<JsonObject>()) {
         JsonObject toyJson = sessionJson["toy"];
-        ESP_LOGD(WIFI_TAG, "--- Parsing toy object ---");
         ToyCalibration calibration;
 
         // Parse calibration data if present
@@ -409,25 +519,14 @@ void sessionFromJson(JsonDocument sessionJson) {
             calibration.maxCm = calibrationJson["maxCm"].as<float>();
             calibration.calibratedAt =
                 calibrationJson["calibratedAt"].as<String>();
-            ESP_LOGD(WIFI_TAG,
-                     "Toy calibration: isCalibrated=%d, minCm=%.2f, "
-                     "maxCm=%.2f, calibratedAt=%s",
-                     calibration.isCalibrated, calibration.minCm,
-                     calibration.maxCm, calibration.calibratedAt.c_str());
-        } else {
-            ESP_LOGD(WIFI_TAG, "Toy calibration: not present");
         }
 
         // Keep description for safety, in case of older payloads
         String toyTagline = EMPTY_STRING;
         if (toyJson["tagline"].is<String>()) {
             toyTagline = toyJson["tagline"].as<String>();
-            ESP_LOGD(WIFI_TAG, "Toy tagline from 'tagline': %s",
-                     toyTagline.c_str());
         } else if (toyJson["description"].is<String>()) {
             toyTagline = toyJson["description"].as<String>();
-            ESP_LOGD(WIFI_TAG, "Toy tagline from 'description': %s",
-                     toyTagline.c_str());
         }
 
         session.toy = Toy{
@@ -436,11 +535,8 @@ void sessionFromJson(JsonDocument sessionJson) {
             .tagline = toyTagline,
             .calibration = calibration,
         };
-        ESP_LOGD(WIFI_TAG, "Toy: id=%s, name=%s", session.toy->id.c_str(),
-                 session.toy->name.c_str());
     } else {
         session.toy = std::nullopt;
-        ESP_LOGD(WIFI_TAG, "No toy object in session");
     }
 
     session.segmentCount = sessionJson["segmentCount"].as<uint16_t>();
@@ -448,25 +544,15 @@ void sessionFromJson(JsonDocument sessionJson) {
     session.durationMinutes = sessionJson["durationMinutes"].as<uint16_t>();
     session.handsFreeMode = sessionJson["handsFreeMode"] | false;
 
-    ESP_LOGD(WIFI_TAG, "Session segmentCount: %d", session.segmentCount);
-    ESP_LOGD(WIFI_TAG, "Session pageIdx: %d", session.pageIdx);
-    ESP_LOGD(WIFI_TAG, "Session durationMinutes: %d", session.durationMinutes);
-    ESP_LOGD(WIFI_TAG, "Session handsFreeMode: %d", session.handsFreeMode);
-
     const auto segments = sessionJson["segments"].as<JsonArray>();
     auto type = TrainingType::REPETITION;
-    ESP_LOGD(WIFI_TAG, "--- Parsing %d segments ---", segments.size());
     session.segments.clear();
 
-    int segmentIdx = 0;
     for (const auto &i : segments) {
         JsonObject segment = i;
 
         auto typeString = segment["type"].as<String>();
         typeString.toLowerCase();
-
-        ESP_LOGD(WIFI_TAG, "Segment[%d]: type string=%s", segmentIdx,
-                 typeString.c_str());
 
         if (typeString == REPETITION_STRING) {
             type = TrainingType::REPETITION;
@@ -488,9 +574,6 @@ void sessionFromJson(JsonDocument sessionJson) {
                 passFailJson["failureText"].is<String>()
                     ? passFailJson["failureText"].as<String>()
                     : "";
-            ESP_LOGD(WIFI_TAG, "Segment[%d] passFail: enabled=%d, threshold=%d",
-                     segmentIdx, passFailConfig.enabled,
-                     passFailConfig.threshold);
         }
 
         auto segmentId = segment["id"].as<String>();
@@ -503,17 +586,6 @@ void sessionFromJson(JsonDocument sessionJson) {
             segment["params"]["trainingDepthIncrease"].as<int>();
         auto speed = segment["params"]["trainingSpeed"].as<float>();
         auto targetWindow = segment["params"]["targetWindow"].as<float>();
-
-        ESP_LOGD(WIFI_TAG, "Segment[%d]: id=%s, name=%s, difficulty=%s",
-                 segmentIdx, segmentId.c_str(), segmentName.c_str(),
-                 segmentDifficulty.c_str());
-        ESP_LOGD(WIFI_TAG,
-                 "Segment[%d] params: target=%d, startPos=%.2f, endPos=%.2f",
-                 segmentIdx, target, startPos, endPos);
-        ESP_LOGD(WIFI_TAG,
-                 "Segment[%d] params: depthIncrease=%d, speed=%.2f, "
-                 "targetWindow=%.2f",
-                 segmentIdx, depthIncrease, speed, targetWindow);
 
         session.segments.push_back(Segment{
             .id = segmentId,
@@ -532,27 +604,14 @@ void sessionFromJson(JsonDocument sessionJson) {
                 },
             .passFail = passFailConfig,
         });
-        segmentIdx++;
     }
-
-    ESP_LOGD(WIFI_TAG, "Parsed %d segments total", session.segments.size());
 
     // If toy is calibrated on backend, override segment positions
     // Backend: minCm = lower value (endPosition), maxCm = higher value
     // (startPosition)
     if (session.toy.has_value() && session.toy->calibration.isCalibrated) {
-        ESP_LOGD(WIFI_TAG, "--- Applying backend calibration override ---");
-        ESP_LOGD(WIFI_TAG, "Backend calibration: minCm=%.2f, maxCm=%.2f",
-                 session.toy->calibration.minCm,
-                 session.toy->calibration.maxCm);
 
         for (auto &segment : session.segments) {
-            ESP_LOGD(WIFI_TAG,
-                     "Overriding segment '%s': startPos %.2f->%.2f, "
-                     "endPos %.2f->%.2f",
-                     segment.name.c_str(), segment.params.startPosition,
-                     session.toy->calibration.maxCm, segment.params.endPosition,
-                     session.toy->calibration.minCm);
             segment.params.startPosition =
                 session.toy->calibration.maxCm;  // maxCm is the higher value
             segment.params.endPosition =
@@ -563,155 +622,148 @@ void sessionFromJson(JsonDocument sessionJson) {
         session.isCalibrated = true;
         session.calibratedMinPosition = session.toy->calibration.maxCm;
         session.calibratedMaxPosition = session.toy->calibration.minCm;
-        ESP_LOGD(WIFI_TAG,
-                 "Session marked calibrated: minPos=%.2f, maxPos=%.2f",
-                 session.calibratedMinPosition, session.calibratedMaxPosition);
-    } else {
-        ESP_LOGD(WIFI_TAG,
-                 "No backend calibration to apply (toy=%s, "
-                 "calibrated=%d)",
-                 session.toy.has_value() ? "present" : "absent",
-                 session.toy.has_value() ? session.toy->calibration.isCalibrated
-                                         : 0);
     }
 
-    ESP_LOGD(WIFI_TAG, "=== Session parsing complete ===");
 };
 
 namespace {
-bool validateSessionDocument(JsonObjectConst root, String &error) {
-    if (root.isNull() || !root["name"].is<String>() ||
-        !root["segments"].is<JsonArrayConst>()) {
-        error = "Session name and segments are required";
+constexpr char SESSION_TEMP_FILE[] = "/session.tmp";
+constexpr char SESSION_BACKUP_FILE[] = "/session.bak";
+
+bool readSessionCache(const char *path, JsonDocument &document, String &error) {
+    File file = SPIFFS.open(path, "r");
+    if (!file || file.size() == 0 ||
+        file.size() > MAX_DASHBOARD_RESPONSE_BYTES) {
+        error = "Session cache is missing or too large";
+        file.close();
         return false;
     }
-    const String name = root["name"].as<String>();
-    const JsonArrayConst segments = root["segments"].as<JsonArrayConst>();
-    if (name.isEmpty() || name.length() > 80 || segments.size() == 0 ||
-        segments.size() > 8) {
-        error = "Session must have a name and 1..8 segments";
+    const auto result = deserializeJson(
+        document, file, DeserializationOption::NestingLimit(8));
+    file.close();
+    if (result || document.overflowed()) {
+        error = "Session cache is not valid JSON";
         return false;
     }
-    if (!root["segmentCount"].isNull() &&
-        root["segmentCount"].as<size_t>() != segments.size()) {
-        error = "segmentCount must match the complete segment array";
+    return validateSessionDocument(document.as<JsonObjectConst>(), error,
+                                   SessionDocumentMode::DashboardPage);
+}
+
+bool persistSessionDocument(const JsonDocument &document, String &error) {
+    const size_t expectedSize = measureJson(document);
+    if (document.overflowed() || expectedSize == 0 ||
+        expectedSize > MAX_DASHBOARD_RESPONSE_BYTES) {
+        error = "Session document exceeds the storage limit";
         return false;
     }
-    for (JsonObjectConst segment : segments) {
-        const String type = segment["type"] | "";
-        const JsonObjectConst params = segment["params"].as<JsonObjectConst>();
-        const bool knownType =
-            type.equalsIgnoreCase(REPETITION_STRING) ||
-            type.equalsIgnoreCase(ENDURANCE_STRING) ||
-            type.equalsIgnoreCase(FREEFORM_STRING) ||
-            type.equalsIgnoreCase(BOUNCE_STRING);
-        if (!knownType || params.isNull() ||
-            !params["target"].is<int>() ||
-            !params["startPosition"].is<float>() ||
-            !params["endPosition"].is<float>() ||
-            !params["trainingDepthIncrease"].is<int>() ||
-            !params["trainingSpeed"].is<float>() ||
-            !params["targetWindow"].is<float>()) {
-            error = "Each segment needs a known type and numeric parameters";
-            return false;
-        }
-        const int target = params["target"].as<int>();
-        const float start = params["startPosition"].as<float>();
-        const float end = params["endPosition"].as<float>();
-        const int depth = params["trainingDepthIncrease"].as<int>();
-        const float speed = params["trainingSpeed"].as<float>();
-        const float window = params["targetWindow"].as<float>();
-        if (target <= 0 || target > 10000 || start <= end || start > 100.0f ||
-            end < 0.0f || depth < 0 || depth > 100 || speed <= 0.0f ||
-            speed > 1000.0f || window <= 0.0f || window > 100.0f) {
-            error = "Segment parameters are outside safe training ranges";
-            return false;
-        }
-        if (segment["passFail"].is<JsonObjectConst>()) {
-            const int threshold = segment["passFail"]["threshold"] | 0;
-            if (threshold < 0 || threshold > 100) {
-                error = "Pass/fail threshold must be 0..100";
-                return false;
+    // Mount without auto-formatting: a storage fault must not erase the last
+    // session or pending upload queue as a side effect of a network request.
+    if (!SPIFFS.begin(false)) {
+        error = "Could not mount session storage";
+        return false;
+    }
+    SPIFFS.remove(SESSION_TEMP_FILE);
+    File temporary = SPIFFS.open(SESSION_TEMP_FILE, "w");
+    const size_t written = temporary ? serializeJson(document, temporary) : 0;
+    temporary.flush();
+    const bool complete = written == expectedSize &&
+                          temporary.size() == expectedSize;
+    temporary.close();
+    if (!complete) {
+        SPIFFS.remove(SESSION_TEMP_FILE);
+        error = "Could not persist the complete replacement session";
+        return false;
+    }
+
+    if (SPIFFS.exists(SESSION_FILE)) {
+        bool stagePrimary = true;
+        if (SPIFFS.exists(SESSION_BACKUP_FILE)) {
+            // Distinguish an interrupted replacement from an unreadable
+            // primary. Parse/allocation failure alone must never delete the
+            // only previous copy. Ordinary rotation needs no extra document.
+            JsonDocument previous;
+            String previousError;
+            if (readSessionCache(SESSION_FILE, previous, previousError)) {
+                if (!SPIFFS.remove(SESSION_BACKUP_FILE)) {
+                    SPIFFS.remove(SESSION_TEMP_FILE);
+                    error = "Could not rotate the session backup";
+                    return false;
+                }
+            } else {
+                previous.clear();
+                if (!readSessionCache(SESSION_BACKUP_FILE, previous,
+                                      previousError) ||
+                    !SPIFFS.remove(SESSION_FILE)) {
+                    SPIFFS.remove(SESSION_TEMP_FILE);
+                    error = "Could not recover the previous session cache";
+                    return false;
+                }
+                stagePrimary = false;
             }
         }
+        if (stagePrimary && !SPIFFS.rename(SESSION_FILE, SESSION_BACKUP_FILE)) {
+            SPIFFS.remove(SESSION_TEMP_FILE);
+            error = "Could not stage the existing session";
+            return false;
+        }
     }
+    if (!SPIFFS.rename(SESSION_TEMP_FILE, SESSION_FILE)) {
+        if (SPIFFS.exists(SESSION_BACKUP_FILE))
+            SPIFFS.rename(SESSION_BACKUP_FILE, SESSION_FILE);
+        SPIFFS.remove(SESSION_TEMP_FILE);
+        error = "Could not commit the replacement session";
+        return false;
+    }
+    SPIFFS.remove(SESSION_BACKUP_FILE);
+    error = "";
     return true;
 }
 }  // namespace
 
 bool applySessionDocument(JsonDocument sessionJson, String &error) {
-    if (!validateSessionDocument(sessionJson.as<JsonObjectConst>(), error))
+    if (sessionJson.overflowed() ||
+        !validateSessionDocument(sessionJson.as<JsonObjectConst>(), error,
+                                 SessionDocumentMode::Complete))
         return false;
     sessionJson["segmentCount"] = sessionJson["segments"].size();
     sessionJson["segmentIdx"] = 0;
     sessionJson["pageIdx"] = 0;
+    if (!persistSessionDocument(sessionJson, error)) return false;
 
-    if (!SPIFFS.begin(true)) {
-        error = "Could not mount session storage";
-        return false;
-    }
-    constexpr char TEMP_FILE[] = "/session.ble.tmp";
-    constexpr char BACKUP_FILE[] = "/session.ble.bak";
-    SPIFFS.remove(TEMP_FILE);
-    File temporary = SPIFFS.open(TEMP_FILE, "w");
-    if (!temporary || serializeJson(sessionJson, temporary) == 0) {
-        temporary.close();
-        SPIFFS.remove(TEMP_FILE);
-        error = "Could not persist the replacement session";
-        return false;
-    }
-    temporary.close();
-
-    SPIFFS.remove(BACKUP_FILE);
-    const bool hadPrevious = SPIFFS.exists(SESSION_FILE);
-    if (hadPrevious && !SPIFFS.rename(SESSION_FILE, BACKUP_FILE)) {
-        SPIFFS.remove(TEMP_FILE);
-        error = "Could not stage the existing session";
-        return false;
-    }
-    if (!SPIFFS.rename(TEMP_FILE, SESSION_FILE)) {
-        if (hadPrevious) SPIFFS.rename(BACKUP_FILE, SESSION_FILE);
-        SPIFFS.remove(TEMP_FILE);
-        error = "Could not commit the replacement session";
-        return false;
-    }
-
-    // The adapter only permits replacement while no segment is active.  Use
-    // the same parser as the boot-time loader so the in-memory and persisted
-    // representations stay identical.
+    // The state-machine adapter serializes this callback while no segment is
+    // active. Validation and durable replacement precede live-state mutation.
     sessionFromJson(sessionJson);
     session.segmentIdx = 0;
     session.pageIdx = 0;
     session.segmentFailureCounts.clear();
-    SPIFFS.remove(BACKUP_FILE);
     return true;
 }
 
 void loadSessionTask(void *pvParameters) {
-    if (!SPIFFS.begin(true)) {
-        ESP_LOGD(WIFI_TAG, "failed to mount SPIFFS, setting to default");
-        session = Session{};
-        stateMachine->process_event(done{});
-        vTaskDelete(nullptr);
-        return;
+    JsonDocument sessionJson;
+    String error;
+    bool valid = false;
+    if (SPIFFS.begin(false)) {
+        valid = readSessionCache(SESSION_FILE, sessionJson, error);
+        if (!valid) {
+            sessionJson.clear();
+            valid = readSessionCache(SESSION_BACKUP_FILE, sessionJson, error);
+        }
     }
-
-    File file = SPIFFS.open(SESSION_FILE, "r");
-    if (SPIFFS.exists(SESSION_FILE) && file && file.size() != 0) {
-        JsonDocument sessionJson;
-        ESP_LOGD(WIFI_TAG, "loaded session from spiffs");
-        deserializeJson(sessionJson, file);
-        file.close();
-
-        sessionFromJson(sessionJson);
-
-    } else {
-        ESP_LOGD(WIFI_TAG, "no session file found, setting to default");
-        // just set it to the default session
-        session = Session{};
-    }
-
-    stateMachine->process_event(done{});
+    bool installed = false;
+    stateMachine->process_event(session_load_ready{
+        [&]() {
+            // A cached later page cannot start a new session at index zero.
+            if (valid && sessionJson["pageIdx"].as<uint16_t>() ==
+                             session.segmentIdx / PAGE_SIZE) {
+                sessionFromJson(sessionJson);
+            } else {
+                session = Session{};
+                ESP_LOGW(WIFI_TAG, "no usable cached session; using recovery");
+            }
+            return true;
+        },
+        installed});
     vTaskDelete(nullptr);
 }
 
@@ -720,9 +772,9 @@ void fetchSettingsTask(void *pvParameters) {
 
     // if not connected to wifi, return
     if (WiFiClass::status() != WL_CONNECTED) {
-        // if no wifi, try to load from remote
-        ESP_LOGD(WIFI_TAG, "no wifi, trying to load from remote");
-        stateMachine->process_event(fail{});
+        // Fall back to the validated cache while offline.
+        ESP_LOGD(WIFI_TAG, "no wifi, loading cached settings");
+        stateMachine->process_event(session_load_failed{});
         vTaskDelete(nullptr);
         return;
     }
@@ -741,10 +793,8 @@ void fetchSettingsTask(void *pvParameters) {
         if (httpResponseCode == 200) {
             break;
         }
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        if (attempt < 2) vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
-
-    ESP_LOGD(WIFI_TAG, "HTTP Response payload: %s", payload.c_str());
 
     if (httpResponseCode != 200) {
         // Diagnostic for support: distinguishes "dashboard errored while online"
@@ -754,20 +804,43 @@ void fetchSettingsTask(void *pvParameters) {
                  "cached session",
                  httpResponseCode, WiFiClass::status() == WL_CONNECTED,
                  healthCheckPassed);
-        stateMachine->process_event(fail{});
+        stateMachine->process_event(session_load_failed{});
         vTaskDelete(nullptr);
         return;
     }
 
-    deserializeJson(sessionJson, payload);
-    sessionFromJson(sessionJson);
+    String validationError;
+    const auto parseError = deserializeJson(
+        sessionJson, payload, DeserializationOption::NestingLimit(8));
+    // Release the raw body before cache serialization/parsing into Session.
+    payload = String();
+    if (parseError || sessionJson.overflowed() ||
+        !validateSessionDocument(sessionJson.as<JsonObjectConst>(),
+                                 validationError,
+                                 SessionDocumentMode::DashboardPage) ||
+        sessionJson["pageIdx"].as<uint16_t>() != doc["pageIdx"].as<uint16_t>()) {
+        ESP_LOGW(WIFI_TAG, "dashboard session rejected; keeping cached session");
+        stateMachine->process_event(session_load_failed{});
+        vTaskDelete(nullptr);
+        return;
+    }
 
-    // Save file to spiffs
-    File file = SPIFFS.open(SESSION_FILE, "w");
-    serializeJson(sessionJson, file);
-    file.close();
-
-    stateMachine->process_event(done{});
+    bool installed = false;
+    stateMachine->process_event(session_load_ready{
+        [&]() {
+            if (sessionJson["pageIdx"].as<uint16_t>() !=
+                    session.segmentIdx / PAGE_SIZE ||
+                !persistSessionDocument(sessionJson, validationError))
+                return false;
+            sessionFromJson(sessionJson);
+            return true;
+        },
+        installed});
+    if (!installed) {
+        ESP_LOGW(WIFI_TAG, "dashboard session was not installed");
+        vTaskDelete(nullptr);
+        return;
+    }
 
     // We're confirmed online (get-settings just returned 200) — opportunistically
     // drain any training results queued from an earlier offline/low-heap moment.
@@ -794,9 +867,6 @@ void saveResultsTask(void *pvParameters) {
         int grade = currentSegment->grade();
         bool passed = (grade >= segment->passFail.threshold);
         passedStatus = passed ? 1 : 0;  // 1=true, 0=false
-        ESP_LOGD(WIFI_TAG,
-                 "Pass/fail enabled: grade=%d, threshold=%d, passed=%d", grade,
-                 segment->passFail.threshold, passedStatus);
     }
 
     JsonDocument doc =
@@ -886,17 +956,6 @@ void sendCalibrationToBackend(float minCm, float maxCm) {
     calibrationUploaded = (httpResponseCode == 200);
 #endif
 
-    if (httpResponseCode == 200) {
-        ESP_LOGD(
-            WIFI_TAG,
-            "Calibration sent to backend successfully: minCm=%.2f, maxCm=%.2f",
-            minCm, maxCm);
-        ESP_LOGD(WIFI_TAG, "Response: %s", payload.c_str());
-    } else {
-        ESP_LOGD(WIFI_TAG,
-                 "Failed to send calibration to backend. HTTP code: %d, "
-                 "response: %s",
-                 httpResponseCode, payload.c_str());
-    }
+    ESP_LOGD(WIFI_TAG, "calibration upload HTTP %d", httpResponseCode);
 }
 #endif  // PROVISION

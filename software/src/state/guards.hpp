@@ -35,8 +35,14 @@ constexpr auto preflightPending =
 #ifndef PROVISION
 
 template <typename Event = done>
-constexpr auto hasNext =
-    [](const Event &) { return session.segmentIdx < session.segmentCount - 1; };
+constexpr auto isSessionLoadComplete =
+    [](const Event &) { return sessionLoadComplete; };
+
+template <typename Event = done>
+constexpr auto hasNext = [](const Event &) {
+    return session.segmentCount > 0 &&
+           session.segmentIdx < session.segmentCount - 1;
+};
 
 template <typename Event = done>
 constexpr auto isNextLoaded = [](const Event &) {

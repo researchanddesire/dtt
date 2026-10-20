@@ -16,6 +16,6 @@ void processWifiTask(void* pvParameters);
 void healthCheckWifi();
 
 // Optional: Add service configuration or constants
-#define WIFI_MANAGER_PORTAL_TIMEOUT 400
+#define WIFI_MANAGER_PORTAL_TIMEOUT 300
 
 #endif  // WIFI_MANAGER_H

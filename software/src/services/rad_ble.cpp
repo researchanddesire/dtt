@@ -534,12 +534,20 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
     if (operation == "session.apply" && path == "session.definition") {
         if (!args["session"].is<JsonObjectConst>())
             return radble::Result::failure("invalid_value", "A complete session object is required");
-        if (currentSegment != nullptr)
-            return radble::Result::failure("invalid_state", "Stop active training before replacing the session");
         JsonDocument replacement;
         replacement.set(args["session"]);
-        String applyError;
-        if (!applySessionDocument(replacement, applyError))
+        String applyError = "Stop active training before replacing the session";
+        bool applied = false;
+        // process_event serializes the state check and mutation with countdown
+        // and training transitions. Checking currentSegment here would race.
+        const bool accepted =
+            stateMachine != nullptr &&
+            stateMachine->process_event(session_replace_requested{
+                [&]() { return applySessionDocument(replacement, applyError); },
+                applied});
+        if (!accepted)
+            return radble::Result::failure("invalid_state", applyError.c_str());
+        if (!applied)
             return radble::Result::failure("invalid_value", applyError.c_str());
         Serial.printf("[RAD BLE][DTT] session replaced (%u segments)\n",
                       static_cast<unsigned>(session.segments.size()));

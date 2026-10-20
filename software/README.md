@@ -62,6 +62,9 @@ keys are available only to the release CI environments.
    ```bash
    pio run -e development -t upload -t monitor 
    ```
+   The build uses `RAD_SERVER` exactly as configured. On the device,
+   `localhost` is the trainer itself, so point `RAD_SERVER` at your computer's
+   LAN address or the staging server before you flash.
 6. To test the release pipeline, you can use the staging environment with an old version number
    ```bash
    export SW_VERSION=0 && pio run -e staging -t upload -t monitor 
@@ -85,7 +88,7 @@ Integration tests boot the full firmware on the ESP32 and run 41 tests across th
 1. Device connected via USB
 2. `WIFI_SSID`/`WIFI_PASSWORD` set in `platformio.ini` `[env:development]`
 3. `BYPASS_EEPROM` enabled in `platformio.ini` `[env:development]`
-4. `RAD_SERVER` pointing to the staging server (not `localhost` if in a VM)
+4. `RAD_SERVER` pointing to the staging server or your computer's LAN address (never `localhost`)
 5. Staging server seeded (`rad-app/supabase/seed/042_dtt_integration_test.sql`)
 
 Tests are human-in-the-loop — follow the `>>> ACTION REQUIRED` prompts in Serial output to press buttons and move the device when asked.
