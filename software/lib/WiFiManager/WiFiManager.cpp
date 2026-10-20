@@ -12,6 +12,10 @@
 
 #include "WiFiManager.h"
 
+#include <algorithm>
+
+#include "PortalSafety.h"
+
 #if defined(ESP8266) || defined(ESP32)
 
 #ifdef ESP32
@@ -286,6 +290,12 @@ void WiFiManager::stopWebPortal() {
 
 boolean WiFiManager::configPortalHasTimeout() {
     if (!configPortalActive) return false;
+    // The configured maximum is absolute even if legacy client checks move
+    // the inactivity timer forward.
+    if (_configPortalTimeout > 0 &&
+        portal_safety::remaining(_configPortalAbsoluteStart,
+                                 _configPortalTimeout, millis()) == 0)
+        return true;
     uint16_t logintvl = 30000;  // how often to emit timeing out counter logging
 
     // handle timeout portal client check
@@ -305,7 +315,7 @@ boolean WiFiManager::configPortalHasTimeout() {
         _configPortalStart = _webPortalAccessed;
 
     // handle timed out
-    if (millis() > _configPortalStart + _configPortalTimeout) {
+    if (millis() - _configPortalStart >= _configPortalTimeout) {
         return true;  // timeout bail, else do debug logging
     }
     if (_debug && _debugLevel > 0) {
@@ -322,7 +332,10 @@ void WiFiManager::setupHTTPServer() {
     if (_httpPort != 80) {
     }
 
-    server.reset(new WM_WebServer(_httpPort));
+    // Captive setup is reachable only at the AP address. A separately started
+    // web portal retains its existing station/all-interface behavior.
+    server = portal_safety::makeServer<WM_WebServer>(
+        configPortalActive, WiFi.softAPIP(), _httpPort);
 
     // G macro workaround for Uri() bug
     // https://github.com/esp8266/Arduino/issues/7102
@@ -378,9 +391,11 @@ boolean WiFiManager::startConfigPortal(char const* apName,
 
     if (!validApPassword()) return false;
 
-    // HANDLE issues with STA connections, shutdown sta if not connected, or
-    // else this will hang channel scanning and softap will not respond
-    if (_disableSTA || (!WiFi.isConnected() && _disableSTAConn)) {
+    // Keep the station network out of captive setup. Address binding alone is
+    // insufficient on stacks that accept a local AP address on another netif.
+    // connectWifi temporarily enables STA while this task waits for a save;
+    // it does not serve HTTP requests during that connection attempt.
+    {
 // this fixes most ap problems, however, simply doing mode(WIFI_AP) does not
 // work if sta connection is hanging, must `wifi_station_disconnect`
 #ifdef WM_DISCONWORKAROUND
@@ -388,9 +403,6 @@ boolean WiFiManager::startConfigPortal(char const* apName,
 #endif
         WiFi_Disconnect();
         WiFi_enableSTA(false);
-
-    } else {
-        // WiFi_enableSTA(true);
     }
 
     // init configportal globals to known states
@@ -399,10 +411,16 @@ boolean WiFiManager::startConfigPortal(char const* apName,
         false;  // loop flags, connect true success, abort true break
 
     _configPortalStart = millis();
+    _configPortalAbsoluteStart = _configPortalStart;
 
     // start access point
 
-    startAP();
+    if (!startAP() || WiFi.softAPIP() == IPAddress()) {
+        WiFi.softAPdisconnect(true);
+        configPortalActive = false;
+        _end();
+        return false;
+    }
     WiFiSetCountry();
 
     // init configportal
@@ -453,13 +471,29 @@ uint8_t WiFiManager::processConfigPortal() {
     // HTTP handler
     server->handleClient();
 
+    if (configPortalHasTimeout()) {
+        connect = false;
+        shutdownConfigPortal();
+        return WL_CONNECT_FAILED;
+    }
+
     // Waiting for save...
     if (connect) {
         connect = false;
 
-        if (_enableCaptivePortal)
-            delay(_cpclosedelay);  // keeps the captiveportal from closing to
-                                   // fast.
+        if (_enableCaptivePortal) {
+            uint32_t closeDelay = _cpclosedelay;
+            if (configPortalActive && _configPortalTimeout > 0)
+                closeDelay = std::min(
+                    closeDelay,
+                    portal_safety::remaining(_configPortalAbsoluteStart,
+                                             _configPortalTimeout, millis()));
+            delay(closeDelay);
+        }
+        if (configPortalHasTimeout()) {
+            shutdownConfigPortal();
+            return WL_CONNECT_FAILED;
+        }
 
         // skip wifi if no ssid
         if (_ssid == "") {
@@ -467,6 +501,12 @@ uint8_t WiFiManager::processConfigPortal() {
             // attempt sta connection to submitted _ssid, _pass
             uint8_t res =
                 connectWifi(_ssid, _pass, _connectonsave) == WL_CONNECTED;
+            // A connection completing at/after expiry must not authorize a
+            // late save callback. Keep the STA association while closing AP.
+            if (configPortalHasTimeout()) {
+                shutdownConfigPortal();
+                return WL_CONNECT_FAILED;
+            }
             if (res || (!_connectonsave)) {
                 if (_savewificallback != nullptr) {
                     _savewificallback();  // @CALLBACK
@@ -475,6 +515,10 @@ uint8_t WiFiManager::processConfigPortal() {
                 if (_disableConfigPortal) shutdownConfigPortal();
                 return WL_CONNECTED;  // CONNECT SUCCESS
             }
+            // Do not let a failed attempt associate later while the captive
+            // HTTP server resumes handling requests. Deadline shutdown above
+            // deliberately leaves STA enabled for association/recovery.
+            if (configPortalActive) WiFi_enableSTA(false);
         }
 
         if (_shouldBreakAfterConfig) {
@@ -482,7 +526,7 @@ uint8_t WiFiManager::processConfigPortal() {
             // @todo this is more of an exiting callback than a save, clarify
             // when this should actually occur confirm or verify data was saved
             // to make this more accurate callback
-            if (_savewificallback != nullptr) {
+            if (!configPortalHasTimeout() && _savewificallback != nullptr) {
                 _savewificallback();  // @CALLBACK
             }
             if (_disableConfigPortal) shutdownConfigPortal();
@@ -501,18 +545,11 @@ uint8_t WiFiManager::processConfigPortal() {
 bool WiFiManager::shutdownConfigPortal() {
     if (webPortalActive) return false;
 
-    if (configPortalActive) {
-        // DNS handler
-        dnsServer->processNextRequest();
-    }
-
-    // HTTP handler
-    server->handleClient();
-
     // @todo what is the proper way to shutdown and free the server up
     // debug - many open issues aobut port not clearing for use with other
     // servers
-    server->stop();
+    // Never process one more request while closing an expired portal.
+    if (server) server->stop();
     server.reset();
 
     WiFi.scanDelete();  // free wifi scan results
@@ -529,7 +566,7 @@ bool WiFiManager::shutdownConfigPortal() {
     // softAPdisconnect failed still no way to reproduce reliably
 
     bool ret = false;
-    ret = WiFi.softAPdisconnect(false);
+    ret = WiFi.softAPdisconnect(true);
 
     delay(1000);
     WiFi_Mode(_usermode);  // restore users wifi mode, BUG
@@ -569,9 +606,20 @@ uint8_t WiFiManager::connectWifi(const String& ssid, const String& pass,
     // [E][WiFiSTA.cpp:221] begin(): connect failed!
 
     while (retry <= _connectRetries && (connRes != WL_CONNECTED)) {
+        if (configPortalHasTimeout()) return WL_CONNECT_FAILED;
         if (_connectRetries > 1) {
-            if (_aggresiveReconn) delay(1000);  // add idle time before recon
+            if (_aggresiveReconn) {
+                const uint32_t wait =
+                    configPortalActive && _configPortalTimeout > 0
+                        ? std::min<uint32_t>(
+                              1000, portal_safety::remaining(
+                                        _configPortalAbsoluteStart,
+                                        _configPortalTimeout, millis()))
+                        : 1000;
+                delay(wait);
+            }
         }
+        if (configPortalHasTimeout()) return WL_CONNECT_FAILED;
         // if ssid argument provided connect to that
         // NOTE: this also catches preload() _defaultssid @todo rework
         if (ssid != "") {
@@ -699,15 +747,24 @@ uint8_t WiFiManager::waitForConnectResult() {
  * @return uint8_t  WL Status
  */
 uint8_t WiFiManager::waitForConnectResult(uint32_t timeout) {
-    if (timeout == 0) {
+    const bool portalDeadline = configPortalActive && _configPortalTimeout > 0;
+    if (timeout == 0 && !portalDeadline) {
         return WiFi.waitForConnectResult();
     }
-
-    unsigned long timeoutmillis = millis() + timeout;
-
+    // Match the SDK's ordinary 60-second default while limiting captive
+    // connection waits to the remaining setup session lifetime.
+    if (timeout == 0) timeout = 60000;
+    const uint32_t startedAt = millis();
     uint8_t status = WiFi.status();
-
-    while (millis() < timeoutmillis) {
+    while (true) {
+        uint32_t wait = portal_safety::remaining(startedAt, timeout, millis());
+        if (portalDeadline) {
+            const uint32_t portalWait = portal_safety::remaining(
+                _configPortalAbsoluteStart, _configPortalTimeout, millis());
+            if (portalWait == 0) return WL_CONNECT_FAILED;
+            wait = std::min(wait, portalWait);
+        }
+        if (wait == 0) return status;
         status = WiFi.status();
         // @todo detect additional states, connect happens, then dhcp then get
         // ip, there is some delay here, make sure not to timeout if waiting on
@@ -716,7 +773,7 @@ uint8_t WiFiManager::waitForConnectResult(uint32_t timeout) {
             return status;
         }
 
-        delay(100);
+        delay(std::min<uint32_t>(100, wait));
     }
     return status;
 }
@@ -812,10 +869,10 @@ void WiFiManager::handleWifi(boolean scan) {
     page += pitem;
 
     pitem = FPSTR(HTTP_FORM_WIFI);
-    pitem.replace(FPSTR(T_v), WiFi_SSID());
+    pitem.replace(FPSTR(T_v), htmlEntities(WiFi_SSID()));
 
     if (_showPassword) {
-        pitem.replace(FPSTR(T_p), WiFi_psk());
+        pitem.replace(FPSTR(T_p), htmlEntities(WiFi_psk()));
     } else if (WiFi_psk() != "") {
         pitem.replace(FPSTR(T_p), FPSTR(S_passph));
     } else {
@@ -1083,6 +1140,10 @@ String WiFiManager::getStaticOut() {
  * HTTPD CALLBACK save form and redirect to WLAN config page again
  */
 void WiFiManager::handleWifiSave() {
+    if (configPortalHasTimeout()) {
+        server->send(403, "text/plain", "Setup session expired");
+        return;
+    }
     handleRequest();
 
     // SAVE/connect here
@@ -1804,9 +1865,9 @@ String WiFiManager::htmlEntities(String str, bool whitespace) {
     str.replace("<", "&lt;");
     str.replace(">", "&gt;");
     str.replace("'", "&#39;");
+    str.replace("\"", "&quot;");
     if (whitespace) str.replace(" ", "&#160;");
     // str.replace("-","&ndash;");
-    // str.replace("\"","&quot;");
     // str.replace("/": "&#x2F;");
     // str.replace("`": "&#x60;");
     // str.replace("=": "&#x3D;");

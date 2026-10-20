@@ -2,7 +2,9 @@
 
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <esp_system.h>
 
+#include "pages/TextPages.h"
 #include "state/state.h"
 #include "upload_queue.h"
 #include "wifiSettings.h"
@@ -31,7 +33,9 @@ void initWifi() {
 
     wm.setClass("invert");
     wm.setConfigPortalBlocking(false);
-    wm.setConfigPortalTimeout(400);
+    wm.setConfigPortalTimeout(WIFI_MANAGER_PORTAL_TIMEOUT);
+    wm.setAPClientCheck(false);
+    wm.setWebPortalClientCheck(false);
 
     wm.setSaveConfigCallback([]() {
         if (stateMachine != nullptr) {
@@ -110,10 +114,32 @@ void processWifiTask(void* pvParameters) {
                stateMachine->is("provisioning.wifiSettings"_s);
 #endif
     };
-    wm.startConfigPortal("Trainer Setup");
+    // A fresh password requires physical access to this setup session. Never
+    // derive it from a MAC/serial number or persist it in logs or firmware.
+    uint8_t entropy[8];
+    esp_fill_random(entropy, sizeof(entropy));
+    char password[17] = {};
+    static constexpr char PASSWORD_ALPHABET[] = "0123456789ABCDEF";
+    for (size_t index = 0; index < sizeof(entropy); ++index) {
+        password[2 * index] = PASSWORD_ALPHABET[entropy[index] >> 4];
+        password[2 * index + 1] = PASSWORD_ALPHABET[entropy[index] & 0xf];
+    }
+    // The QR code joins the protected network directly; the text beside it
+    // is for typing the password by hand.
+    TextPage setupPage = wifiSetupPage;
+    setupPage.url = String("WIFI:T:WPA;S:Trainer Setup;P:") + password + ";;";
+    setupPage.content = String("Password: ") + String(password).substring(0, 8) +
+                        " " + String(password).substring(8);
+    drawQRCodePage(setupPage);
+    wm.startConfigPortal("Trainer Setup", password);
+    memset(password, 0, sizeof(password));
+    memset(entropy, 0, sizeof(entropy));
+    const uint32_t startedAt = millis();
     wm.process();
 
-    while (isInCorrectState()) {
+    while (isInCorrectState() && wm.getConfigPortalActive() &&
+           static_cast<uint32_t>(millis() - startedAt) <
+               WIFI_MANAGER_PORTAL_TIMEOUT * 1000UL) {
         wm.process();
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -124,6 +150,13 @@ void processWifiTask(void* pvParameters) {
         wm.stopConfigPortal();
     }
     wm.process();
+    setupPage.url = "";
+    setupPage.content = "";
+    if (isInCorrectState()) {
+        setupPage.title = "Setup closed";
+        setupPage.content = "Power cycle to retry";
+        drawTextPage(setupPage);
+    }
     vTaskDelete(nullptr);
 }
 

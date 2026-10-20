@@ -10,10 +10,13 @@
 #include "pages/TextPages.h"
 #include "services/display.h"
 #include "services/wifi_service.h"
+#include "state/events.hpp"
 #include "state/utils.h"
 #include "utils/update.hpp"
 
 #ifndef PROVISION
+#include <SessionSnapshot.h>
+
 #include "input.h"
 #include "pages/play/page.h"
 #include "services/leds.h"
@@ -232,6 +235,18 @@ constexpr auto drawProvisionUpdateError = []() {
 
 constexpr auto next = []() { process_done(false); };
 
+inline bool sessionLoadComplete = false;
+constexpr auto beginSessionLoad = []() { sessionLoadComplete = false; };
+constexpr auto failSessionLoad = []() { process_fail(); };
+constexpr auto applyLoadedSession = [](const session_load_ready &request) {
+    request.applied = request.apply();
+    sessionLoadComplete = request.applied;
+    if (request.applied)
+        process_done(false);
+    else
+        process_fail();
+};
+
 constexpr auto incrementSegmentIdx = []() { session.segmentIdx++; };
 
 constexpr auto clearSegmentIndex = []() {
@@ -307,6 +322,7 @@ constexpr auto drawSegmentDetails = []() {
     const Segment *segment = getSegmentByIdx(session.segmentIdx);
     if (segment == nullptr) {
         ESP_LOGD(ACTIONS_TAG, "Segment not found for idx %d", session.segmentIdx);
+        process_fail();
         return;
     }
     session.hasSeenSessionDetails = true;
@@ -350,9 +366,10 @@ constexpr auto drawSegmentDetails = []() {
 };
 
 constexpr auto drawBegin = []() {
-    const Segment *segment = getSegmentByIdx(session.segmentIdx);
-    if (segment == nullptr) {
+    const auto segment = copySegmentByIdx(session.segments, session.segmentIdx);
+    if (!segment.has_value()) {
         ESP_LOGD(ACTIONS_TAG, "Segment not found for idx %d", session.segmentIdx);
+        process_fail();
         return;
     }
 
@@ -393,6 +410,18 @@ constexpr auto drawBegin = []() {
     });
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     process_done(false);
+};
+
+constexpr auto applyRequestedSession =
+    [](const session_replace_requested &request) {
+        request.applied = currentSegment == nullptr && request.apply();
+    };
+
+constexpr auto recoverMissingSegment = []() {
+    // Recovery must not reload the same corrupt cache into a countdown loop.
+    // A later preflight can fetch validated dashboard settings normally.
+    session = Session{};
+    sessionLoadComplete = true;
 };
 
 constexpr auto drawGrade = []() {

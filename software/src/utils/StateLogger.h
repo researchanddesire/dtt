@@ -25,6 +25,9 @@ using namespace sml;
 struct StateLogger {
     template <class SM, class TEvent>
     [[gnu::used]] static void log_process_event(const TEvent &) {
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_DEBUG
+        // get_type_name initializes per-type storage even when its log call
+        // is compiled out. Do not build diagnostic names in quiet firmware.
         ESP_LOGV(STATE_MACHINE_TAG, "%s", sml::aux::get_type_name<SM>());
         const char *eventName = sml::aux::get_type_name<TEvent>();
 
@@ -41,29 +44,36 @@ struct StateLogger {
         } else {
             ESP_LOGD(STATE_MACHINE_TAG, "%s", eventName);
         }
+#endif
     }
 
     template <class SM, class TGuard, class TEvent>
     [[gnu::used]] static void log_guard(const TGuard &, const TEvent &,
                                         bool result) {
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_DEBUG
         const char *resultString = result ? "[PASS]" : "[DO NOT PASS]";
         ESP_LOGV(STATE_MACHINE_TAG, "%s: %s", resultString,
                  sml::aux::get_type_name<SM>());
         ESP_LOGD(STATE_MACHINE_TAG, "%s: %s, %s", resultString,
                  sml::aux::get_type_name<TGuard>(),
                  sml::aux::get_type_name<TEvent>());
+#endif
     }
 
     template <class SM, class TAction, class TEvent>
     [[gnu::used]] static void log_action(const TAction &, const TEvent &) {
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_VERBOSE
         ESP_LOGV(STATE_MACHINE_TAG, "%s", sml::aux::get_type_name<SM>());
+#endif
     }
 
     template <class SM, class TSrcState, class TDstState>
     [[gnu::used]] static void log_state_change(const TSrcState &src,
                                                const TDstState &dst) {
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_DEBUG
         ESP_LOGD(STATE_MACHINE_TAG, "%s: %s -> %s",
                  sml::aux::get_type_name<SM>(), src.c_str(), dst.c_str());
+#endif
     }
 };
 #endif  // STATELOGGER_H

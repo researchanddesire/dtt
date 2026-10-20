@@ -11,6 +11,8 @@
 #include <mbedtls/sha256.h>
 #include <time.h>
 
+#include "CertificateDateClient.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -43,7 +45,8 @@ bool waitForValidUtc(String &error) {
     return false;
 }
 
-bool beginFirmwareRequest(HTTPClient &http, WiFiClientSecure &secureClient,
+bool beginFirmwareRequest(HTTPClient &http,
+                          firmware::CertificateDateClient &secureClient,
                           WiFiClient &plainClient, const String &url,
                           const std::uint16_t timeoutMs, String &error) {
 #if defined(DTT_MIGRATION_LAB_INSECURE_HTTP) && defined(RAD_SERVER)
@@ -201,7 +204,7 @@ bool postCheck(const char *apiBaseUrl, const DeviceReport &report,
     if (url.endsWith("/")) url.remove(url.length() - 1);
     url += "/api/firmware/v1/check";
 
-    WiFiClientSecure secureClient;
+    firmware::CertificateDateClient secureClient;
     WiFiClient plainClient;
     HTTPClient http;
     if (!beginFirmwareRequest(http, secureClient, plainClient, url, 30000,
@@ -296,7 +299,7 @@ bool postCheck(const char *apiBaseUrl, const DeviceReport &report,
 bool installStreamedArtifact(const Artifact &artifact, const int updateCommand,
                              String &error) {
     NetworkRequestLock requestLock;
-    WiFiClientSecure secureClient;
+    firmware::CertificateDateClient secureClient;
     WiFiClient plainClient;
     HTTPClient http;
     if (!beginFirmwareRequest(http, secureClient, plainClient,
