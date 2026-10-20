@@ -23,7 +23,9 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 - Firmware changes enter `staging` first: branch from `origin/staging` and open the PR into `staging`. Promote with a same-repository `staging` → `main` PR.
 - A production fix may take firmware to `main` directly from a `fix/<issue>` branch (an owner prefix such as `AJ/fix/<issue>` also works) started from `origin/main`.
 - Changes outside the firmware directory (documentation, hardware, BOMs, workflows) may open their PR straight into `main`; they need no build or hardware checks. `PR target policy` enforces these rules.
-- After every merge into `main` that is not a promotion, `hotfix-sync.yml` merges `main` back into `staging` directly (main wins documentation, staging keeps its own firmware version) and opens a `main` → `staging` PR only when a conflict needs a person.
+- On every push to `main` and once a day, `hotfix-sync.yml` merges `main` back into `staging` directly as `rad-version-control[bot]` (main wins documentation and the firmware version). It opens a non-draft `main` → `staging` PR only when staging changed the same code.
+- Firmware versions are allocated only for merges into `main`: `publish_firmware.yml` runs `.github/scripts/allocate_version.sh` (identical in every firmware repository), commits `AUTO: Version bump main <version>` to `Version.h` and `version.json` as `rad-version-control[bot]`, then builds, signs and publishes the candidate. Staging merges allocate nothing. Never hand-edit the version.
+- `rad-version-control[bot]` bypasses every branch ruleset so version bumps and syncs push directly. Never open draft PRs.
 - Squash feature and fix PRs into one focused commit with a concise, imperative title. Merge `staging` → `main` promotions and `main` → `staging` sync PRs with a merge commit; never squash or rebase them.
 - Documentation is the exception: see Documentation below.
 
@@ -38,7 +40,7 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 
 - Releases live only in Supabase. Never publish firmware through GitHub Pages,
   S3, or committed binaries.
-- `publish_firmware.yml` runs on firmware pushes to `staging` and `main`: the
+- `publish_firmware.yml` runs on firmware pushes to `main`: the
   control plane allocates the version, the rad-version-control app commits the
   bump, CI builds V1, V2, and the migration bridge, and signed immutable
   artifacts are published as `validating` releases.
@@ -68,7 +70,7 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 - PRs into `staging` or `main` that change the firmware directory, or the validation tooling (`software/scripts/hil/`, `pr-firmware.yml`, `hardware-run.yml`, `.github/scripts/hil_evidence.py`), build every hardware variant and run the exact staging bundle for the PR merge SHA on the shared Test Rig. Other PRs skip both; `Build validation` and `Hardware validation` then pass without work.
 - `PR target policy`, `Build validation` and `Hardware validation` are required on `staging` and `main`.
 - The rig records the product's camera for the whole run; `Hardware evidence` comments on the PR with each device's video and result, pass or fail. Video never decides a result.
-- Merging a firmware change into `staging` or `main` allocates the next version and publishes a signed candidate through `publish_firmware.yml`.
+- Merging a firmware change into `main` allocates the next version and publishes a signed candidate through `publish_firmware.yml`; staging merges do not.
 - `pr-firmware.yml` calls the reviewed wrapper
   `.github/workflows/hardware-run.yml` pinned by commit SHA. The org runner
   group `rad-firmware-validation` allows only that exact ref, and
