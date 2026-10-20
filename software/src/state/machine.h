@@ -62,12 +62,23 @@ struct dtt_state_machine {
             "init.idle"_s + sml::on_exit<_> / (clear),
 
             "init.preflight"_s + on_entry<_> / (drawPage(&preflightPage), preflightCheck),
+            "init.preflight"_s + event<preflight_done>[isOnline<preflight_done> && !hasTrainerId<preflight_done>] = "provisioning"_s,
             "init.preflight"_s + event<preflight_done>[isOnline<preflight_done> && hasUpdate<preflight_done>] = "update"_s,
             "init.preflight"_s + event<preflight_done>[isOnline<preflight_done> && !isPaired<preflight_done>] = "pairing"_s,
             "init.preflight"_s + event<preflight_done> = "play.preflight"_s,
             "init.preflight"_s + sml::on_exit<_> / (clear),
 
             "provisioning.wifiSettings"_s = X,
+
+            // Stored identity is blank (erased NVS): fetch it by hardware
+            // address, then reboot so preflight runs with a real trainer ID.
+            "provisioning"_s + on_entry<_> / (drawPage(&provisioningPage), startTask(provisionTask, provisionTaskName, &provisionTaskHandle)),
+            "provisioning"_s + event<provision_complete> / espRestart = X,
+            "provisioning"_s + event<provision_failed> = "provisioning.error"_s,
+            "provisioning"_s + event<timeout_expired> / provisionTimedOut = "provisioning.error"_s,
+
+            "provisioning.error"_s + on_entry<_> / drawProvisionError,
+            "provisioning.error"_s + event<button_pressed> = "provisioning"_s,
 
             "pairing"_s + on_entry<_> / (drawPage(&pairingPage), startTask(checkIfPairedTask, checkIfPairedTaskName, &checkIfPairedTaskHandle, RUNTIME_TASK_STACK_MULTIPLIER)),
             "pairing"_s + event<done> = "play.preflight"_s,

@@ -20,10 +20,8 @@ constexpr char preflightChecksTaskName PROGMEM[] = "preflightChecksTask";
 constexpr char drawBatteryTaskName PROGMEM[] = "drawBatteryTask";
 constexpr char drawButtonTaskName PROGMEM[] = "drawButtonTask";
 
-#ifdef PROVISION
 extern TaskHandle_t provisionTaskHandle;
 constexpr char provisionTaskName PROGMEM[] = "provisionTask";
-#endif
 
 #ifndef PROVISION
 extern TaskHandle_t getDistanceTaskHandle;

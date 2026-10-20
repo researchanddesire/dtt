@@ -6,9 +6,7 @@ TaskHandle_t drawBatteryTaskHandle;
 TaskHandle_t drawButtonTaskHandle;
 TaskHandle_t updateTaskHandle;
 
-#ifdef PROVISION
 TaskHandle_t provisionTaskHandle;
-#endif
 
 #ifndef PROVISION
 TaskHandle_t getDistanceTaskHandle;
