@@ -32,6 +32,9 @@ jobs:
         with:
           version: latest
 
+      - name: Verify Supabase alias access
+        run: supabase storage ls "ss:///dtt-firmware/" --experimental
+
       - name: Download and verify immutable release
         id: release
         run: |
