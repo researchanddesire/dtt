@@ -16,27 +16,23 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 
 ## Branches and history
 
-- Persistent branches are lowercase `staging` and `main`. Never force-push,
-  rewrite, or delete them; the docs hub orders files by commit date.
-- Start feature and release work from `origin/staging` on an `AJ/` branch and
-  open the pull request back into `staging`. Squash feature PRs into one
-  focused commit with a concise, imperative title.
-- Promote releases with a same-repository `staging` to `main` pull request only
-  after every required build, test, artifact, and hardware validation passes.
-- Only urgent production fixes target `main` directly, with the standalone word
-  `hotfix` first in the PR title. `hotfix-sync.yml` then opens the `main` to
-  `staging` pull request; merge sync PRs with a merge commit, never squash.
+- Never force-push, rewrite, or delete `staging` or `main`; the docs hub orders
+  files by commit date.
+- Persistent branches are lowercase `staging` and `main`. Fetch before branching.
+- The firmware directory is `software/` (except the harness copy in `software/scripts/hil/`). `FIRMWARE_PATHS` in `pr-firmware.yml` and `pr-target-policy.yml` and the `publish_firmware.yml` push paths define it; keep them in sync.
+- Firmware changes enter `staging` first: branch from `origin/staging` and open the PR into `staging`. Promote with a same-repository `staging` → `main` PR.
+- A production fix may take firmware to `main` directly from a `fix/<issue>` branch (an owner prefix such as `AJ/fix/<issue>` also works) started from `origin/main`.
+- Changes outside the firmware directory (documentation, hardware, BOMs, workflows) may open their PR straight into `main`; they need no build or hardware checks. `PR target policy` enforces these rules.
+- After every merge into `main` that is not a promotion, `hotfix-sync.yml` merges `main` back into `staging` directly (main wins documentation, staging keeps its own firmware version) and opens a `main` → `staging` PR only when a conflict needs a person.
+- Squash feature and fix PRs into one focused commit with a concise, imperative title. Merge `staging` → `main` promotions and `main` → `staging` sync PRs with a merge commit; never squash or rebase them.
 - Documentation is the exception: see Documentation below.
 
-## Authorized Supabase projects
+## Supabase
 
-- Production project ref: `acjajruwevyyatztbkdf`. It backs the `main` firmware
-  control plane (`https://dashboard.researchanddesire.com`) and every
-  `dtt-firmware` alias rad-app reads (`alpha`, `production`, `v/latest`).
-- Staging project ref: `meuaxbjzqrszxdvmacug`. It backs the `staging` control
-  plane (`https://staging.researchanddesire.com`).
-- Every remote firmware publication or Supabase operation names its project
-  ref explicitly. Never use implicit CLI linked-project state.
+- The only Supabase project agents and workflows address is `acjajruwevyyatztbkdf`, through the organization secret `SUPABASE_ACCESS_TOKEN`. Name it explicitly in every remote operation; never infer a project from a URL, environment variable, cached CLI link, neighboring repository or prior conversation.
+- Firmware releases reach it only through the dashboard firmware API. PR hardware evidence videos go to its private `hil-evidence` bucket.
+- `release_alpha.yml` and `release_production.yml` copy verified releases into
+  its `dtt-firmware` aliases (`alpha`, `production`, `v/latest`).
 
 ## Firmware releases (Supabase only)
 
@@ -69,6 +65,10 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 
 ## Hardware validation
 
+- PRs into `staging` or `main` that change the firmware directory, or the validation tooling (`software/scripts/hil/`, `pr-firmware.yml`, `hardware-run.yml`, `.github/scripts/hil_evidence.py`), build every hardware variant and run the exact staging bundle for the PR merge SHA on the shared Test Rig. Other PRs skip both; `Build validation` and `Hardware validation` then pass without work.
+- `PR target policy`, `Build validation` and `Hardware validation` are required on `staging` and `main`.
+- The rig records the product's camera for the whole run; `Hardware evidence` comments on the PR with each device's video and result, pass or fail. Video never decides a result.
+- Merging a firmware change into `staging` or `main` allocates the next version and publishes a signed candidate through `publish_firmware.yml`.
 - `pr-firmware.yml` calls the reviewed wrapper
   `.github/workflows/hardware-run.yml` pinned by commit SHA. The org runner
   group `rad-firmware-validation` allows only that exact ref, and

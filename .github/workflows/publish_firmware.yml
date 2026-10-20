@@ -1,41 +1,17 @@
 name: Publish immutable firmware candidate
 
 on:
+  # Manual runs republish the current branch head after a failed candidate.
+  workflow_dispatch:
   push:
     branches: [main, staging]
     paths:
-      - "software/include/**"
-      - "software/lib/**"
-      - "software/src/**"
-      - "software/test/**"
-      - "software/data/**"
-      - "software/platformio.ini"
-      - "software/partition*.csv"
-      - "software/sdkconfig*.defaults"
-      - "software/migration/**"
-      - "software/generate_migration_assets.py"
-      - "software/pre_build_script.py"
-      - "software/firmware_build_metadata.py"
-      - "software/serial_identity_build.py"
-      - "software/scripts/release_version.py"
-      - "software/scripts/migration_build_identity.py"
-      - "software/scripts/test_release_version.py"
-      - ".github/scripts/download_verified_release.py"
-      - ".github/scripts/test_download_verified_release.py"
-      - ".github/scripts/build_web_installer.py"
-      - ".github/scripts/test_build_web_installer.py"
-      - ".github/scripts/publish_immutable_firmware.py"
-      - ".github/scripts/test_publish_immutable_firmware.py"
-      - ".github/scripts/check_firmware_size.py"
-      - ".github/scripts/test_check_firmware_size.py"
-      - ".github/scripts/check_migration_image.py"
-      - ".github/scripts/test_check_migration_image.py"
-      - ".github/scripts/release_workflow.py"
-      - ".github/scripts/test_release_workflow.py"
-      - ".github/workflows/finalize_release.yml"
-      - ".github/workflows/publish_firmware.yml"
-      - ".github/workflows/release_alpha.yml"
-      - ".github/workflows/release_production.yml"
+      # The firmware directory only: a change here allocates the next version and
+      # publishes a signed candidate. Keep in sync with FIRMWARE_PATHS in
+      # pr-firmware.yml and pr-target-policy.yml. Release tooling changes are
+      # exercised by PR checks and republished manually.
+      - "software/**"
+      - "!software/scripts/hil/**"
 
 permissions:
   contents: write
