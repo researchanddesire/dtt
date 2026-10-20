@@ -172,8 +172,9 @@ jobs:
   hardware:
     needs: build_required
     if: github.event.pull_request.head.repo.full_name == github.repository
-    # Runner-group access is restricted to reviewed workflow paths and refs.
-    uses: ./.github/workflows/hardware-run.yml
+    # Use the exact reviewed wrapper commit allowed by the runner group.
+    # Runner-group access is restricted to this full workflow path and ref.
+    uses: researchanddesire/Open-Source-Deepthroat-Trainer_DTT/.github/workflows/hardware-run.yml@bfa30392c62ac9bc1f24a423d2f0245a11915c9c
   hardware_required:
     name: Hardware validation
     if: always()

@@ -75,15 +75,18 @@ validate_partition_table_fits_flash()
 
 
 # The dashboard API credential is supplied at build time (a CI secret) and is
-# never committed. Without it, src/wifiSettings.cpp uses its DEV_KEY_123 default.
+# never committed. Environments opt in with custom_rad_public_key = environment;
+# others keep src/wifiSettings.cpp's DEV_KEY_123 default.
 def apply_api_credential():
-    credential = os.environ.get("RAD_PUBLIC_KEY", "").strip()
     if has_build_define("RAD_PUBLIC_KEY"):
         return
+    if env.GetProjectOption("custom_rad_public_key", "") != "environment":
+        return
+    credential = os.environ.get("RAD_PUBLIC_KEY", "").strip()
     if credential:
         env.Append(CPPDEFINES=[("RAD_PUBLIC_KEY", env.StringifyMacro(credential))])
         print("RAD_PUBLIC_KEY supplied from the build environment")
-    elif has_build_define("FIRMWARE_TRACK") and not has_build_define("VERSIONDEV"):
+    elif not has_build_define("VERSIONDEV"):
         print("WARNING: RAD_PUBLIC_KEY is not set; this release build uses DEV_KEY_123")
 
 
