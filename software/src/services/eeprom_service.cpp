@@ -55,21 +55,21 @@ void initEEPROM() {
                  "itself once online");
     }
 
+    // Read the persisted flag as a byte: 0xFF is not a valid bool value.
+    uint8_t alphaValue = 0;
     if (eepromReady) {
-        EEPROM.get(110, isAlphaVersion);
+        EEPROM.get(110, alphaValue);
         EEPROM.get(132, serialNumber);
     }
+    isAlphaVersion = alphaValue == 1;
     if (serialNumber < 0) {
         serialNumber = 0;  // erased flash reads back as -1
     }
-    ESP_LOGI(TAG,
-             "EEPROM initialization complete. TrainerId: %s, TrainerIdShort: "
-             "%s, Serial: %d",
-             trainerId.c_str(), trainerIdShort.c_str(), serialNumber);
+    ESP_LOGI(TAG, "EEPROM initialization complete");
 
     // if isAlphaVersion is not defined assume false
     // If isAlphaVersion is uninitialized (EEPROM default is 0xFF), set to false
-    if (eepromReady && isAlphaVersion != true && isAlphaVersion != false) {
+    if (eepromReady && alphaValue > 1) {
         isAlphaVersion = false;
         EEPROM.put(110, isAlphaVersion);
         EEPROM.commit();
@@ -77,12 +77,11 @@ void initEEPROM() {
     }
 
 #ifdef BYPASS_EEPROM
+    // Matches rad-app's integration seed (042_dtt_integration_test.sql).
     trainerId = "B1E57A229D22417E88B476977AF7226A";
     trainerIdShort = "7226A";
     serialNumber = 0;
     ESP_LOGI(TAG, "BYPASS_EEPROM enabled");
-    ESP_LOGI(TAG, "EEPROM initialization complete. TrainerId: %s, Serial: %d",
-             trainerId.c_str(), serialNumber);
 #endif
 
 #ifdef FORCE_TRAINER_ID
@@ -102,9 +101,6 @@ void toggleIsAlpha() {
 bool saveToEEPROM(const String &newTrainerId, const int newSerialNumber) {
     ESP_LOGD(TAG, "Saving to EEPROM...");
     String newTrainerIdShort = newTrainerId.substring(0, 6);
-    ESP_LOGD(TAG, "TrainerId: %s", trainerId.c_str());
-    ESP_LOGD(TAG, "TrainerIdShort: %s", newTrainerIdShort.c_str());
-    ESP_LOGD(TAG, "SerialNumber: %d", newSerialNumber);
 
     // Store char buffers to EEPROM with size limits
     char trainerIdBuffer[100];
@@ -147,9 +143,6 @@ bool saveToEEPROM(const String &newTrainerId, const int newSerialNumber) {
                  committed);
         return false;
     }
-
-    ESP_LOGI(TAG, "New TrainerId: %s", newTrainerIdBuffer);
-    ESP_LOGI(TAG, "New TrainerIdShort: %s", newTrainerIdShortBuffer);
 
     ESP_LOGI(TAG, "EEPROM save complete.");
 

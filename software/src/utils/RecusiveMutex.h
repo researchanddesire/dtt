@@ -5,7 +5,7 @@
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 
-#include <boost/sml.hpp>
+#include <cstdlib>
 
 /**
  * @brief ESP32RecursiveMutex class provides a recursive mutex functionality
@@ -16,7 +16,9 @@
 class ESP32RecursiveMutex {
   public:
     // Constructor: Creates a new recursive mutex
-    ESP32RecursiveMutex() { mutex = xSemaphoreCreateRecursiveMutex(); }
+    ESP32RecursiveMutex() : mutex(xSemaphoreCreateRecursiveMutex()) {
+        if (mutex == nullptr) std::abort();
+    }
 
     // Destructor: Deletes the recursive mutex
     ~ESP32RecursiveMutex() { vSemaphoreDelete(mutex); }
@@ -24,11 +26,16 @@ class ESP32RecursiveMutex {
     // Locks the mutex. If the mutex is already locked by the same task,
     // the function will return immediately instead of blocking.
     void lock() const {
-        xSemaphoreTakeRecursive(mutex, portTICK_PERIOD_MS * 1000);
+        // BasicLockable::lock must never return without owning the mutex.
+        // In particular, countdown actions can hold it for several seconds.
+        if (xSemaphoreTakeRecursive(mutex, portMAX_DELAY) != pdTRUE)
+            std::abort();
     }
 
     // Unlocks the mutex.
-    void unlock() const { xSemaphoreGiveRecursive(mutex); }
+    void unlock() const {
+        if (xSemaphoreGiveRecursive(mutex) != pdTRUE) std::abort();
+    }
 
     // Tries to lock the mutex. If the mutex is not available, the function
     // will return immediately with 'false'. If the mutex is available,

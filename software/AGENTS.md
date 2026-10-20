@@ -21,6 +21,13 @@ documentation) are in `../AGENTS.md`.
 - Keep stable `hashId`, physical flash size, partition layout, migration hops, checksum, reboot, and rollback behavior covered by native and hardware tests.
 - Never commit credentials, local build products, or generated secrets.
 
+## Device security
+
+- Dashboard and update HTTPS verify the CA bundle, hostname and certificate dates through `firmware::CertificateDateClient`; never use `setInsecure()`. Profiles whose SDK lacks `MBEDTLS_HAVE_TIME_DATE` must keep `MBEDTLS_SSL_KEEP_PEER_CERTIFICATE`.
+- `src/services/dhcp_server_patch.c` replaces the pinned ESP-IDF 4.4.7 SoftAP DHCP server, and every build fails unless the link map uses it. Re-review it before changing the SDK.
+- Validate dashboard and BLE sessions with `SessionValidation.h` before parsing or persisting them. Keep its bounds in step with what rad-app's `get-settings` sends; a rejected page leaves the device on its cached session.
+- Never log trainer IDs, request or response bodies, or Wi-Fi credentials. Release environments reject embedded Wi-Fi and identity defines.
+
 ## PR hardware validation
 
 - Every PR into staging or main builds all hardware variants, including docs-only changes.

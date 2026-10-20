@@ -343,6 +343,7 @@ class WiFiManager {
 
     unsigned long _configPortalStart =
         0;  // ms config portal start time (updated for timeouts)
+    uint32_t _configPortalAbsoluteStart = 0;
     unsigned long _webPortalAccessed = 0;  // ms last web access time
     uint8_t _lastconxresult =
         WL_IDLE_STATUS;    // store last result when doing connect operations

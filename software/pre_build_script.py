@@ -1,8 +1,7 @@
 Import("env")
 import csv
 import os
-import re
-import socket
+import sys
 from pathlib import Path
 
 
@@ -93,83 +92,40 @@ def apply_api_credential():
 apply_api_credential()
 
 
-def get_local_ip():
-    try:
-        # Create a socket connection to an external server (doesn't actually connect)
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
-    except Exception as e:
-        print(f"Error getting local IP: {e}")
-        return None
+# Build flags may contain local credentials. Never print or rewrite them, and
+# never infer a development endpoint from the machine's network interfaces.
+if str(env.get("PIOENV", "")).startswith(("production", "staging")):
+    for forbidden in ("BYPASS_EEPROM", "FORCE_TRAINER_ID", "WIFI_SSID", "WIFI_PASSWORD"):
+        if has_build_define(forbidden):
+            raise ValueError("Release builds cannot embed development identity or Wi-Fi settings")
 
-# Function to check if SW_VERSION is already in CPPDEFINES
-def get_build_flag_value(flag_name):
-    try:
-        build_flags = env.ParseFlags(env['BUILD_FLAGS'])
-        all_defines = build_flags.get('CPPDEFINES', [])
-        
-        for define in all_defines:
-            if isinstance(define, (list, tuple)) and len(define) >= 2 and define[0] == flag_name:
-                print(f"Found Build Flag {flag_name} = {define[1]}")
-                return define[1]
-        
-        print(f"Found Build Flag {flag_name} = None")
-        return None
-    except KeyError:
-        return None
 
-# Function to check if a flag is defined (with or without value)
-def is_build_flag_defined(flag_name):
-    return has_build_define(flag_name)
+sys.path.insert(0, str(Path(env.subst("$PROJECT_DIR")) / "scripts"))
+from check_dhcp_patch import verify_link_map
 
-# Replace "localhost" with the local IP address in all BUILD_FLAGS
-def replace_localhost_in_flags():
-    local_ip = get_local_ip()
-    if not local_ip:
-        print("No local IP found, skipping localhost replacement")
+
+def _flat(values):
+    if isinstance(values, str) or not hasattr(values, "__iter__"):
+        yield str(values)
         return
-    
-    build_flags = env.get('BUILD_FLAGS', [])
-    new_flags = []
-    replacements = []
-    
-    for flag in build_flags:
-        if isinstance(flag, str) and 'localhost' in flag:
-            new_flag = flag.replace('localhost', local_ip)
-            replacements.append((flag, new_flag))
-            new_flags.append(new_flag)
-        else:
-            new_flags.append(flag)
-    
-    if replacements:
-        print(f"\nLocalhost -> {local_ip}")
-        print(f"{'Key':<20}{'Old':<25}{'New'}")
-        print("-" * 65)
-        for orig, repl in replacements:
-            if '=' in orig:
-                key = orig.split('=')[0].replace('-D ', '').strip()
-                old_val = orig.split('=', 1)[1].strip('"')
-                new_val = repl.split('=', 1)[1].strip('"')
-            else:
-                key, old_val, new_val = orig, orig, repl
-            print(f"{key:<20}{old_val:<25}{new_val}")
-        print()
-    
-    env.Replace(BUILD_FLAGS=new_flags)
+    for value in values:
+        yield from _flat(value)
 
 
-# Replace localhost with local IP (only for VERSIONDEV builds)
-if is_build_flag_defined('VERSIONDEV'):
-    print("VERSIONDEV is defined")
-    
-    local_ip = get_local_ip()
-    print(f"Detected local IP: {local_ip}")
-    
-    replace_localhost_in_flags()
-    
-    print(f"Final BUILD_FLAGS: {env['BUILD_FLAGS']}")
-else:
-    print("VERSIONDEV is not defined")
+def linker_map_path(env):
+    # Arduino links with -Map=$BUILD_DIR/$PROGNAME.map. ESP-IDF profiles use
+    # CMake's link flags, which name the map after the CMake project. The
+    # linker writes the last map option it receives.
+    path = "$BUILD_DIR/${PROGNAME}.map"
+    for flag in _flat(env.get("LINKFLAGS", [])):
+        for prefix in ("-Wl,--Map=", "-Wl,-Map="):
+            if flag.startswith(prefix):
+                path = flag[len(prefix):].strip('"')
+    return Path(env.subst(path))
+
+
+def verify_dhcp_patch(source, target, env):
+    verify_link_map(linker_map_path(env))
+
+
+env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", verify_dhcp_patch)

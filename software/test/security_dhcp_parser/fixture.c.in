@@ -1,0 +1,339 @@
+#include <arpa/inet.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+typedef uint8_t u8_t;
+typedef uint16_t u16_t;
+typedef uint32_t u32_t;
+typedef int16_t s16_t;
+typedef struct { u32_t addr; } ip4_addr_t;
+typedef ip4_addr_t ip_addr_t;
+struct udp_pcb { int unused; };
+struct dhcps_state { s16_t state; };
+// Exact ESP-IDF v4.4.7 wire layout; ports below replace only lwIP services.
+struct dhcps_msg {
+    u8_t op, htype, hlen, hops, xid[4];
+    u16_t secs, flags;
+    u8_t ciaddr[4], yiaddr[4], siaddr[4], giaddr[4], chaddr[16];
+    u8_t sname[64], file[128], options[312];
+};
+_Static_assert(offsetof(struct dhcps_msg, options) == 236, "BOOTP header layout");
+_Static_assert(sizeof(struct dhcps_msg) == 548, "SDK DHCP message allocation");
+struct dhcps_pool { ip4_addr_t ip; u8_t mac[6]; u32_t lease_timer; };
+typedef struct _list_node { void *pnode; struct _list_node *pnext; } list_node;
+static list_node *plist;
+static ip4_addr_t client_address, client_address_plus;
+static bool renew;
+static const u32_t magic_cookie = 0x63538263;
+static struct { bool enable; ip4_addr_t start_ip, end_ip; } dhcps_poll;
+static u32_t dhcps_lease_time = 120;
+#define DHCPS_LEASE_UNIT 60
+#define DHCPS_COARSE_TIMER_SECS 1
+// ACTUAL_DEFINITIONS
+
+static unsigned allocation_calls, free_calls, live_allocations, fail_allocation;
+static size_t last_allocation_size;
+static void *tracked_malloc(size_t size) {
+    ++allocation_calls;
+    last_allocation_size = size;
+    if (fail_allocation == allocation_calls) return NULL;
+    void *result = malloc(size);
+    assert(result != NULL);
+    ++live_allocations;
+    return result;
+}
+static void tracked_free(void *pointer) {
+    if (pointer) {
+        assert(live_allocations > 0);
+        --live_allocations;
+        ++free_calls;
+        free(pointer);
+    }
+}
+static bool ip4_addr_isany(const ip4_addr_t *address) { return address->addr == 0; }
+#define mem_malloc tracked_malloc
+#define mem_free tracked_free
+#define free tracked_free
+// ACTUAL_INSERT
+// ACTUAL_REMOVE
+// ACTUAL_OPTIONS
+#define parse_msg actual_parse_msg
+// ACTUAL_MESSAGE
+#undef parse_msg
+#undef free
+
+struct pbuf { struct pbuf *next; void *payload; u16_t tot_len, len; };
+static unsigned pbuf_free_calls, freed_pbuf_nodes, copy_calls, parse_calls;
+static unsigned offers, acknowledgements, negative_acknowledgements;
+static bool short_copy;
+static const u8_t *expected_packet;
+static u16_t expected_packet_size;
+static u16_t last_parse_length;
+
+static u16_t pbuf_copy_partial(const struct pbuf *p, void *buffer, u16_t len, u16_t offset) {
+    ++copy_calls;
+    assert(offset == 0);
+    size_t copied = 0;
+    size_t limit = short_copy && len > 0 ? len - 1 : len;
+    for (; p && copied < limit; p = p->next) {
+        size_t count = p->len;
+        if (count > limit - copied) count = limit - copied;
+        memcpy((u8_t *)buffer + copied, p->payload, count);
+        copied += count;
+    }
+    return (u16_t)copied;
+}
+static void pbuf_free(struct pbuf *p) {
+    ++pbuf_free_calls;
+    while (p) {
+        struct pbuf *next = p->next;
+        free(p->payload);
+        free(p);
+        p = next;
+        ++freed_pbuf_nodes;
+    }
+}
+static s16_t parse_msg(struct dhcps_msg *message, u16_t length) {
+    ++parse_calls;
+    last_parse_length = length;
+    assert(expected_packet != NULL);
+    assert(length == expected_packet_size - 240);
+    assert(memcmp(message, expected_packet, expected_packet_size) == 0);
+    return actual_parse_msg(message, length);
+}
+static void send_offer(struct dhcps_msg *message, u16_t length) { ++offers; }
+static void send_ack(struct dhcps_msg *message, u16_t length) { ++acknowledgements; }
+static void send_nak(struct dhcps_msg *message, u16_t length) { ++negative_acknowledgements; }
+#define free tracked_free
+// ACTUAL_HANDLER
+#undef free
+
+static void reset_state(void) {
+    while (plist) {
+        list_node *next = plist->pnext;
+        tracked_free(plist->pnode);
+        tracked_free(plist);
+        plist = next;
+    }
+    assert(live_allocations == 0);
+    allocation_calls = free_calls = fail_allocation = 0;
+    last_allocation_size = 0;
+    pbuf_free_calls = freed_pbuf_nodes = copy_calls = parse_calls = 0;
+    offers = acknowledgements = negative_acknowledgements = 0;
+    short_copy = false;
+    expected_packet = NULL;
+    expected_packet_size = last_parse_length = 0;
+    client_address.addr = htonl(0x0a000002);
+    client_address_plus = client_address;
+    dhcps_poll.start_ip = client_address;
+    dhcps_poll.end_ip.addr = htonl(0x0a000014);
+    renew = false;
+}
+static u8_t exact_options(const u8_t *data, size_t length) {
+    assert(length <= INT16_MAX);
+    u8_t *buffer = length ? malloc(length) : NULL;
+    if (length) memcpy(buffer, data, length);
+    u8_t state = parse_options(buffer, (s16_t)length);
+    if (length) assert(memcmp(buffer, data, length) == 0);
+    free(buffer);
+    return state;
+}
+#define CHECK_OPTIONS(expected, ...) do { \
+    const u8_t data[] = {__VA_ARGS__}; \
+    assert(exact_options(data, sizeof(data)) == (expected)); \
+} while (0)
+
+static void test_options(void) {
+    reset_state();
+    assert(parse_options(NULL, 10) == DHCPS_STATE_IDLE);
+    assert(parse_options(NULL, 0) == DHCPS_STATE_IDLE);
+    u8_t pad = 0;
+    assert(parse_options(&pad, -1) == DHCPS_STATE_IDLE);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 255);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53, 1);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53, 2, 1);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53, 1, 1, 42);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 42, 255, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 50, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 50, 1, 10);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 50, 2, 10, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 50, 3, 10, 0, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 50, 4, 10, 0, 0);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53, 1, 1, 50, 3, 10, 0, 0);
+    CHECK_OPTIONS(DHCPS_STATE_OFFER, 53, 1, 1);
+    CHECK_OPTIONS(DHCPS_STATE_OFFER, 0, 0, 53, 1, 1, 0, 255, 53);
+    CHECK_OPTIONS(DHCPS_STATE_OFFER, 42, 0, 53, 1, 1, 255);
+    CHECK_OPTIONS(DHCPS_STATE_OFFER, 42, 3, 255, 53, 255, 53, 1, 1, 255);
+    CHECK_OPTIONS(DHCPS_STATE_ACK, 53, 1, 3, 50, 4, 10, 0, 0, 2, 255);
+    CHECK_OPTIONS(DHCPS_STATE_NAK, 53, 1, 3, 50, 4, 10, 0, 0, 3, 255);
+    CHECK_OPTIONS(DHCPS_STATE_ACK, 53, 2, 3, 99, 50, 5, 10, 0, 0, 2, 99, 255);
+    CHECK_OPTIONS(DHCPS_STATE_NAK, 53, 1, 3, 255);
+    renew = true;
+    CHECK_OPTIONS(DHCPS_STATE_ACK, 53, 1, 3, 255);
+    CHECK_OPTIONS(DHCPS_STATE_RELEASE, 53, 1, 7, 255);
+    CHECK_OPTIONS(DHCPS_STATE_IDLE, 53, 1, 4, 255);
+    u8_t maximum_option[261] = {42, 255};
+    maximum_option[257] = 53; maximum_option[258] = 1;
+    maximum_option[259] = 1; maximum_option[260] = 255;
+    assert(exact_options(maximum_option, sizeof(maximum_option)) == DHCPS_STATE_OFFER);
+}
+
+static uint32_t fuzz_state = 0x6147d4c9;
+static uint32_t random_word(void) {
+    fuzz_state ^= fuzz_state << 13;
+    fuzz_state ^= fuzz_state >> 17;
+    fuzz_state ^= fuzz_state << 5;
+    return fuzz_state;
+}
+static void test_fuzz(void) {
+    reset_state();
+    // Exhaust every 1/2-byte buffer: catches final type/length dereferences.
+    for (unsigned first = 0; first < 256; ++first) {
+        u8_t data[2] = {(u8_t)first, 0};
+        exact_options(data, 1);
+        for (unsigned second = 0; second < 256; ++second) {
+            data[1] = (u8_t)second;
+            exact_options(data, 2);
+        }
+    }
+    for (unsigned iteration = 0; iteration < 100000; ++iteration) {
+        size_t length = random_word() % 513;
+        u8_t data[512];
+        for (size_t i = 0; i < length; ++i) data[i] = (u8_t)random_word();
+        renew = (iteration & 1) != 0;
+        u8_t first = exact_options(data, length);
+        assert(first >= DHCPS_STATE_OFFER && first <= DHCPS_STATE_RELEASE);
+        assert(exact_options(data, length) == first);
+    }
+    u8_t *pads = calloc(INT16_MAX, 1);
+    assert(pads != NULL);
+    assert(exact_options(pads, INT16_MAX) == DHCPS_STATE_IDLE);
+    pads[INT16_MAX - 1] = 53;
+    assert(exact_options(pads, INT16_MAX) == DHCPS_STATE_IDLE);
+    free(pads);
+}
+
+static struct dhcps_msg *message(const u8_t *options, size_t size) {
+    struct dhcps_msg *result = calloc(1, sizeof(*result));
+    assert(result != NULL && size <= sizeof(result->options) - 4);
+    memcpy(result->options, &magic_cookie, 4);
+    memcpy(result->options + 4, options, size);
+    result->chaddr[0] = 2; result->chaddr[5] = 1;
+    return result;
+}
+static struct pbuf *packet(const u8_t *bytes, u16_t size, u16_t chunk) {
+    struct pbuf *first = NULL, **tail = &first;
+    for (size_t offset = 0; offset < size;) {
+        size_t length = size - offset;
+        if (length > chunk) length = chunk;
+        struct pbuf *part = calloc(1, sizeof(*part));
+        assert(part != NULL);
+        part->payload = malloc(length); assert(part->payload != NULL);
+        memcpy(part->payload, bytes + offset, length);
+        part->len = (u16_t)length; part->tot_len = size - offset;
+        *tail = part; tail = &part->next; offset += length;
+    }
+    return first;
+}
+static void test_receive(void) {
+    const u8_t discover[] = {53, 1, 1, 255};
+    struct dhcps_msg *valid = message(discover, sizeof(discover));
+    reset_state();
+    handle_dhcp(NULL, NULL, NULL, NULL, 68);
+    assert(allocation_calls == 0 && pbuf_free_calls == 0);
+    const unsigned invalid_sizes[] = {0, 1, 239, INT16_MAX + 1u, UINT16_MAX};
+    for (size_t i = 0; i < sizeof(invalid_sizes) / sizeof(invalid_sizes[0]); ++i) {
+        reset_state();
+        // No payload allocation: rejection must precede any attempted read.
+        struct pbuf *invalid = calloc(1, sizeof(*invalid));
+        invalid->tot_len = (u16_t)invalid_sizes[i];
+        handle_dhcp(NULL, NULL, invalid, NULL, 68);
+        assert(allocation_calls == 0 && copy_calls == 0 && parse_calls == 0);
+        assert(pbuf_free_calls == 1 && freed_pbuf_nodes == 1);
+    }
+    for (unsigned failure = 1; failure <= 2; ++failure) {
+        reset_state(); expected_packet = (u8_t *)valid; expected_packet_size = 244;
+        if (failure == 1) fail_allocation = 1; else short_copy = true;
+        handle_dhcp(NULL, NULL, packet((u8_t *)valid, 244, 61), NULL, 68);
+        assert(parse_calls == 0 && live_allocations == 0);
+        assert(pbuf_free_calls == 1 && freed_pbuf_nodes == 4);
+        assert(free_calls == (failure == 1 ? 0u : 1u));
+    }
+    reset_state(); expected_packet = (u8_t *)valid; expected_packet_size = 244;
+    handle_dhcp(NULL, NULL, packet((u8_t *)valid, 244, 61), NULL, 68);
+    assert(copy_calls == 1 && parse_calls == 1 && last_parse_length == 4);
+    assert(pbuf_free_calls == 1 && freed_pbuf_nodes == 4 && offers == 1);
+    assert(live_allocations == 2);  // Only the intentional lease survives.
+    reset_state(); expected_packet = (u8_t *)valid; expected_packet_size = 240;
+    handle_dhcp(NULL, NULL, packet((u8_t *)valid, 240, 80), NULL, 68);
+    assert(parse_calls == 1 && last_parse_length == 0 && live_allocations == 0 && offers == 0);
+    assert(last_allocation_size == sizeof(struct dhcps_msg));
+    reset_state();
+    u8_t *large = calloc(INT16_MAX, 1); assert(large != NULL);
+    memcpy(large, valid, 244);
+    expected_packet = large; expected_packet_size = INT16_MAX;
+    handle_dhcp(NULL, NULL, packet(large, INT16_MAX, 8191), NULL, 68);
+    assert(parse_calls == 1 && last_parse_length == INT16_MAX - 240);
+    assert(pbuf_free_calls == 1 && freed_pbuf_nodes == 5 && offers == 1);
+    assert(live_allocations == 2);
+    free(large); free(valid); reset_state();
+}
+
+static void test_leases(void) {
+    const u8_t discover[] = {53, 1, 1, 255};
+    const u8_t request[] = {53, 1, 3, 50, 4, 10, 0, 0, 2, 255};
+    const u8_t renewal[] = {53, 1, 3, 255};
+    const u8_t release[] = {53, 1, 7, 255};
+    const u8_t malformed[] = {53, 1, 1, 50, 4, 10};
+    struct dhcps_msg *valid = message(discover, sizeof(discover));
+    struct dhcps_msg *invalid = message(malformed, sizeof(malformed));
+    reset_state();
+    assert(actual_parse_msg(NULL, 4) == DHCPS_STATE_IDLE);
+    assert(actual_parse_msg(valid, INT16_MAX + 1u) == DHCPS_STATE_IDLE);
+    assert(actual_parse_msg(invalid, sizeof(malformed)) == DHCPS_STATE_IDLE);
+    assert(plist == NULL && allocation_calls == 0);
+    for (unsigned failure = 1; failure <= 2; ++failure) {
+        reset_state(); fail_allocation = failure;
+        assert(actual_parse_msg(valid, sizeof(discover)) == DHCPS_STATE_IDLE);
+        assert(plist == NULL && live_allocations == 0);
+        assert(free_calls == (failure == 1 ? 0u : 1u));
+    }
+    reset_state();
+    assert(actual_parse_msg(valid, sizeof(discover)) == DHCPS_STATE_OFFER);
+    assert(plist && !plist->pnext && live_allocations == 2);
+    struct dhcps_pool *lease = plist->pnode;
+    lease->lease_timer = 17;
+    const u32_t original_ip = lease->ip.addr;
+    assert(actual_parse_msg(invalid, sizeof(malformed)) == DHCPS_STATE_IDLE);
+    assert(plist->pnode == lease && lease->lease_timer == 17 && lease->ip.addr == original_ip);
+    assert(allocation_calls == 2 && live_allocations == 2);
+    memcpy(valid->options + 4, request, sizeof(request));
+    assert(actual_parse_msg(valid, sizeof(request)) == DHCPS_STATE_ACK);
+    assert(plist->pnode == lease && lease->lease_timer == 7200 && allocation_calls == 2);
+    memcpy(valid->ciaddr, &lease->ip.addr, sizeof(lease->ip.addr));
+    memcpy(valid->options + 4, renewal, sizeof(renewal));
+    assert(actual_parse_msg(valid, sizeof(renewal)) == DHCPS_STATE_ACK && renew);
+    memcpy(valid->options + 4, release, sizeof(release));
+    assert(actual_parse_msg(valid, sizeof(release)) == DHCPS_STATE_RELEASE);
+    assert(plist == NULL && live_allocations == 0);
+    free(valid); free(invalid); reset_state();
+}
+
+int main(int argc, char **argv) {
+    assert(argc == 2);
+    if (strcmp(argv[1], "options") == 0) test_options();
+    else if (strcmp(argv[1], "fuzz") == 0) test_fuzz();
+    else if (strcmp(argv[1], "receive") == 0) test_receive();
+    else if (strcmp(argv[1], "leases") == 0) test_leases();
+    else assert(false);
+    puts("DHCP parser/receive assertions passed");
+}

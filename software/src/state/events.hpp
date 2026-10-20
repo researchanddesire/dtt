@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 struct timeout {};
 
 struct button_pressed {};
@@ -25,3 +27,17 @@ struct three_strikes {};
 struct restart_training {};
 struct request_pairing {};
 struct force_update {};
+
+// Synchronous application under the state machine's recursive lock. Only
+// states without an active training task accept replacement requests.
+struct session_replace_requested {
+    std::function<bool()> apply;
+    bool &applied;
+};
+
+struct session_load_ready {
+    std::function<bool()> apply;
+    bool &applied;
+};
+
+struct session_load_failed {};
