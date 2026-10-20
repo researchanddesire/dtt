@@ -1,0 +1,59 @@
+name: Publish verified production alias
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Validated main release UUID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dtt-firmware-alias
+  cancel-in-progress: false
+
+jobs:
+  alias:
+    runs-on: ubuntu-latest
+    environment: firmware-production
+    env:
+      FIRMWARE_PUBLISH_TOKEN: ${{ secrets.FIRMWARE_PUBLISH_TOKEN }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: acjajruwevyyatztbkdf
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Download and verify immutable release
+        id: release
+        run: |
+          python .github/scripts/download_verified_release.py \
+            --release-id "${{ inputs.release_id }}" \
+            --track main \
+            --device dtt \
+            --hardware-variant v1 \
+            --output firmware
+          test -f firmware/firmware.bin
+          test -f firmware/version.json
+
+      - name: Replace production and latest Supabase aliases
+        run: |
+          for ALIAS in production v/latest; do
+            supabase storage rm "ss:///dtt-firmware/$ALIAS/firmware.bin" "ss:///dtt-firmware/$ALIAS/partitions.bin" \
+              "ss:///dtt-firmware/$ALIAS/bootloader.bin" "ss:///dtt-firmware/$ALIAS/version.json" --experimental --yes || true
+            for binary in firmware.bin partitions.bin bootloader.bin; do
+              [[ ! -f "./firmware/$binary" ]] || supabase storage cp "./firmware/$binary" "ss:///dtt-firmware/$ALIAS/$binary" \
+                --content-type "application/octet-stream" --cache-control "no-cache" --experimental
+            done
+            supabase storage cp ./firmware/version.json "ss:///dtt-firmware/$ALIAS/version.json" \
+              --content-type "application/json" --cache-control "no-cache" --experimental
+          done
+
+      - name: Summary
+        run: echo "production and v/latest now point to validated release ${{ inputs.release_id }} (v${{ steps.release.outputs.version }})" >> "$GITHUB_STEP_SUMMARY"
