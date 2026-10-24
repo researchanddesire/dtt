@@ -3,11 +3,13 @@
 - [DTT.FCStd](DTT.FCStd) — editable FreeCAD assembly (FreeCAD 1.1+).
 - [DTT.step](DTT.step) — STEP assembly.
 - [Body + diffuser 3MF](../production-exports/cad/integrated-diffuser/DTT-Outer-Body-Print-in-Place.3mf) — two material regions printed together.
+- [Screw mount](screw-mount/) — backplate mount, its builder script, BOM and assembly.
 
 The assembly includes the housing, diffuser, PCB, OLED, sensor, 702035 battery,
-ribbon cable, harness, screws, and loop backing. Groups separate the parts;
-`AssemblyParameters` holds dimensions. Hide the housing to see the interior.
-Show `ExplodedView` for the exploded assembly.
+ribbon cable, harness, heat-set inserts, standoffs, and the suction-cup
+backplate with its screws. Groups separate the parts; `AssemblyParameters`
+holds dimensions and `MountParameters` drives the screw mount. Hide the
+housing to see the interior. Show `ExplodedView` for the exploded assembly.
 
 ![Internal assembly](DTT-Internal-Assembly.png)
 

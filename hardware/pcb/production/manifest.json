@@ -1,6 +1,6 @@
 {
   "project": "hardware/pcb/kicad-rev4/217A_dttrainer_rev4",
-  "kicad_version": "7.0.7",
+  "kicad_version": "7.0.11",
   "units": "mm",
   "origin": "KiCad auxiliary drill/place origin; X right, Y up",
   "pcb_components": 69,
@@ -13,7 +13,7 @@
     "U4"
   ],
   "source_sha256": {
-    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.kicad_pcb": "a857739a881039854a69aa8f35bb2594e406b36af665cd7cf3b71ade4d9ea45a",
+    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.kicad_pcb": "33d4f7081d6560109682cd6e9fcf9002f37f0996991603b6bcdd16690459d3e7",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.kicad_pro": "df2b22356ad4ba6835a7b9dfe6cd32e6422a1fb220591ed11d6d91d5d950944a",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.kicad_sch": "cd7b90a3c56a5ecdb867bf64c688c06eb0694d4602564198f03042422032ef6e",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/C1.kicad_mod": "781a52e74fe6bc9c37c65bf5f3a629a9d108f0d4f55a748e5ddf1e62234fe17b",
@@ -37,10 +37,10 @@
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/C9.kicad_mod": "0852d900c41d3339c7b4598a2b61886de183e74054e6afc198fc28e4072e986e",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/D1.kicad_mod": "f46480ecb56bebd865f7d82814a1c781495d3866cbd22176243b2d92cbd7eccc",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/D2.kicad_mod": "a545fd251d2c78a6596bef88768f9c10f903bd8c1640c502f962ab5bff14cafd",
-    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE0.kicad_mod": "381e696a2a00b3560c4a8ff14b2d5ce321196b8fd27da9f6afe779fb52ac9449",
-    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE1.kicad_mod": "70aac23a461afe3e236b7819bbe49c2a97e0fc64b898c2652aca3cee05bd6f50",
-    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE2.kicad_mod": "a3d6bda5449ab6ae6c5261be72715587f9f2705c249bfa3768118130eb21c38e",
-    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE3.kicad_mod": "b4b0f9904f776135f19e0fc5e3df4e6d3f092954a3e6d1e9c0f6e5cf927e72d4",
+    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE0.kicad_mod": "d9ccf013faf87ca58a4ffed6afbe23f47977bfaa60203f86731213c52455f549",
+    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE1.kicad_mod": "ad2c72a2b691b2d21cc6004088925a4f4f9a3505e31b790a47f3b9e99f0f265b",
+    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE2.kicad_mod": "ef535d9c35ee37c68b3254ebb4bcc5ca43728f230e21f492097c492a70163e46",
+    "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/HOLE3.kicad_mod": "cce8019fd0752607a048ade314be127a4f928a945a46784587178da64b0a3e89",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/J1.kicad_mod": "bbf28b60e6165a9c30a8226cca1e4c6dd5d6c039934e419bac2f35f3ffbd8331",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/J2.kicad_mod": "1aee9112c2eca08ee3a02ec9200c52df0f2f3d23bebc5fb1abdd9e257e209a66",
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/217A_dttrainer_rev4.pretty/J3.kicad_mod": "626801d27abb4b0d539fa3020a159f654aeceab2a08a9320bcf2b51b40baafa0",
@@ -101,21 +101,21 @@
     "hardware/pcb/kicad-rev4/217A_dttrainer_rev4/usb-programming.kicad_sch": "eb4762b288250085b4315a56dc8b7e1388cbb6ffbef3a672057c981af2a01673"
   },
   "output_sha256": {
-    "Trainer_gerber.zip": "e25ea12a68e04d1a26a72dbb9d6ad21e718e0a60dd2444fe03caab48fc7e7888",
+    "Trainer_gerber.zip": "b53cd38f68bef051ea4dc787e783a85c9723c2f25f251338265fb5c2225089cc",
     "assembly-bom.csv": "996ed27de7c0f1418587f83a8adf243df15f9a5ea3de4ec2e03c0acef1a0dfde",
-    "gerbers/217A_dttrainer_rev4-B_Cu.gbl": "cd96a5b624baa3f2e632b679ee60dd74aceb5939ad3bd26e4ef0d1b92d1c6400",
-    "gerbers/217A_dttrainer_rev4-B_Mask.gbs": "02d8c9ee80cd815acc89bc1067b22a42a8207ed517b9f368dfdb3c45b3468fdc",
-    "gerbers/217A_dttrainer_rev4-B_Paste.gbp": "f38344d2a6e781b9e1af062029caa47fe102d6814bad1aa1a82ad4f4985d218c",
-    "gerbers/217A_dttrainer_rev4-B_Silkscreen.gbo": "3a6710902fadcf30fbe7c65f3de00e2de588bdd6fe51cf6c09aae617915edd92",
-    "gerbers/217A_dttrainer_rev4-Edge_Cuts.gm1": "99b8ab6a9f88f7994552f37d19754cd943d12b913da4933e6173e690c3b1e9a6",
-    "gerbers/217A_dttrainer_rev4-F_Cu.gtl": "567ddfe7ebc5d530f86b1a82c1d230ae70a91ce8689dd4abf50ac268ac362cc5",
-    "gerbers/217A_dttrainer_rev4-F_Mask.gts": "3ddae622f10cae51b22d3c81b38b50fe0ad36c50878a2003bd2977d74197a558",
-    "gerbers/217A_dttrainer_rev4-F_Paste.gtp": "7780b99bec90d274acb261bc8a2be9e0ac320a51bd7a6297119d240a5a4987f7",
-    "gerbers/217A_dttrainer_rev4-F_Silkscreen.gto": "8ba15d15e874ecb962a3371e3aa0ba38743222e61e9fc121dfbc45d3a10bceb5",
-    "gerbers/217A_dttrainer_rev4-job.gbrjob": "0b36d918676f03d3194ca10828be0a9abebc80690e34903bc7b89f2cb485fdfb",
-    "gerbers/217A_dttrainer_rev4.drl": "eef03cfeb5a66c88a7edf62e65fe316e0e9f29bcc1ca6d1cd090e603620c24b9",
+    "gerbers/217A_dttrainer_rev4-B_Cu.gbl": "79c49521906673abd1200afd366ef6676b484628b30a0eb9321443ce2cc751ce",
+    "gerbers/217A_dttrainer_rev4-B_Mask.gbs": "ca1ed536a69739c13ac35920bac3752cac300e574a9720694373767d67569c17",
+    "gerbers/217A_dttrainer_rev4-B_Paste.gbp": "a9f3ed47f5ae01a8be2b03ace050535978ca72273ab43d2ca5a809988e74a9b8",
+    "gerbers/217A_dttrainer_rev4-B_Silkscreen.gbo": "6d4cc9179a216c42746b27f1881ce3bbf436538728fd5b63ca6e064185141b1f",
+    "gerbers/217A_dttrainer_rev4-Edge_Cuts.gm1": "6854c4f0becc67172b712e502a5584f74cfb9458440a7e6fdaced2d598f01fb6",
+    "gerbers/217A_dttrainer_rev4-F_Cu.gtl": "0a9ca8808b901777b30ac6771c403fff2625c4547fe03099653b98e813a18f2b",
+    "gerbers/217A_dttrainer_rev4-F_Mask.gts": "211449d1643cd81ed28104c9fc88f9bd3254c1b1190cdfcbab901f9927e7ca25",
+    "gerbers/217A_dttrainer_rev4-F_Paste.gtp": "4d3d8d7bf6299e4be18b31a8be8b8fd4c66c55ce4a29749ba47b1ff5a2b6dee4",
+    "gerbers/217A_dttrainer_rev4-F_Silkscreen.gto": "da5f4b386940a4d0085c6b9f14b616c82d6fc84d3a1ef7badc35432f94469607",
+    "gerbers/217A_dttrainer_rev4-job.gbrjob": "8addc8a01fe3dcc8dd32f75bc5988dc98fe39535d9ba90b5e02b1ced8d9dd907",
+    "gerbers/217A_dttrainer_rev4.drl": "0075ab7f9510083b7cc6d6947108bbc97c852b551b043a150738bf3fa7365cf9",
     "pcb-bom.csv": "02717ab9281b7b04dafd2d16ed7bce331461658dbcab112fe7e53512446c322c",
     "pick-and-place.csv": "9f13b681aedb29d65d97107d832a88b28c92800844fc148c52e3d9519db3773c",
-    "schematic.pdf": "914ec83eb10a09271b340b327accfd8c82ed511816793866b497eab46919f37f"
+    "schematic.pdf": "f87df8950710faf5942aacf52c0dd2995993991662a463710263d61e870f803d"
   }
 }
