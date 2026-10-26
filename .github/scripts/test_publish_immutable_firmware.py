@@ -4,6 +4,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from publish_immutable_firmware import (
     Artifact,
@@ -50,6 +51,21 @@ class PublisherTests(unittest.TestCase):
             self.assertTrue(artifact.installable)
             self.assertEqual(artifact.install_order, 2)
             self.assertEqual(artifact.sha256, "c3bf47ea1f4a4a605470313cacb3a44f4a461f68c6faeab07e737610cb5ac835")
+
+    def test_preserves_windows_drive_and_space_in_artifact_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "firmware.bin"
+            path.write_bytes(b"firmware")
+            windows_path = r"C:\local builds\firmware.bin"
+            with mock.patch("publish_immutable_firmware.Path", return_value=path) as parse_path:
+                artifact = parse_artifact(f"application:{windows_path}:2:true")
+            parse_path.assert_called_once_with(windows_path)
+            self.assertEqual(artifact.install_order, 2)
+            self.assertTrue(artifact.installable)
+
+    def test_rejects_non_numeric_artifact_install_order(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            parse_artifact("application:firmware.bin:invalid:true")
 
     def test_adds_physical_flash_compatibility_rule(self):
         self.assertEqual(
