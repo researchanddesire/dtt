@@ -26,7 +26,20 @@ enum class SessionPersistenceError : uint8_t {
     None, Limit, Mount, Write, Rotate, Recover, Stage, Commit
 };
 enum class SettingsCacheSource : uint8_t { NotLoaded, Primary, Backup, Recovery };
-enum class SettingsFetchView : uint8_t { Summary, Transport, Parse, Storage, Memory };
+enum class SettingsFetchView : uint8_t { Summary, Transport, Parse, Storage, Write, Memory };
+
+struct SettingsWriteStatus {
+    uint32_t expected = 0;
+    uint32_t written = 0;
+    uint32_t openReportedSize = 0;
+    uint32_t reopenedSize = 0;
+    uint32_t verifiedBytes = 0;
+    uint32_t fsUsed = 0;
+    uint32_t fsTotal = 0;
+    bool opened = false;
+    bool reopened = false;
+    bool verified = false;
+};
 
 struct SettingsFetchStatus {
     uint32_t generation = 0;
@@ -50,6 +63,7 @@ struct SettingsFetchStatus {
     uint32_t updatedAtMs = 0;
     uint32_t freeHeap = 0;
     uint32_t largestBlock = 0;
+    SettingsWriteStatus write;
 };
 
 inline const char *settingsFetchStageName(SettingsFetchStage stage) {
@@ -113,6 +127,7 @@ inline const char *settingsFetchViewName(SettingsFetchView view) {
         case SettingsFetchView::Transport: return "transport";
         case SettingsFetchView::Parse: return "parse";
         case SettingsFetchView::Storage: return "storage";
+        case SettingsFetchView::Write: return "write";
         case SettingsFetchView::Memory: return "memory";
     }
     return "unknown";
@@ -120,6 +135,7 @@ inline const char *settingsFetchViewName(SettingsFetchView view) {
 inline bool parseSettingsFetchView(const char *name, SettingsFetchView &view) {
     for (const auto candidate : {SettingsFetchView::Summary, SettingsFetchView::Transport,
                                 SettingsFetchView::Parse, SettingsFetchView::Storage,
+                                SettingsFetchView::Write,
                                 SettingsFetchView::Memory}) {
         if (name && std::strcmp(name, settingsFetchViewName(candidate)) == 0) {
             view = candidate;
@@ -165,10 +181,21 @@ inline void writeSettingsFetchStatus(
         output["eventAccepted"] = status.eventAccepted;
         output["persisted"] = status.persisted;
         output["installed"] = status.installed;
+    } else if (view == SettingsFetchView::Write) {
+        output["expected"] = status.write.expected;
+        output["written"] = status.write.written;
+        output["openReportedSize"] = status.write.openReportedSize;
+        output["reopenedSize"] = status.write.reopenedSize;
+        output["verifiedBytes"] = status.write.verifiedBytes;
+        output["opened"] = status.write.opened;
+        output["reopened"] = status.write.reopened;
+        output["verified"] = status.write.verified;
     } else if (view == SettingsFetchView::Memory) {
         output["startedAtMs"] = status.startedAtMs;
         output["updatedAtMs"] = status.updatedAtMs;
         output["freeHeap"] = status.freeHeap;
         output["largestBlock"] = status.largestBlock;
+        output["fsUsed"] = status.write.fsUsed;
+        output["fsTotal"] = status.write.fsTotal;
     }
 }

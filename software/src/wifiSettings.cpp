@@ -680,6 +680,34 @@ namespace {
 constexpr char SESSION_TEMP_FILE[] = "/session.tmp";
 constexpr char SESSION_BACKUP_FILE[] = "/session.bak";
 
+// Verify a closed staging file against the exact bounded serialization with
+// constant memory. A matching size alone cannot detect corrupted/short reads.
+class SessionFileVerifier {
+   public:
+    explicit SessionFileVerifier(File &file) : file_(file) {}
+    size_t write(uint8_t value) { return write(&value, 1); }
+    size_t write(const uint8_t *bytes, size_t length) {
+        if (failed_) return 0;
+        for (size_t index = 0; index < length; ++index) {
+            const int value = file_.read();
+            if (value < 0 || static_cast<uint8_t>(value) != bytes[index]) {
+                failed_ = true;
+                return index;
+            }
+            ++verifiedBytes_;
+        }
+        return length;
+    }
+    size_t verifiedBytes() const { return verifiedBytes_; }
+    bool complete(size_t expected) {
+        return !failed_ && verifiedBytes_ == expected && file_.read() == -1;
+    }
+   private:
+    File &file_;
+    size_t verifiedBytes_ = 0;
+    bool failed_ = false;
+};
+
 bool readSessionCache(const char *path, JsonDocument &document, String &error) {
     File file = SPIFFS.open(path, "r");
     if (!file || file.size() == 0 ||
@@ -701,14 +729,18 @@ bool readSessionCache(const char *path, JsonDocument &document, String &error) {
 
 bool persistSessionDocument(
     const JsonDocument &document, String &error,
-    SessionPersistenceError *failure = nullptr) {
+    SessionPersistenceError *failure = nullptr,
+    SettingsWriteStatus *writeStatus = nullptr) {
     if (failure) *failure = SessionPersistenceError::None;
+    SettingsWriteStatus observed;
     const auto reject = [&](const char *message, SessionPersistenceError reason) {
         error = message;
         if (failure) *failure = reason;
+        if (writeStatus) *writeStatus = observed;
         return false;
     };
     const size_t expectedSize = measureJson(document);
+    observed.expected = expectedSize;
     if (document.overflowed() || expectedSize == 0 ||
         expectedSize > MAX_DASHBOARD_RESPONSE_BYTES) {
         return reject("Session document exceeds the storage limit",
@@ -720,13 +752,33 @@ bool persistSessionDocument(
         return reject("Could not mount session storage",
                       SessionPersistenceError::Mount);
     }
+    observed.fsUsed = SPIFFS.usedBytes();
+    observed.fsTotal = SPIFFS.totalBytes();
     SPIFFS.remove(SESSION_TEMP_FILE);
     File temporary = SPIFFS.open(SESSION_TEMP_FILE, "w");
+    observed.opened = static_cast<bool>(temporary);
     const size_t written = temporary ? serializeJson(document, temporary) : 0;
+    observed.written = written;
     temporary.flush();
-    const bool complete = written == expectedSize &&
-                          temporary.size() == expectedSize;
+    // Writable SPIFFS handles may report a stale size until close. Record it
+    // for diagnostics, but never use it to accept or reject durable storage.
+    observed.openReportedSize = temporary.size();
     temporary.close();
+    bool complete = observed.opened && written == expectedSize;
+    if (complete) {
+        File staged = SPIFFS.open(SESSION_TEMP_FILE, "r");
+        observed.reopened = static_cast<bool>(staged);
+        observed.reopenedSize = staged.size();
+        complete = observed.reopened && observed.reopenedSize == expectedSize;
+        if (complete) {
+            SessionFileVerifier verifier(staged);
+            const size_t verified = serializeJson(document, verifier);
+            observed.verifiedBytes = verifier.verifiedBytes();
+            complete = verified == expectedSize && verifier.complete(expectedSize);
+        }
+        staged.close();
+    }
+    observed.verified = complete;
     if (!complete) {
         SPIFFS.remove(SESSION_TEMP_FILE);
         return reject("Could not persist the complete replacement session",
@@ -773,6 +825,7 @@ bool persistSessionDocument(
                       SessionPersistenceError::Commit);
     }
     SPIFFS.remove(SESSION_BACKUP_FILE);
+    if (writeStatus) *writeStatus = observed;
     error = "";
     return true;
 }
@@ -946,21 +999,24 @@ void fetchSettingsTask(void *pvParameters) {
                 return false;
             }
             SessionPersistenceError persistenceError;
+            SettingsWriteStatus writeStatus;
             updateSettingsFetchStatus(generation, [](auto &status) {
                 status.stage = SettingsFetchStage::Persisting;
             });
             if (!persistSessionDocument(sessionJson, validationError,
-                                        &persistenceError)) {
+                                        &persistenceError, &writeStatus)) {
                 updateSettingsFetchStatus(generation, [&](auto &status) {
                     status.stage = SettingsFetchStage::PersistenceFailed;
                     status.error = SettingsFetchError::Persistence;
                     status.persistenceError = persistenceError;
+                    status.write = writeStatus;
                 });
                 return false;
             }
-            updateSettingsFetchStatus(generation, [](auto &status) {
+            updateSettingsFetchStatus(generation, [&](auto &status) {
                 status.stage = SettingsFetchStage::Installing;
                 status.persisted = true;
+                status.write = writeStatus;
             });
             sessionFromJson(sessionJson);
             updateSettingsFetchStatus(generation, [](auto &status) {

@@ -234,23 +234,37 @@ static size_t writeLimit = SIZE_MAX;
 static std::string renameFailure;
 static std::string removeFailure;
 static bool mountFails = false;
+static bool deferWritableStat = false, corruptWriteOnClose = false;
+static std::string readOpenFailure;
+static std::string writeOpenFailure;
+static size_t stagedReadLimit = SIZE_MAX;
 class File {
     std::shared_ptr<std::string> data;
     size_t position = 0;
+    size_t readLimit = SIZE_MAX;
+    bool writable = false, closed = false;
  public:
     File() = default;
-    explicit File(std::shared_ptr<std::string> value) : data(value) {}
-    explicit operator bool() const { return data != nullptr; }
-    size_t size() const { return data ? data->size() : 0; }
-    void close() {}
+    explicit File(std::shared_ptr<std::string> value, bool writing = false,
+                  size_t limit = SIZE_MAX) : data(value), readLimit(limit), writable(writing) {}
+    explicit operator bool() const { return data != nullptr && !closed; }
+    size_t size() const { return data && !closed && !(writable && deferWritableStat) ? data->size() : 0; }
+    void close() {
+        if (data && writable && corruptWriteOnClose && !data->empty()) {
+            const auto text = data->find("replacement");
+            (*data)[text != std::string::npos ? text : 0] ^= 1;
+            corruptWriteOnClose = false;
+        }
+        closed = true;
+    }
     void flush() {}
     size_t write(uint8_t value) { return write(&value, 1); }
     size_t write(const uint8_t *buffer, size_t size) {
-        if (!data || data->size() >= writeLimit) return 0;
+        if (!data || closed || data->size() >= writeLimit) return 0;
         const size_t count = std::min(size, writeLimit - data->size());
         data->append(reinterpret_cast<const char *>(buffer), count); return count;
     }
-    int read() { return data && position < data->size() ? static_cast<uint8_t>((*data)[position++]) : -1; }
+    int read() { return data && !closed && position < data->size() && position < readLimit ? static_cast<uint8_t>((*data)[position++]) : -1; }
     size_t readBytes(char *buffer, size_t size) {
         size_t count = 0;
         for (int ch; count < size && (ch = read()) >= 0;) buffer[count++] = ch;
@@ -261,9 +275,18 @@ struct {
     bool begin(bool format) { assert(!format); return !mountFails; }
     bool exists(const char *path) { return files.count(path); }
     bool remove(const char *path) { return removeFailure != path && files.erase(path); }
+    size_t totalBytes() const { return 1024 * 1024; }
+    size_t usedBytes() const {
+        size_t total = 0;
+        for (const auto &entry : files) total += entry.second->size();
+        return total;
+    }
     File open(const char *path, const char *mode) {
+        if (mode[0] == 'r' && readOpenFailure == path) return File();
+        if (mode[0] == 'w' && writeOpenFailure == path) return File();
         if (mode[0] == 'w') files[path] = std::make_shared<std::string>();
-        return exists(path) ? File(files[path]) : File();
+        return exists(path) ? File(files[path], mode[0] == 'w',
+                                   std::string(path) == "/session.tmp" && mode[0] == 'r' ? stagedReadLimit : SIZE_MAX) : File();
     }
     bool rename(const char *from, const char *to) {
         if (renameFailure == from || !exists(from) || exists(to)) return false;
@@ -319,6 +342,8 @@ static JsonDocument sessionDocument(const char *name) {
 
 static void resetFetch() {
     files.clear(); writeLimit = SIZE_MAX; renameFailure.clear(); removeFailure.clear(); mountFails = false;
+    deferWritableStat = corruptWriteOnClose = false;
+    readOpenFailure.clear(); writeOpenFailure.clear(); stagedReadLimit = SIZE_MAX;
     response = Response{}; session = Session{}; machine = StateMachine{};
     wifiStatus = WL_CONNECTED; liveInstalls = flushCalls = loadFailures = 0;
     clockMs = 1000; ESP.heap = 200000;
@@ -343,6 +368,20 @@ static void testFetchDiagnostics() {
     assert(status.retainedBodyBytes == response.body.size() && status.parseCode == 0);
     assert(status.callbackInvoked && status.eventAccepted && status.persisted && status.installed);
     assert(liveInstalls == 1 && flushCalls == 1 && files.count(SESSION_FILE));
+    assert(status.write.expected == status.write.written && status.write.verified);
+    assert(status.write.reopenedSize == status.write.expected);
+    assert(status.write.verifiedBytes == status.write.expected);
+
+    // Physical regression: metadata remains stale on a writable handle, but a
+    // flushed/closed/reopened staging file contains the complete correct bytes.
+    resetFetch(); deferWritableStat = true;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.installed && status.persisted && status.write.openReportedSize == 0);
+    assert(status.write.opened && status.write.reopened && status.write.verified);
+    assert(status.write.expected == status.write.written && status.write.expected > 0);
+    assert(status.write.reopenedSize == status.write.expected);
+    assert(status.write.verifiedBytes == status.write.expected);
+    deferWritableStat = false;
 
     // A server200 and a completely read prefix can still be a failed body read.
     resetFetch(); response.declaredSize = response.body.size() + 1;
@@ -458,6 +497,33 @@ static void testFetchDiagnostics() {
     old["description"] = std::string(MAX_DASHBOARD_RESPONSE_BYTES, 'x');
     assert(!persistSessionDocument(old, error, &failure));
     assert(failure == SessionPersistenceError::Limit);
+
+    // No staging-file fault may rotate the old cache or remove queue entries.
+    for (int fault = 0; fault < 5; ++fault) {
+        resetFetch(); auto previous = sessionDocument("previous");
+        assert(persistSessionDocument(previous, error));
+        const auto previousBytes = *files[SESSION_FILE];
+        files[SESSION_BACKUP_FILE] = std::make_shared<std::string>(previousBytes);
+        files["/q_fixture.json"] = std::make_shared<std::string>("queued");
+        if (fault == 0) readOpenFailure = SESSION_TEMP_FILE;
+        if (fault == 1) stagedReadLimit = 10;
+        if (fault == 2) corruptWriteOnClose = true;
+        if (fault == 3) writeLimit = 10;
+        if (fault == 4) writeOpenFailure = SESSION_TEMP_FILE;
+        SettingsWriteStatus observed;
+        auto replacement = sessionDocument("replacement");
+        assert(!persistSessionDocument(replacement, error, &failure, &observed));
+        assert(failure == SessionPersistenceError::Write && !observed.verified);
+        assert(*files[SESSION_FILE] == previousBytes && *files[SESSION_BACKUP_FILE] == previousBytes);
+        assert(*files["/q_fixture.json"] == "queued" && !files.count(SESSION_TEMP_FILE));
+        if (fault == 0) assert(observed.opened && !observed.reopened);
+        if (fault == 1 || fault == 2) {
+            assert(observed.reopenedSize == observed.expected);
+            assert(observed.verifiedBytes < observed.expected);
+        }
+        if (fault == 3) assert(observed.written < observed.expected);
+        if (fault == 4) assert(!observed.opened && !observed.reopened);
+    }
 }
 
 // These names come from the actual DTT state table, not a guessed short name.
@@ -476,11 +542,14 @@ static void testDiagnosticReplyBudget() {
     worst.parseCode = UINT8_MAX;
     worst.startedAtMs = worst.updatedAtMs = UINT32_MAX;
     worst.freeHeap = worst.largestBlock = UINT32_MAX;
+    worst.write.expected = worst.write.written = worst.write.openReportedSize = UINT32_MAX;
+    worst.write.reopenedSize = worst.write.verifiedBytes = UINT32_MAX;
+    worst.write.fsUsed = worst.write.fsTotal = UINT32_MAX;
     settingsFetchStatus = worst;
     radble::Server server;
     size_t maximumReply = 0;
     unsigned combinations = 0;
-    for (const char *view : {"summary", "transport", "parse", "storage", "memory"}) {
+    for (const char *view : {"summary", "transport", "parse", "storage", "write", "memory"}) {
         JsonDocument args; args["view"] = view;
         const auto result = settingsFetchDiagnostic(args.as<JsonObjectConst>());
         assert(result.ok);

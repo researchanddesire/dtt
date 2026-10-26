@@ -335,6 +335,10 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
     }
 
     if (operation == "sensor.read" || operation == "setting.read") {
+#ifndef PROVISION
+        if (path == "connectivity.settings")
+            return settingsFetchDiagnostic(args);
+#endif
         JsonDocument document;
         document["path"] = path;
         if (path == "button.main")
@@ -371,8 +375,6 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
                  path == "setting.voltageCalibrationOffset")
             return calibrationValue(path);
 #ifndef PROVISION
-        else if (path == "connectivity.settings")
-            return settingsFetchDiagnostic(args);
         else if (path == "motion.position")
             document["value"] = currentSegment ? currentSegment->currentPosition : 0;
         else if (path == "motion.speed")
