@@ -79,6 +79,14 @@ side elevation, with the module cavity cut out of it.
   the module pushes down on the way in. Its stop face springs up 1.2 mm behind
   the board's USB-C edge, with 0.2 mm clearance. Peak strain is about 0.7 %:
   1.4 mm deflection at the teeth, 20 mm flex zone, 2 mm thick.
+- **Over-travel stop:** a fixed finger runs from the plate across each lever
+  slot, on the print bed, into a pocket in the rear of the lever beside the
+  teeth (X 7-9.9 and 32.1-35, Y 92.6-96.6, 1.4 mm tall). The pocket roof
+  prints as a 5 mm bridge over the finger, 1.8 mm above it. Pressing the tab
+  moves the roof down until it lands on the fingers. The teeth have then moved
+  1.66 mm, 0.46 mm past release, and the lever strain is 0.85 %. Each finger
+  sees about 15 MPa bending per 10 N of press force. The stop does not limit
+  pulling the tab outward.
 - **Release:** unplug USB-C, press the tab toward the wall and slide the module
   out toward the USB-C end.
 - The jack, USB-C, side switch and buttons stay open.
@@ -110,6 +118,7 @@ side elevation, with the module cavity cut out of it.
 | Side profile | flat top 0.8 above the module, S-curve Y 44-78, R2 outer edge | design |
 | Skids | X 11-13 and 29-31, Y 5-64 | design |
 | Release lever | X 9-33 from Y 66, flex zone 2.0 thick to Y 86, teeth 1.2 rise, 30° ramp | design |
+| Over-travel stop | fingers 4.0 x 1.4, 0.9 into the lever, 1.8 travel, 0.5 clearance | design |
 | Plate | 4.0 thick | reference (estimate) |
 | Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
 | Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
@@ -138,6 +147,8 @@ Every value and its basis is in `PARAMS` in the builder.
 
 - Lever: tooth engagement and release force on a test print; tune `ToothRise`
   and `LatchT`.
+- Stop fingers print free of the lever (elephant foot can bridge the 0.5 mm
+  gaps; tune `StopClear`), and the pocket roofs bridge cleanly.
 - Slide fit of the track on the printer used; tune `WallClear`.
 - THT lead protrusion on the PCB back under 2 mm along the skid tracks, and
   under 0.4 mm over the lower cup head (X 15-27, Y 22-34). The J5 jack's leads
@@ -153,7 +164,7 @@ Every value and its basis is in `PARAMS` in the builder.
 Print rear face down in PETG with at least 4 perimeters and no supports. The
 lever's rear stays on the bed. The overhangs are the 0.6 mm lips (45°/55°), the
 hood lip, which runs parallel to the housing slope at 54°, and the 0.6 mm bed
-chamfer.
+chamfer. The lever pockets over the stop fingers are 5 mm bridges.
 
 For two colours, load `DTT-Snap-Backplate-Black.stl` and
 `DTT-Snap-Backplate-Blue.stl` together as one object with two parts, and give

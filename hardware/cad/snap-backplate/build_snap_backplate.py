@@ -87,6 +87,14 @@ PARAMS = {
     'ToothClear': (0.2, 'design: tooth stop face to the module end'),
     'ToothFlat': (1.0, 'design'),
     'RampAngle': (30.0, 'design: lead-in ramp, degrees from the plate'),
+    # over-travel stop: a fixed finger from the plate crosses each slot on the bed into a pocket in the
+    # lever's rear; the pocket roof is bridged over the finger and bottoms out on it when pressed too far
+    'StopY0': (92.6, 'design: fingers start just past the flex zone (the lever is full thickness from Y 92)'),
+    'StopW': (4.0, 'design: finger width along Y'),
+    'StopH': (1.4, 'design: finger height above the bed'),
+    'StopGap': (1.8, 'design: finger top to pocket roof, the press travel at the fingers'),
+    'StopPen': (0.9, 'design: finger overlap into the lever, beside the teeth'),
+    'StopClear': (0.5, 'design: clearance around the fingers, wide enough that elephant foot does not fuse them'),
     'GripN': (4.0, 'design: grip grooves across the press tab'),
     'GripPitch': (2.0, 'design'),
     'GripW': (1.0, 'design: groove width; straight walls with a round bottom'),
@@ -458,6 +466,40 @@ def latch_teeth():
     return teeth
 
 
+def stop_parts():
+    """(fingers, pockets): a finger from each slot's outer wall on the bed, and the pocket it sits in
+    under the lever. The pocket is open to the rear and the slot; its roof bridges along Y."""
+    zr = z_rear(); g = P['LatchSlot']; x0, x1 = P['LatchX0'], P['LatchX1']
+    y0, w, h, c, pen = P['StopY0'], P['StopW'], P['StopH'], P['StopClear'], P['StopPen']
+    fingers = [box(x0 - g - 0.5, x0 + pen, y0, y0 + w, zr, zr + h), box(x1 - pen, x1 + g + 0.5, y0, y0 + w, zr, zr + h)]
+    zt = zr + h + P['StopGap']
+    pockets = [box(x0 - 0.01, x0 + pen + c, y0 - c, y0 + w + c, zr - 1, zt),
+               box(x1 - pen - c, x1 + 0.01, y0 - c, y0 + w + c, zr - 1, zt)]
+    return fingers, pockets
+
+
+def lever_shape(y):
+    """Relative deflection along the lever under a load at the teeth (flex zone plus rigid tab)."""
+    y0 = P['LatchRootY'] + P['LatchRootRamp'] / 2
+    a = P['LatchFlexEndY'] - P['LatchRootY']
+    Lt = P['DeviceTopY'] + P['ToothClear'] - y0
+    s = y - y0
+    if s <= a:
+        return Lt * s ** 2 / 2 - s ** 3 / 6
+    return Lt * a ** 2 / 2 - a ** 3 / 6 + (Lt * a - a ** 2 / 2) * (s - a)
+
+
+def stop_checks():
+    """Teeth travel and lever strain when the stop bottoms out; finger bending stress per 10 N."""
+    yc = P['StopY0'] + P['StopW'] / 2
+    teeth = P['DeviceTopY'] + P['ToothClear']
+    d_teeth = P['StopGap'] * lever_shape(teeth) / lever_shape(yc)
+    strain = latch_strain() * d_teeth / (P['ToothRise'] + 0.2)
+    arm = P['LatchSlot'] + P['StopPen'] / 2
+    stress = 6 * 10.0 * arm / (P['StopW'] * P['StopH'] ** 2)
+    return d_teeth, strain, stress
+
+
 def latch_strain():
     """Flex zone of length a (to the middle of the end ramp) with a rigid tab out to the teeth;
     deflection at the teeth = tooth rise + 0.2 mm margin. Returns strain as a fraction."""
@@ -598,7 +640,9 @@ def printed_part():
                                    plate_top() + 1)], P['SlotEdgeR'], zf, 'lever slots',
                            exclude=[(P['LatchX0'] - 0.01, P['LatchX1'] + 0.01, P['LatchRootY'] - 0.01,
                                      P['LatchRootY'] + 0.01)])
-    printed = body.fuse(skids() + latch_teeth()).removeSplitter()
+    fingers, pockets = stop_parts()
+    body = body.cut(pockets).removeSplitter()
+    printed = body.fuse(skids() + latch_teeth() + fingers).removeSplitter()
     return printed
 
 
@@ -633,6 +677,9 @@ def design_checks(printed, black, blue):
     print('CHECK screw head top %.2f mm below the bed' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
+    d_teeth, s_stop, sigma = stop_checks()
+    print('CHECK stop: teeth travel %.2f mm (%.2f below the PCB rear), lever strain %.2f %%, finger stress %.1f MPa per 10 N'
+          % (d_teeth, d_teeth - P['ToothRise'], s_stop * 100, sigma))
     print('CHECK colour split: black valid %s (%d solid), blue valid %s (%d solid), volume %.1f + %.1f = %.1f of %.1f' % (
         black.isValid(), len(black.Solids), blue.isValid(), len(blue.Solids), black.Volume, blue.Volume,
         black.Volume + blue.Volume, printed.Volume))
