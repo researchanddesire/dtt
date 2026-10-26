@@ -33,28 +33,37 @@ PARAMS = {
     'PlateW': (75.0, 'reference proxy: upper width'),
     'PlateTopR': (5.0, 'reference proxy'),
     'DeviceTopInset': (17.0, 'reference proxy: plate top to housing top end'),
-    'UpperH': (26.0, 'design: height of the wide upper section'),
+    'UpperH': (36.0, 'design: height of the wide upper section, encloses the upper keyholes'),
     'BodyW': (54.0, 'design: housing width plus 5 mm each side'),
-    'BottomMargin': (35.0, 'design: plate bottom below the housing jack end'),
+    'BottomMargin': (5.0, 'design: plate bottom below the housing jack end, under the end stops'),
     'BottomR': (12.0, 'design'),
     'ShoulderR': (6.0, 'design: fillet where the upper section meets the body'),
-    # cradle
-    'RestGap': (2.0, 'design: plate front to PCB rear; clears the 1.5 mm PCB screw heads'),
-    'PadSize': (4.0, 'design: square rest pads under the PCB edge'),
-    'SeatOD': (8.5, 'design: ring around each PCB screw head'),
-    'SeatID': (5.4, 'design: 4.8 mm screw head plus 0.3 mm each side'),
+    # track: the module slides in from the USB-C end and rests on the bottom end stops
+    'RestGap': (2.6, 'design: plate front to PCB rear; PCB screw heads and the lower cup head pass under the PCB'),
     'WallClear': (0.2, 'design: clearance to the housing sides'),
-    'ArmT': (1.8, 'design: hook arm thickness'),
-    'ArmW': (10.0, 'design: hook arm width'),
-    'HookEngage': (0.6, 'design: lip overlap onto the top chamfer'),
+    'RailT': (2.0, 'design: rail wall thickness'),
+    'HookEngage': (0.6, 'design: rail lip overlap onto the top chamfer'),
+    'SkidW': (2.0, 'design: skids under the PCB, between the screw-head and connector tracks'),
     'StopT': (2.0, 'design: end stop thickness'),
     'StopTopZ': (-1.0, 'design: end stops reach 2.5 mm up the housing'),
+    # flexure latch: a tongue cut into the plate, teeth snap behind the PCB at the USB-C end
+    'LatchX0': (9.0, 'design: tongue left edge'),
+    'LatchX1': (33.0, 'design: tongue right edge'),
+    'LatchRootY': (66.0, 'design: tongue root, under the module'),
+    'LatchEndY': (104.0, 'design: tongue free end, the press tab'),
+    'LatchSlot': (1.5, 'design: cut around the tongue'),
+    'LatchT': (2.0, 'design: tongue thickness, thinned from the rear'),
+    'ToothW': (5.0, 'design: each tooth; both sit outside the USB-C plug overmold'),
+    'ToothRise': (1.2, 'design: tooth top above the PCB rear, catches the board edge'),
+    'ToothClear': (0.2, 'design: tooth stop face to the module end'),
+    'ToothFlat': (1.0, 'design'),
+    'RampAngle': (30.0, 'design: lead-in ramp, degrees from the plate'),
     # cups, keyhole travel and head size from the reference proxy
     'TopCupX': (28.5, 'reference proxy: from the centreline'),
     'TopCupDrop': (13.0, 'reference proxy: below the plate top'),
-    'TopEntryX': (16.5, 'reference proxy: top slots run outward'),
-    'LowCupDrop': (11.0, 'design: stem below the housing jack end, head clear of the end stops'),
-    'LowSlot': (12.0, 'design: lower slot runs upward from the entry, so the load seats the stem'),
+    'TopSlot': (12.0, 'design: upper slots run upward from the entry, so the load seats the stems'),
+    'LowCupY': (28.0, 'design: stem under the module, head clear of the skids'),
+    'LowSlot': (12.0, 'design: lower slot runs upward from the entry'),
     'KeyEntryD': (14.0, 'reference proxy'),
     'KeySlotW': (9.0, 'reference proxy'),
     'CupD': (35.0, 'reference proxy (estimate)'),
@@ -70,17 +79,18 @@ PARAMS = {
 P = {k: v for k, (v, _) in PARAMS.items()}
 
 # Housing side profile: (y0, y1, outer x left, outer x right, chamfer start z, chamfer inset)
-SECTIONS = {'mid': (26.4, 56.6, 0.0, 42.0, 13.18, 0.99),
+SECTIONS = {'bottom': (4.0, 24.0, 2.0, 40.0, 13.18, 0.99),
+            'mid': (26.4, 56.6, 0.0, 42.0, 13.18, 0.99),
             'wide': (58.4, 88.0, -1.0, 43.0, 12.18, 1.41)}
-HOOKS = [('mid', 36.0), ('wide', 63.5)]          # hook arm centre Y per section, both sides
-# PCB rest pads (device XY centres): near the board edge, clear of the four PCB screw
-# heads and of through-hole parts (J5, J2, J6, S1, S2, USB-C).
-# Existing 0408LTFB PCB screw heads (device XY); seat rings around them locate the module.
-SCREWS = [(3.0, 76.0), (39.0, 76.0), (3.3, 27.5), (38.7, 27.5)]
-PADS = [(6.5, 12.0), (35.5, 12.0), (2.0, 40.0), (40.0, 40.0), (1.5, 66.0), (9.0, 90.0), (33.0, 90.0)]
-# End stops (device X ranges): bottom ones clear the 3.5 mm jack, top ones the USB-C plug.
+# Rails (section, y0, y1), both sides. The module slides toward -Y, so a rail is only ever
+# passed by its own section or narrower ones. The wide rails stop short of the S1 switch,
+# which protrudes from the right side at Y 79.4 and above.
+RAILS = [('bottom', 6.0, 22.0), ('mid', 28.0, 55.0), ('wide', 60.0, 77.0)]
+# Skids under the PCB (X ranges), run Y 4 to the tongue root. They sit between the tracks swept by
+# the PCB screw heads (X 0.6-5.7, 36.3-41.4) and clear of the J5 and J2/J6 through-hole parts.
+SKIDS = [(11.0, 13.0), (29.0, 31.0)]
+# End stops (device X ranges) at the jack end, either side of the 3.5 mm jack.
 BOTTOM_STOPS = [(7.0, 14.0), (28.0, 35.0)]
-TOP_STOPS = [(12.0, 14.5), (27.5, 30.0)]
 
 
 def plate_top():
@@ -119,13 +129,14 @@ def plate_shape():
     face = [f for f in outline.Faces if abs(f.CenterOfMass.z - zr) < 1e-6][0]
     r = P['ShoulderR']
     face = face.makeOffset2D(r, join=0).makeOffset2D(-r, join=0)   # fillet the shoulders
+    face = face.makeOffset2D(-3.0, join=0).makeOffset2D(3.0, join=0)   # round the shoulder corners
     return face.extrude(App.Vector(0, 0, P['PlateT']))
 
 
 def cup_centres():
     cx, yt = P['DeviceCx'], plate_top() - P['TopCupDrop']
     return {'UL': (cx - P['TopCupX'], yt), 'UR': (cx + P['TopCupX'], yt),
-            'L': (cx, P['DeviceBottomY'] - P['LowCupDrop'])}
+            'L': (cx, P['LowCupY'])}
 
 
 def keyholes():
@@ -133,16 +144,32 @@ def keyholes():
     cut = []
     w = P['KeySlotW'] / 2
     for key, (sx, sy) in cup_centres().items():
-        if key == 'L':
-            ex, ey = sx, sy - P['LowSlot']
-        else:
-            ex, ey = P['DeviceCx'] + (sx - P['DeviceCx']) * P['TopEntryX'] / P['TopCupX'], sy
-        cut += [cyl(P['KeyEntryD'] / 2, ex, ey, zr - 1, zf + 1), cyl(w, sx, sy, zr - 1, zf + 1)]
-        if ex == sx:
-            cut.append(box(sx - w, sx + w, min(sy, ey), max(sy, ey), zr - 1, zf + 1))
-        else:
-            cut.append(box(min(sx, ex), max(sx, ex), sy - w, sy + w, zr - 1, zf + 1))
+        ey = sy - (P['LowSlot'] if key == 'L' else P['TopSlot'])
+        cut += [cyl(P['KeyEntryD'] / 2, sx, ey, zr - 1, zf + 1), cyl(w, sx, sy, zr - 1, zf + 1),
+                box(sx - w, sx + w, ey, sy, zr - 1, zf + 1)]
     return cut
+
+
+def latch_cut():
+    """U-shaped cut that frees the tongue, plus the rear thinning that makes it flex."""
+    zf = z_front(); zr = zf - P['PlateT']; g = P['LatchSlot']
+    x0, x1, y0, y1 = P['LatchX0'], P['LatchX1'], P['LatchRootY'], P['LatchEndY']
+    u = box(x0 - g, x1 + g, y0, y1 + g, zr - 1, zf + 1).cut(box(x0, x1, y0 - 1, y1, zr - 2, zf + 2))
+    return [u, box(x0, x1, y0, y1, zr - 1, zf - P['LatchT'])]
+
+
+def latch_teeth():
+    zf = z_front()
+    zt = P['PCBRearZ'] + P['ToothRise']
+    ys = P['DeviceTopY'] + P['ToothClear']
+    yf = ys + P['ToothFlat']
+    yr = yf + (zt - zf) / math.tan(math.radians(P['RampAngle']))
+    prof = [(ys, zf - 0.01), (ys, zt), (yf, zt), (yr, zf - 0.01)]
+    teeth = []
+    for xa in (P['LatchX0'], P['LatchX1'] - P['ToothW']):
+        pts = [App.Vector(xa, y, z) for y, z in prof]
+        teeth.append(Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(App.Vector(P['ToothW'], 0, 0)))
+    return teeth
 
 
 def cup_shape(x, y):
@@ -157,43 +184,34 @@ def cup_shape(x, y):
     return outside.cut(inside).fuse([stem, head]).removeSplitter()
 
 
-def hook_arm(side, y_c, sec):
-    """Cantilever arm rising from the plate with a lip over the housing's top chamfer."""
-    y0, y1, xl, xr, zc, inset = SECTIONS[sec]
-    zf = z_front(); c, t = P['WallClear'], P['ArmT']
+def rail(side, sec, ya, yb):
+    """Rail wall rising from the plate with a lip over the housing's top chamfer."""
+    _, _, xl, xr, zc, inset = SECTIONS[sec]
+    zf = z_front(); c, t = P['WallClear'], P['RailT']
     s = -1 if side == 'L' else 1
     wall = xl if side == 'L' else xr
-    inner = wall + s * c                         # arm inner face
+    inner = wall + s * c
     outer = inner + s * t
-    ya, yb = y_c - P['ArmW'] / 2, y_c + P['ArmW'] / 2
-    # lip follows the chamfer, offset by the clearance, then a lead-in back to the arm
     slope = (P['HousingTopZ'] - zc) / inset
     tip = wall - s * (P['HookEngage'] - c)       # lip tip X, over the chamfer
-    z_tip = zc + (P['HookEngage'] - c + c) * slope + c
-    prof = [(outer, zf), (inner, zf), (inner, zc + c), (tip, z_tip), (tip, z_tip + 0.4),
-            (inner, P['HousingTopZ'] + 1.2), (outer, P['HousingTopZ'] + 1.2)]
+    z_tip = zc + P['HookEngage'] * slope + c
+    prof = [(outer, zf), (inner, zf), (inner, zc + c), (tip, z_tip), (tip, P['HousingTopZ'] + 1.2),
+            (outer, P['HousingTopZ'] + 1.2)]
     pts = [App.Vector(x, ya, z) for x, z in prof]
-    face = Part.Face(Part.makePolygon(pts + [pts[0]]))
-    return face.extrude(App.Vector(0, yb - ya, 0))
+    return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(App.Vector(0, yb - ya, 0))
 
 
 def cradle():
     zf = z_front(); parts = []
-    h = P['PadSize'] / 2
-    for x, y in PADS:
-        parts.append(box(x - h, x + h, y - h, y + h, zf - 0.01, P['PCBRearZ']))
-    for x, y in SCREWS:
-        parts.append(cyl(P['SeatOD'] / 2, x, y, zf - 0.01, P['PCBRearZ']).cut(
-            cyl(P['SeatID'] / 2, x, y, zf - 1, P['PCBRearZ'] + 1)))
-    for sec, y in HOOKS:
+    for sec, ya, yb in RAILS:
         for side in 'LR':
-            parts.append(hook_arm(side, y, sec))
+            parts.append(rail(side, sec, ya, yb))
+    for xa, xb in SKIDS:
+        parts.append(box(xa, xb, P['DeviceBottomY'] + 3, P['LatchRootY'] - 2, zf - 0.01, P['PCBRearZ']))
     c, t = P['WallClear'], P['StopT']
     for xa, xb in BOTTOM_STOPS:
         parts.append(box(xa, xb, P['DeviceBottomY'] - c - t, P['DeviceBottomY'] - c, zf - 0.01, P['StopTopZ']))
-    for xa, xb in TOP_STOPS:
-        parts.append(box(xa, xb, P['DeviceTopY'] + c, P['DeviceTopY'] + c + t, zf - 0.01, P['StopTopZ']))
-    return parts
+    return parts + latch_teeth()
 
 
 def tagged(doc, name, label, shape, colour=None, transparency=0):
@@ -221,7 +239,7 @@ def main():
         if o is not None:
             o.Visibility = False
     zf = z_front()
-    plate = plate_shape().cut(keyholes())
+    plate = plate_shape().cut(keyholes() + latch_cut())
     printed = plate.fuse(cradle()).removeSplitter()
     group = doc.addObject('App::Part', 'SnapBackplate'); group.Label = 'Snap backplate concept'
     parameter_sheet(doc)
@@ -254,12 +272,14 @@ def render(doc):
     view.saveImage(os.path.join(HERE, 'Snap-Backplate-Assembled.png'), 1400, 1400, 'White')
     for o in tops:
         o.Visibility = o.Name == 'SnapBackplate'
+    housing = doc.getObject('Cover___V3_v5'); housing.Visibility = False
     view.viewIsometric(); view.fitAll()
     view.saveImage(os.path.join(HERE, 'Snap-Backplate-Front.png'), 1400, 1400, 'White')
     view.setCameraOrientation(App.Rotation(App.Vector(0, 1, 0), 180)); view.fitAll()
     view.saveImage(os.path.join(HERE, 'Snap-Backplate-Rear.png'), 1400, 1400, 'White')
     for n, v in saved.items():
         doc.getObject(n).Visibility = v
+    housing.Visibility = True
     view.viewRight(); view.fitAll()
     view.saveImage(os.path.join(HERE, 'Snap-Backplate-Side.png'), 1400, 1400, 'White')
 

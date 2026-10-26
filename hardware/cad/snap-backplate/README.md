@@ -1,8 +1,8 @@
 # DTT snap backplate (concept)
 
-A printed backplate that the unmodified DTT module clicks into. The plate holds
-three suction cups, two upper and one lower. The module needs no changes beyond
-removing the hook-and-loop backing. The toy's own suction base sticks straight
+A printed backplate with a track that the unmodified DTT module slides into, held
+by a sprung printed latch. The plate holds three suction cups, two upper and one
+lower. The module needs no changes beyond removing the hook-and-loop backing. The toy's own suction base sticks straight
 to the mounting surface and does not touch the plate.
 
 ![Assembled](Snap-Backplate-Assembled.png)
@@ -24,60 +24,75 @@ to the mounting surface and does not touch the plate.
 
 ## How it holds the module
 
-- **Rest and location:** the PCB back rests on seven 4 mm pads and four seat
-  rings, 2 mm above the plate. The rings surround the existing 0408LTFB PCB
-  screw heads (1.5 mm proud of the board) with 0.3 mm clearance, so the heads
-  locate the module on the plate and nothing presses on them.
-- **Retention:** four cantilever arms, two per side, rise beside the housing
-  walls and hook 0.6 mm over the top chamfer. Arm thickness 1.8 mm and free
-  length about 21 mm; the 0.8 mm snap deflection is about 0.5 % strain in PETG.
-  A lead-in on each lip lets the module push straight in.
-- **Ends:** two low stops at each end hold the module along its length. They sit
-  either side of the 3.5 mm jack and the USB-C port, which stay open, as do the
-  side switch and the buttons.
-- **Release:** spread one pair of arms and lift that side out.
+- **Track:** the module slides in from the USB-C end, jack end first, until it
+  sits on two end stops either side of the 3.5 mm jack. Three pairs of rails,
+  one per housing section, run beside the walls with 0.2 mm clearance and a
+  0.6 mm lip over the top chamfer. The housing steps wider toward the USB-C
+  end, so each rail is only passed by its own section or narrower ones. The
+  wide rails stop at Y 77, below the side switch S1, which protrudes from the
+  right wall at Y 79.4 and above and so never reaches them.
+- **Support:** the PCB back rides on two skids, 2.6 mm above the plate. They
+  sit between the tracks swept by the PCB screw heads and clear of the jack
+  and the connectors with through-hole leads. The screw heads (1.5 mm proud)
+  and the lower cup head pass under the board.
+- **Latch:** a 24 x 38 mm tongue is cut free in the plate, rooted under the
+  module and thinned to 2 mm from the rear. Two teeth near its free end ride
+  up a 30° ramp as the module goes in. Once the module seats, they spring up
+  1.2 mm behind the board's USB-C edge. The teeth sit either side of the
+  USB-C plug. Deflection is about 1.4 mm over a 34 mm span, about 0.4 %
+  strain in PETG.
+- **Release:** unplug USB-C, press the tab at the tongue's free end toward the
+  wall and slide the module out toward the USB-C end.
+- The jack, USB-C, side switch and buttons stay open.
 
 ## Plate and cups
 
-- Plate 4 mm thick, 75 x 144 mm overall: a 75 mm wide upper section the height of
-  the upper cups, then a 54 mm body (housing width plus 5 mm each side) with
-  R12 bottom corners.
-- The upper cups follow the reference backplate: stems ±28.5 from the
-  centreline, 13 below the plate top, keyholes sliding outward. The module top
-  end sits 17 below the plate top, as on the reference.
-- The lower cup stem sits 11 below the module's jack end. Its keyhole runs
-  upward from the entry, so the hanging load seats the stem at the closed end.
-- Cup heads sit on the plate front outside the module footprint, clear of the
-  arms and stops.
+- Plate 4 mm thick, 75 x 114 mm overall: a 75 mm upper section carrying the
+  upper cups, then a 54 mm body (housing width plus 5 mm each side).
+- The upper cup stems follow the reference backplate: ±28.5 from the
+  centreline, 13 below the plate top, beside the module's USB-C end. The lower
+  cup sits under the module, with its stem 28 mm from the jack end on the
+  centreline. All keyholes run upward from the entry, so the hanging load
+  seats the stems at the closed ends.
+- Fit the cups before sliding the module in. The lower cup head sits under the
+  PCB with 0.4 mm clearance.
 
 | Parameter | Value | Basis |
 | --- | --- | --- |
 | PCB rear face | Z −5.1 | verified (DTT.FCStd) |
 | Housing width | 38 / 42 / 44 by section, top chamfer 0.99-1.41 | verified |
-| Plate front to PCB rear | 2.0 | design |
-| Seat ring | ID 5.4, OD 8.5 around Ø4.8 screw heads | design |
-| Arm | 1.8 thick, 10 wide, 0.6 lip, 0.2 wall clearance | design |
+| Plate front to PCB rear | 2.6 | design |
+| Rails | 2.0 wall, 0.6 lip, 0.2 clearance; Y 6-22, 28-55, 60-77 | design |
+| Skids | X 11-13 and 29-31, Y 4-64 | design |
+| Latch | tongue X 9-33, Y 66-104, 2.0 thick; teeth 5 wide, 1.2 rise, 30° ramp | design |
 | Plate | 4.0 thick | reference (estimate) |
 | Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
-| Keyhole | entry Ø14, slot 9, upper slots 12 outward, lower slot 12 upward | reference / design |
+| Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
 
 ## Validation (geometric, in the model)
 
 - The printed part and cup proxies are valid solids.
-- No intersections with the housing, PCB, PCB screws or cups. Smallest gaps:
-  arms to housing 0.2 mm, seat rings to screw heads 0.3 mm, cup heads to the
-  plate 0.4 mm. Pads and rings touch the PCB rear by design.
-- Cup proxies have more than 3 mm to every module part.
+- At rest there are no intersections with the housing, PCB, PCB screws or
+  cups. Smallest gaps: rails to housing 0.2 mm, lower cup head to PCB 0.4 mm,
+  cup heads to plate 0.4 mm. The skids touch the PCB rear by design.
+- Sweep check: the module was stepped out along the track in 3 mm steps over
+  its full travel. Nothing it carries below the housing collides with the
+  plate, rails, stops or cups. The only contact is with the latch tongue,
+  which is meant to deflect.
 
 ## Needs physical checks
 
-- Snap force and retention of the arms on a test print; tune `HookEngage` and
-  `ArmT`.
-- THT lead protrusion on the PCB back under 2 mm, or the leads touch the plate.
+- Latch: tooth engagement and release force on a test print; tune
+  `ToothRise`, `LatchT`.
+- Slide fit of the rails on the printer used; tune `WallClear`.
+- THT lead protrusion on the PCB back under 2 mm along the skid tracks, and
+  under 0.4 mm over the lower cup head (X 15-27, Y 22-34), or recess the head.
+- USB-C plug overmold width under 14 mm, so it fits between the teeth.
 - Plate thickness and cup stem and head sizes against the real cups.
 - Suction hold with the module on a wall.
 
 ## Printing
 
-Print plate face down (wall side on the bed). The arms, pads and stops then
-build upward with no supports. PETG, at least 4 perimeters.
+Print plate face down (wall side on the bed). The rails, skids, stops and
+teeth then build upward with no supports; the rail lips are 0.6 mm overhangs.
+PETG, at least 4 perimeters.
