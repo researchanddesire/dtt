@@ -24,10 +24,16 @@ class SourceBehaviourTests(unittest.TestCase):
         portal = (ROOT / "lib/WiFiManager/WiFiManager.cpp").read_text()
         transport = between(wifi, "namespace {\nconstexpr size_t MAX_DASHBOARD", "\n#ifndef PROVISION\nvoid checkIfPairedTask")
         cache = between(wifi, "namespace {\nconstexpr char SESSION_TEMP_FILE", "\nbool applySessionDocument")
+        diagnostics = between(wifi, "namespace {\nportMUX_TYPE settingsFetchStatusMux", "\nstatic void sessionFromJson")
+        load = between(wifi, "void loadSessionTask(", "\nvoid fetchSettingsTask(")
+        fetch = between(wifi, "void fetchSettingsTask(", "\nvoid saveResultsTask(")
         html = between(portal, "String WiFiManager::htmlEntities(", "\n/**")
         source = (HERE / "fixture.cpp.in").read_text()
         source = source.replace("// ACTUAL_TRANSPORT", transport)
         source = source.replace("// ACTUAL_CACHE", cache)
+        source = source.replace("// ACTUAL_DIAGNOSTICS", diagnostics)
+        source = source.replace("// ACTUAL_LOAD", load)
+        source = source.replace("// ACTUAL_FETCH", fetch)
         source = source.replace("// ACTUAL_HTML", html)
         includes = ROOT / ".pio/libdeps/test_native/ArduinoJson/src"
         self.assertTrue((includes / "ArduinoJson.h").is_file())
@@ -42,7 +48,7 @@ class SourceBehaviourTests(unittest.TestCase):
             for local_http in (False, True):
                 with self.subTest(local_http=local_http):
                     binary = Path(directory) / ("development" if local_http else "production")
-                    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-I", directory, "-I", str(includes), "-I", str(ROOT / "lib/TrainingTypes/src"), "-I", str(ROOT / "lib/FirmwareUpdateProtocol/src"), str(cpp), "-o", str(binary)]
+                    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-I", directory, "-I", str(includes), "-I", str(ROOT / "src"), "-I", str(ROOT / "lib/TrainingTypes/src"), "-I", str(ROOT / "lib/FirmwareUpdateProtocol/src"), str(cpp), "-o", str(binary)]
                     if local_http:
                         command += ["-DDTT_ALLOW_LOCAL_HTTP"]
                     subprocess.run(command, check=True, capture_output=True, text=True)

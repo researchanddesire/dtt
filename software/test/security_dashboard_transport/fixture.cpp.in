@@ -6,10 +6,14 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <functional>
+#include <thread>
 #include <string>
 #include <vector>
 #include <ArduinoJson.h>
 #include <SessionValidation.h>
+#include "services/settings_fetch_status.h"
 
 static uint32_t clockMs = 0;
 static time_t utc = 1800000000;
@@ -26,6 +30,12 @@ void configTime(int, int, const char *, const char *) {
 #define WIFI_TAG "test"
 #define ESP_LOGD(...) ((void)0)
 #define ESP_LOGE(...) ((void)0)
+#define ESP_LOGW(...) ((void)0)
+#define portMAX_DELAY 0
+using portMUX_TYPE = std::mutex;
+#define portMUX_INITIALIZER_UNLOCKED {}
+#define portENTER_CRITICAL(mutex) ((mutex)->lock())
+#define portEXIT_CRITICAL(mutex) ((mutex)->unlock())
 
 class String : public std::string {
  public:
@@ -121,7 +131,11 @@ class WiFiClientSecure : public WiFiClient {
     int lastError(char *, size_t) { return 0; }
 };
 #include <CertificateDateClient.h>
-struct { unsigned heap = 200000; unsigned getFreeHeap() const { return heap; } } ESP;
+struct {
+    unsigned heap = 200000;
+    unsigned getFreeHeap() const { return heap; }
+    unsigned getMaxAllocHeap() const { return heap / 2; }
+} ESP;
 static String configuredOrigin = "https://dashboard.invalid";
 #define RAD_SERVER configuredOrigin
 #define RAD_PUBLIC_KEY "synthetic-test-only"
@@ -189,12 +203,15 @@ class HTTPClient {
     static String errorToString(int) { return "synthetic transport failure"; }
 };
 namespace { extern const uint8_t dashboardCaBundle[] asm("_binary_x509_crt_bundle_start") = {1}; }
+int postJson(const String &, const JsonDocument &, String *, int,
+             DashboardResponseMetrics * = nullptr);
 // ACTUAL_TRANSPORT
 
 // A minimal storage port with short-write, rename-failure and power-cut states.
 static std::map<std::string, std::shared_ptr<std::string>> files;
 static size_t writeLimit = SIZE_MAX;
 static std::string renameFailure;
+static std::string removeFailure;
 static bool mountFails = false;
 class File {
     std::shared_ptr<std::string> data;
@@ -222,7 +239,7 @@ class File {
 struct {
     bool begin(bool format) { assert(!format); return !mountFails; }
     bool exists(const char *path) { return files.count(path); }
-    bool remove(const char *path) { return files.erase(path); }
+    bool remove(const char *path) { return removeFailure != path && files.erase(path); }
     File open(const char *path, const char *mode) {
         if (mode[0] == 'w') files[path] = std::make_shared<std::string>();
         return exists(path) ? File(files[path]) : File();
@@ -237,12 +254,184 @@ struct {
 class WiFiManager { public: static String htmlEntities(String, bool = false); };
 // ACTUAL_HTML
 
+// Actual fetch/cache task bodies run against synthetic scheduler/state ports.
+// The network and filesystem failures below do not touch a device or host file.
+// ACTUAL_DIAGNOSTICS
+static constexpr int WL_CONNECTED = 1;
+static int wifiStatus = WL_CONNECTED;
+struct WiFiClass { static int status() { return wifiStatus; } };
+struct Session {
+    String id = "synthetic-boot";
+    uint16_t segmentIdx = 0;
+} session;
+static String trainerId = "synthetic-device";
+[[maybe_unused]] static bool healthCheckPassed = true;
+static unsigned liveInstalls = 0, flushCalls = 0, loadFailures = 0;
+static void sessionFromJson(JsonDocument &) { ++liveInstalls; }
+struct session_load_ready { std::function<bool()> apply; bool &applied; };
+struct session_load_failed {};
+struct StateMachine {
+    bool accepts = true, changeLivePage = false;
+    bool process_event(const session_load_ready &event) {
+        if (!accepts) return false;
+        if (changeLivePage) session.segmentIdx = 100;
+        event.applied = event.apply();
+        return true;
+    }
+    bool process_event(session_load_failed) { ++loadFailures; return true; }
+} machine;
+static auto *stateMachine = &machine;
+#define PAGE_SIZE 100
+static void vTaskDelete(void *) {}
+static int flushUploadQueue() { ++flushCalls; return 0; }
+// ACTUAL_LOAD
+// ACTUAL_FETCH
+
 static JsonDocument sessionDocument(const char *name) {
     JsonDocument doc;
     const char *fixture = R"({"name":"test","segmentCount":1,"pageIdx":0,"segments":[{"idx":0,"type":"repetition","params":{"target":10,"startPosition":10,"endPosition":1,"trainingDepthIncrease":0,"trainingSpeed":10,"targetWindow":1}}]})";
     assert(!deserializeJson(doc, fixture));
     doc["name"] = name;
     return doc;
+}
+
+static void resetFetch() {
+    files.clear(); writeLimit = SIZE_MAX; renameFailure.clear(); removeFailure.clear(); mountFails = false;
+    response = Response{}; session = Session{}; machine = StateMachine{};
+    wifiStatus = WL_CONNECTED; liveInstalls = flushCalls = loadFailures = 0;
+    clockMs = 1000; ESP.heap = 200000;
+    configuredOrigin = "https://dashboard.invalid";
+    auto document = sessionDocument("sentinel-private-name");
+    document["id"] = "sentinel-private-identifier";
+    document["description"] = "sentinel-private-body";
+    response.body.clear(); serializeJson(document, response.body);
+}
+
+static void testFetchDiagnostics() {
+    resetFetch();
+    fetchSettingsTask(nullptr);
+    auto status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::Installed);
+    assert(status.httpStatus == 200 && status.clientStatus == 200);
+    assert(status.attempt == 1 && status.responseBytes == response.body.size());
+    assert(status.retainedBodyBytes == response.body.size() && status.parseCode == 0);
+    assert(status.callbackInvoked && status.eventAccepted && status.persisted && status.installed);
+    assert(liveInstalls == 1 && flushCalls == 1 && files.count(SESSION_FILE));
+
+    // A server200 and a completely read prefix can still be a failed body read.
+    resetFetch(); response.declaredSize = response.body.size() + 1;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::HttpFailed);
+    assert(status.httpStatus == 200 && status.clientStatus < 0 && status.attempt == 3);
+    assert(status.responseBytes == response.body.size() && status.retainedBodyBytes == 0);
+    assert(status.error == SettingsFetchError::Transport && !status.callbackInvoked);
+    loadSessionTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::HttpFailed);
+    assert(status.cacheSource == SettingsCacheSource::Recovery && status.cacheMounted);
+
+    resetFetch(); wifiStatus = 0;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.error == SettingsFetchError::Offline && status.attempt == 0);
+    resetFetch(); response.status = 503;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.error == SettingsFetchError::Http && status.httpStatus == 503);
+
+    resetFetch(); response.body = "{";
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::ParseFailed && status.parseCode != 0);
+    assert(status.responseBytes == 1 && !status.callbackInvoked);
+    resetFetch(); response.body = "{\"nested\":[[[[[[[[[[]]]]]]]]]]}";
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::ParseFailed && status.parseCode == DeserializationError::TooDeep);
+    resetFetch(); response.body = "{\"name\":42,\"segments\":[]}";
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::ValidationFailed && status.parseCode == 0);
+
+    resetFetch();
+    auto page = sessionDocument("next page");
+    page["segmentCount"] = 101; page["pageIdx"] = 1; page["segments"][0]["idx"] = 100;
+    response.body.clear(); serializeJson(page, response.body);
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.error == SettingsFetchError::RequestPage && !status.callbackInvoked);
+    resetFetch(); machine.changeLivePage = true;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.error == SettingsFetchError::LivePage && status.callbackInvoked && !status.persisted);
+
+    resetFetch(); mountFails = true;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::PersistenceFailed);
+    assert(status.persistenceError == SessionPersistenceError::Mount && !status.installed);
+    loadSessionTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.persistenceError == SessionPersistenceError::Mount && !status.cacheMounted);
+    resetFetch(); writeLimit = 10;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.persistenceError == SessionPersistenceError::Write && !status.persisted);
+    resetFetch(); renameFailure = SESSION_TEMP_FILE;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.persistenceError == SessionPersistenceError::Commit && !status.installed);
+    resetFetch(); machine.accepts = false;
+    fetchSettingsTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.stage == SettingsFetchStage::StateRejected && !status.callbackInvoked && !status.eventAccepted);
+
+    resetFetch();
+    String error;
+    auto cached = sessionDocument("cached");
+    assert(persistSessionDocument(cached, error));
+    wifiStatus = 0; fetchSettingsTask(nullptr); loadSessionTask(nullptr);
+    status = getSettingsFetchStatus();
+    assert(status.error == SettingsFetchError::Offline && status.cacheSource == SettingsCacheSource::Primary);
+    files[SESSION_BACKUP_FILE] = files[SESSION_FILE]; files.erase(SESSION_FILE);
+    loadSessionTask(nullptr); status = getSettingsFetchStatus();
+    assert(status.error == SettingsFetchError::Offline && status.cacheSource == SettingsCacheSource::Backup);
+
+    // New requests reset diagnostics; delayed older workers cannot overwrite it.
+    const auto previous = status.generation;
+    const auto next = beginSettingsFetchStatus();
+    assert(next != previous);
+    updateSettingsFetchStatus(previous, [](auto &value) { value.httpStatus = 999; });
+    status = getSettingsFetchStatus();
+    assert(status.httpStatus == 0 && status.parseCode == 255 && !status.installed);
+    JsonDocument diagnostic;
+    writeSettingsFetchStatus(diagnostic.to<JsonObject>(), status);
+    std::string encoded; serializeJson(diagnostic, encoded);
+    assert(encoded.find("sentinel") == std::string::npos);
+    assert(encoded.find("synthetic-device") == std::string::npos);
+    assert(!diagnostic["url"].is<const char *>() && !diagnostic["id"].is<const char *>());
+    assert(diagnostic.size() == 22 && diagnostic["stage"] == "requesting");
+
+    // Coherent fixed-size snapshots while a worker publishes a new phase.
+    std::thread writer([next]() {
+        for (size_t count = 0; count < 10000; ++count)
+            updateSettingsFetchStatus(next, [count](auto &value) {
+                value.responseBytes = count; value.retainedBodyBytes = count;
+            });
+    });
+    for (size_t count = 0; count < 10000; ++count) {
+        const auto coherent = getSettingsFetchStatus();
+        assert(coherent.responseBytes == coherent.retainedBodyBytes);
+    }
+    writer.join();
+
+    // Distinct persistence reasons retain existing cache/rollback semantics.
+    resetFetch(); auto old = sessionDocument("old");
+    assert(persistSessionDocument(old, error));
+    const auto original = *files[SESSION_FILE];
+    SessionPersistenceError failure;
+    renameFailure = SESSION_FILE;
+    assert(!persistSessionDocument(old, error, &failure));
+    assert(failure == SessionPersistenceError::Stage && *files[SESSION_FILE] == original);
+    renameFailure.clear(); files[SESSION_BACKUP_FILE] = std::make_shared<std::string>(original);
+    removeFailure = SESSION_BACKUP_FILE;
+    assert(!persistSessionDocument(old, error, &failure));
+    assert(failure == SessionPersistenceError::Rotate && *files[SESSION_FILE] == original);
+    removeFailure.clear();
+    files[SESSION_FILE] = std::make_shared<std::string>("{bad");
+    files[SESSION_BACKUP_FILE] = std::make_shared<std::string>("{bad");
+    assert(!persistSessionDocument(old, error, &failure));
+    assert(failure == SessionPersistenceError::Recover);
+    old["description"] = std::string(MAX_DASHBOARD_RESPONSE_BYTES, 'x');
+    assert(!persistSessionDocument(old, error, &failure));
+    assert(failure == SessionPersistenceError::Limit);
 }
 int main() {
     JsonDocument doc; doc["id"] = "synthetic";
@@ -358,5 +547,6 @@ int main() {
     assert(WiFiManager::htmlEntities("ordinary network") == "ordinary network");
     assert(WiFiManager::htmlEntities("&lt;") == "&amp;lt;");
     assert(WiFiManager::htmlEntities(" a ", true) == "&#160;a&#160;");
+    testFetchDiagnostics();
     std::cout << "all assertions passed\n";
 }

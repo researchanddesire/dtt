@@ -8,6 +8,35 @@ This reference documents internal, engineering, and validation error codes emitt
 
 Internal status codes surfaced when the device attempts to upload calibration or session data but can't reach the server. Codes like **"69 0"** are internal status codes — when offline, they don't prevent training; they simply indicate that data couldn't be uploaded at that moment.
 
+## Settings-fetch diagnostics over BLE
+
+Ordinary BLE-enabled firmware exposes the read-only `connectivity.settings`
+resource through `sensor.read` or `setting.read`. It reports the most recent
+dashboard settings fetch without enabling verbose logs. Reading it does not
+retry the request, change the session or write storage.
+
+The snapshot contains only fixed categories, counters and memory telemetry:
+
+| Fields | Meaning |
+| --- | --- |
+| `generation`, `attempt` | Fetch generation since boot and request attempt (up to three). |
+| `httpStatus`, `clientStatus` | Server HTTP status (zero if none) and the effective transport result. A server `200` can accompany a negative client result if reading the body failed. |
+| `responseBytes`, `retainedBodyBytes` | Body bytes accepted by the bounded sink before a failure discards the payload, and bytes retained for parsing. |
+| `parseCode`, `overflow` | ArduinoJson result: `255` not run, `0` success, `1` empty input, `2` incomplete input, `3` invalid input, `4` no memory, `5` too deep; document allocation overflow flag. |
+| `stage`, `error` | Last fetch phase and fixed error category. Request-page and live-page mismatches are distinct. |
+| `persistenceError` | `none`, `limit`, `mount`, `write`, `rotate`, `recover`, `stage` or `commit`. |
+| `callbackInvoked`, `eventAccepted`, `persisted`, `installed` | Whether the state machine accepted the load callback, storage was committed and live settings were installed. |
+| `cacheSource`, `cacheMounted` | Subsequent fallback outcome: `not_loaded`, `primary`, `backup` or `recovery`, and mount result. Fallback preserves the fetch's original failure category. |
+| `startedAtMs`, `updatedAtMs`, `freeHeap`, `largestBlock` | Uptime and heap observations at the last diagnostic update. |
+
+A completed fetch reports `stage=installed`, `parseCode=0`, `persisted=true`
+and `installed=true`. `cacheMounted` describes a fallback cache load only;
+it remains false when no fallback was attempted, including successful fetches.
+Diagnostics reset for a new fetch and after reboot.
+Snapshots contain no request/response text, identifiers, network addresses or
+credentials. Existing validation, transport, cache and formatting policies
+remain in effect.
+
 ## Segment validation errors
 
 ### "Invalid Range"

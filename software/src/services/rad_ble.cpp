@@ -61,6 +61,8 @@ const radble::Resource RESOURCES[] = {
     {"voltage_offset", "setting.voltageCalibrationOffset", "setting",
      "float", "V", RWP, "{\"min\":-1,\"max\":1}"},
 #ifndef PROVISION
+    {"settings_fetch", "connectivity.settings", "connectivity", "object", "", R,
+     "{\"diagnosticOnly\":true,\"schema\":1}"},
     {"position", "motion.position", "motion", "float", "cm", RS, ""},
     {"speed", "motion.speed", "motion", "float", "cm/s", RS, ""},
     {"rpm", "motion.rpm", "motion", "float", "rpm", RS, ""},
@@ -353,6 +355,9 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
                  path == "setting.voltageCalibrationOffset")
             return calibrationValue(path);
 #ifndef PROVISION
+        else if (path == "connectivity.settings")
+            writeSettingsFetchStatus(document.as<JsonObject>(),
+                                     getSettingsFetchStatus());
         else if (path == "motion.position")
             document["value"] = currentSegment ? currentSegment->currentPosition : 0;
         else if (path == "motion.speed")

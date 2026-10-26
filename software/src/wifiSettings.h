@@ -15,12 +15,14 @@
 #endif
 
 #include "services/eeprom_service.h"
+#include "services/settings_fetch_status.h"
 
 extern DashboardState dashboardState;
 
 // Helper to POST JSON to Bubble server
 int postJson(const String &endpoint, const JsonDocument &doc,
-             String *responsePayload = nullptr, int timeoutMs = 15000);
+             String *responsePayload = nullptr, int timeoutMs = 15000,
+             DashboardResponseMetrics *metrics = nullptr);
 
 void getIsPaired();
 
@@ -77,6 +79,7 @@ void checkIfPairedTask(void *pvParameters);
 void notifyTrainingTask(void *pvParameters);
 void sendCalibrationToBackend(float minCm, float maxCm);
 bool applySessionDocument(JsonDocument sessionJson, String &error);
+SettingsFetchStatus getSettingsFetchStatus();
 #endif  // PROVISION
 
 #endif  // WIFI_SETTINGS_H_
