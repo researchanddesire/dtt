@@ -34,18 +34,22 @@ PARAMS = {
     'PlateTopR': (5.0, 'reference proxy'),
     'DeviceTopInset': (17.0, 'reference proxy: plate top to housing top end'),
     'UpperH': (36.0, 'design: height of the wide upper section, encloses the upper keyholes'),
-    'BodyW': (54.0, 'design: housing width plus 5 mm each side'),
-    'BottomMargin': (5.0, 'design: plate bottom below the housing jack end, under the end stops'),
-    'BottomR': (12.0, 'design'),
+    'BodyW': (48.4, 'design: flush with the outer faces of the track walls'),
+    'BottomMargin': (2.2, 'design: flush with the end wall at the jack end'),
+    'BottomR': (0.5, 'design: square corners under the track walls'),
     'ShoulderR': (6.0, 'design: fillet where the upper section meets the body'),
     # track: the module slides in from the USB-C end and rests on the bottom end stops
     'RestGap': (2.6, 'design: plate front to PCB rear; PCB screw heads and the lower cup head pass under the PCB'),
     'WallClear': (0.2, 'design: clearance to the housing sides'),
-    'RailT': (2.0, 'design: rail wall thickness'),
+    'RailT': (2.0, 'design: side wall thickness at the widest housing section'),
+    'TopChamfer': (1.5, 'design: outer top edge of the walls'),
+    'EntryFlare': (1.0, 'design: inward lead-in at the open end of each wall'),
+    'TrackEndY': (78.0, 'design: walls end here, below the S1 switch at Y 79.4'),
+    'JackOpenX0': (14.0, 'design: opening in the end wall for the 3.5 mm plug'),
+    'JackOpenX1': (28.0, 'design'),
     'HookEngage': (0.6, 'design: rail lip overlap onto the top chamfer'),
     'SkidW': (2.0, 'design: skids under the PCB, between the screw-head and connector tracks'),
-    'StopT': (2.0, 'design: end stop thickness'),
-    'StopTopZ': (-1.0, 'design: end stops reach 2.5 mm up the housing'),
+    'StopT': (2.0, 'design: end wall thickness at the jack end'),
     # flexure latch: a tongue cut into the plate, teeth snap behind the PCB at the USB-C end
     'LatchX0': (9.0, 'design: tongue left edge'),
     'LatchX1': (33.0, 'design: tongue right edge'),
@@ -82,15 +86,15 @@ P = {k: v for k, (v, _) in PARAMS.items()}
 SECTIONS = {'bottom': (4.0, 24.0, 2.0, 40.0, 13.18, 0.99),
             'mid': (26.4, 56.6, 0.0, 42.0, 13.18, 0.99),
             'wide': (58.4, 88.0, -1.0, 43.0, 12.18, 1.41)}
-# Rails (section, y0, y1), both sides. The module slides toward -Y, so a rail is only ever
-# passed by its own section or narrower ones. The wide rails stop short of the S1 switch,
-# which protrudes from the right side at Y 79.4 and above.
-RAILS = [('bottom', 6.0, 22.0), ('mid', 28.0, 55.0), ('wide', 60.0, 77.0)]
+# Side walls run continuously from the jack end to TrackEndY with one straight outer face. Each
+# Y band takes the inner face and chamfer lip of the section at its top end, so in the steps
+# between sections the wall clears the narrower housing. The module slides toward -Y, so a band
+# is only ever passed by its own section or narrower ones. The walls stop short of the S1
+# switch, which protrudes from the right side at Y 79.4 and above.
+TRACK = [('bottom', 23.0), ('mid', 56.0), ('wide', None)]   # (section, band top Y; None = TrackEndY)
 # Skids under the PCB (X ranges), run Y 4 to the tongue root. They sit between the tracks swept by
 # the PCB screw heads (X 0.6-5.7, 36.3-41.4) and clear of the J5 and J2/J6 through-hole parts.
 SKIDS = [(11.0, 13.0), (29.0, 31.0)]
-# End stops (device X ranges) at the jack end, either side of the 3.5 mm jack.
-BOTTOM_STOPS = [(7.0, 14.0), (28.0, 35.0)]
 
 
 def plate_top():
@@ -184,33 +188,66 @@ def cup_shape(x, y):
     return outside.cut(inside).fuse([stem, head]).removeSplitter()
 
 
-def rail(side, sec, ya, yb):
-    """Rail wall rising from the plate with a lip over the housing's top chamfer."""
+def outer_x(side):
+    c, t = P['WallClear'], P['RailT']
+    return (min(v[2] for v in SECTIONS.values()) - c - t if side == 'L'
+            else max(v[3] for v in SECTIONS.values()) + c + t)
+
+
+def wall_band(side, sec, ya, yb):
+    """One Y band of a side wall: straight outer face, inner face and lip follow the section."""
     _, _, xl, xr, zc, inset = SECTIONS[sec]
-    zf = z_front(); c, t = P['WallClear'], P['RailT']
+    zf = z_front(); c = P['WallClear']
     s = -1 if side == 'L' else 1
     wall = xl if side == 'L' else xr
     inner = wall + s * c
-    outer = inner + s * t
+    outer = outer_x(side)
+    top = P['HousingTopZ'] + 1.2; ch = P['TopChamfer']
     slope = (P['HousingTopZ'] - zc) / inset
     tip = wall - s * (P['HookEngage'] - c)       # lip tip X, over the chamfer
     z_tip = zc + P['HookEngage'] * slope + c
-    prof = [(outer, zf), (inner, zf), (inner, zc + c), (tip, z_tip), (tip, P['HousingTopZ'] + 1.2),
-            (outer, P['HousingTopZ'] + 1.2)]
+    prof = [(outer, zf), (inner, zf), (inner, zc + c), (tip, z_tip), (tip, top),
+            (outer - s * ch, top), (outer, top - ch)]
     pts = [App.Vector(x, ya, z) for x, z in prof]
     return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(App.Vector(0, yb - ya, 0))
 
 
+def track():
+    """Continuous U-shaped track: two side walls joined by an end wall at the jack end."""
+    zf = z_front(); c, t = P['WallClear'], P['StopT']
+    y_end = P['DeviceBottomY'] - c - t
+    top = P['HousingTopZ'] + 1.2; ch = P['TopChamfer']
+    parts = []
+    for side in 'LR':
+        ya = y_end
+        for sec, yb in TRACK:
+            yb = P['TrackEndY'] if yb is None else yb
+            parts.append(wall_band(side, sec, ya, yb))
+            ya = yb
+    xl, xr = outer_x('L'), outer_x('R')
+    # end wall, chamfered on its outer top edge like the side walls
+    prof = [(y_end, zf), (P['DeviceBottomY'] - c, zf), (P['DeviceBottomY'] - c, top), (y_end + ch, top),
+            (y_end, top - ch)]
+    pts = [App.Vector(xl, y, z) for y, z in prof]
+    end = Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(App.Vector(xr - xl, 0, 0))
+    end = end.cut(box(P['JackOpenX0'], P['JackOpenX1'], y_end - 1, P['DeviceBottomY'], zf + 0.01, top + 1))
+    shape = parts[0].fuse(parts[1:] + [end])
+    # lead-in flare on the inner face at the open end of each wall
+    f, L = P['EntryFlare'], 4.0
+    y1 = P['TrackEndY']
+    _, _, wl, wr, _, _ = SECTIONS['wide']
+    for side in 'LR':
+        s = -1 if side == 'L' else 1
+        x_in = (wl if side == 'L' else wr) + s * c
+        tri = [(x_in, y1 - L), (x_in + s * f, y1 + 0.01), (x_in - s * 2.0, y1 + 0.01)]
+        shape = shape.cut(prism(tri, zf + 0.01, top + 1))
+    return shape.removeSplitter()
+
+
 def cradle():
-    zf = z_front(); parts = []
-    for sec, ya, yb in RAILS:
-        for side in 'LR':
-            parts.append(rail(side, sec, ya, yb))
+    zf = z_front(); parts = [track()]
     for xa, xb in SKIDS:
         parts.append(box(xa, xb, P['DeviceBottomY'] + 3, P['LatchRootY'] - 2, zf - 0.01, P['PCBRearZ']))
-    c, t = P['WallClear'], P['StopT']
-    for xa, xb in BOTTOM_STOPS:
-        parts.append(box(xa, xb, P['DeviceBottomY'] - c - t, P['DeviceBottomY'] - c, zf - 0.01, P['StopTopZ']))
     return parts + latch_teeth()
 
 
