@@ -129,6 +129,9 @@ PARAMS = {
     'ScrewHeadD': (8.3, 'reference: #6 drywall screw bugle head (estimate)'),
     'ScrewShankD': (3.5, 'reference: #6 drywall screw'),
     'ScrewLen': (32.0, 'reference: 1-1/4 in drywall screw'),
+    'SpacerT': (4.0, 'design: wall spacer for screw mounting; at the stop the tab end moves 3.3 mm toward the wall'),
+    'SpacerTopY': (62.0, 'design: the spacer ends below the lever root (Y 66), so the lever is free of the wall'),
+    'SpacerCornerR': (3.0, 'design: top corners of the spacer'),
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
 
@@ -396,6 +399,18 @@ def screw_holes():
         cuts += [cyl(rc, x, y, zr - 1, zf + 1), Part.makeCone(rc, rk, rk - rc, V(x, y, zc)),
                  cyl(rk, x, y, zf - sink, zf + 1)]
     return cuts
+
+
+def wall_spacer():
+    """Flat spacer between the plate and the wall for screw mounting: the plate outline below the lever
+    root, with clearance holes for the screws. Without it the lever has no room to move toward the wall."""
+    zr = z_rear(); t = P['SpacerT']
+    clip = box(-FAR / 2, FAR / 2, -FAR / 2, P['SpacerTopY'], zr - 1, zr + 1)
+    face = [f for f in plan_face().common(clip).Faces][0]
+    face = round_face(face, 0, P['SpacerCornerR'])
+    spacer = face.extrude(V(0, 0, -t))
+    holes = [cyl(P['ScrewClearD'] / 2, x, y, zr - t - 1, zr + 1) for x, y in screw_centres()]
+    return spacer.cut(holes).removeSplitter()
 
 
 def screw_shape(x, y):
@@ -735,6 +750,10 @@ def main():
     for key, (x, y) in zip(('L', 'U'), screw_centres()):
         group.addObject(tagged(doc, 'SnapScrew' + key, 'Wall screw %s (optional, proxy)' % key, screw_shape(x, y),
                                SCREW_COLOUR))
+    spacer = wall_spacer()
+    sp = tagged(doc, 'SnapWallSpacer', 'Wall spacer (screw mounting, replaces the cups)', spacer, PLATE_COLOUR)
+    sp.Visibility = False                                  # it takes the place of the cups
+    group.addObject(sp)
     doc.recompute()
     os.makedirs(HERE, exist_ok=True); os.makedirs(OUT, exist_ok=True)
     if App.GuiUp:
@@ -742,8 +761,9 @@ def main():
         ImportGui.export(bodies, os.path.join(OUT, 'DTT-Snap-Backplate.step'))
     else:
         Part.makeCompound([black, blue]).exportStep(os.path.join(OUT, 'DTT-Snap-Backplate.step'))
+    spacer.exportStep(os.path.join(OUT, 'DTT-Snap-Backplate-Wall-Spacer.step'))
     import MeshPart
-    for shape, suffix in ((printed, ''), (black, '-Black'), (blue, '-Blue')):
+    for shape, suffix in ((printed, ''), (black, '-Black'), (blue, '-Blue'), (spacer, '-Wall-Spacer')):
         MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.02, AngularDeflection=0.2, Relative=False).write(
             os.path.join(OUT, 'DTT-Snap-Backplate%s.stl' % suffix))
     if App.GuiUp:

@@ -31,6 +31,8 @@ CAD previews: [assembled](Snap-Backplate-Assembled.png), [front](Snap-Backplate-
   - `DTT-Snap-Backplate-Black.stl` and `DTT-Snap-Backplate-Blue.stl`: the two
     colours, for a two-colour print.
   - `DTT-Snap-Backplate.stl`: the whole part, for a one-colour print.
+  - `DTT-Snap-Backplate-Wall-Spacer` (STEP and STL): the spacer for screw
+    mounting.
 
 ## Form
 
@@ -106,8 +108,11 @@ side elevation, with the module cavity cut out of it.
   drywall screws: 4.5 mm clearance hole, 90° countersink Ø9, with a 0.4 mm
   counterbore above it so a #6 head sits 0.7 mm below the bed. Screw the
   plate on before sliding the module in. The module then covers the screws.
-- Use either the cups or the screws. Screwed on, the plate sits flat on the
-  wall with the cups removed.
+- Use either the cups or the screws. For screws, fit the 4 mm wall spacer
+  behind the plate instead of the cups. It follows the plate outline below the
+  lever root (Y 62), so the lever stays clear of the wall. The tab end moves up
+  to 3.3 mm toward the wall before the stop lands. Use screws of at least 32 mm
+  (1-1/4 in).
 
 | Parameter | Value | Basis |
 | --- | --- | --- |
@@ -126,6 +131,7 @@ side elevation, with the module cavity cut out of it.
 | Grip grooves | 4 at 2.0 pitch, 1.0 wide, 0.9 deep | design |
 | Wall screws | X 21, Y 40 and 59; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
 | Screw | #6 drywall, head Ø8.3, shank Ø3.5 | reference (estimate) |
+| Wall spacer | 4.0 thick, plate outline to Y 62, Ø4.5 screw holes | design |
 
 Every value and its basis is in `PARAMS` in the builder.
 
@@ -165,6 +171,8 @@ Print rear face down in PETG with at least 4 perimeters and no supports. The
 lever's rear stays on the bed. The overhangs are the 0.6 mm lips (45°/55°), the
 hood lip, which runs parallel to the housing slope at 54°, and the 0.6 mm bed
 chamfer. The lever pockets over the stop fingers are 5 mm bridges.
+
+Print the wall spacer flat, in black.
 
 For two colours, load `DTT-Snap-Backplate-Black.stl` and
 `DTT-Snap-Backplate-Blue.stl` together as one object with two parts, and give
