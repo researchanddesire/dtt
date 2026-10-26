@@ -15,22 +15,26 @@ resource through `sensor.read` or `setting.read`. It reports the most recent
 dashboard settings fetch without enabling verbose logs. Reading it does not
 retry the request, change the session or write storage.
 
+Schema 2 returns a compact `summary` by default. Set `args.view` to `transport`,
+`parse`, `storage` or `memory` for the corresponding details. Each fixed view
+fits the complete 509-byte RadBLE reply, including request ID and both state
+names. Compare `generation` across reads to ensure they describe the same fetch.
+There is no combined `all` view.
+
 The snapshot contains only fixed categories, counters and memory telemetry:
 
-| Fields | Meaning |
+| View | Fields and meaning |
 | --- | --- |
-| `generation`, `attempt` | Fetch generation since boot and request attempt (up to three). |
-| `httpStatus`, `clientStatus` | Server HTTP status (zero if none) and the effective transport result. A server `200` can accompany a negative client result if reading the body failed. |
-| `responseBytes`, `retainedBodyBytes` | Body bytes accepted by the bounded sink before a failure discards the payload, and bytes retained for parsing. |
-| `parseCode`, `overflow` | ArduinoJson result: `255` not run, `0` success, `1` empty input, `2` incomplete input, `3` invalid input, `4` no memory, `5` too deep; document allocation overflow flag. |
-| `stage`, `error` | Last fetch phase and fixed error category. Request-page and live-page mismatches are distinct. |
-| `persistenceError` | `none`, `limit`, `mount`, `write`, `rotate`, `recover`, `stage` or `commit`. |
-| `callbackInvoked`, `eventAccepted`, `persisted`, `installed` | Whether the state machine accepted the load callback, storage was committed and live settings were installed. |
-| `cacheSource`, `cacheMounted` | Subsequent fallback outcome: `not_loaded`, `primary`, `backup` or `recovery`, and mount result. Fallback preserves the fetch's original failure category. |
-| `startedAtMs`, `updatedAtMs`, `freeHeap`, `largestBlock` | Uptime and heap observations at the last diagnostic update. |
+| All views | `v=2`, `view`, `generation` since boot and last fetch `stage`. |
+| `summary` | `error`, `httpStatus`, `clientStatus`, `parseCode`, `persistenceError`, `cacheSource`. |
+| `transport` | `attempt` (up to three), `httpStatus` (zero if none), `clientStatus`, `responseBytes`, `retainedBodyBytes`. A server `200` can accompany a negative client result if body reading failed. Byte counts distinguish the bounded sink's accepted bytes from the body retained for parsing. |
+| `parse` | `error`, `parseCode`, `overflow`, `callbackInvoked`, `eventAccepted`. Parse codes: `255` not run, `0` success, `1` empty input, `2` incomplete input, `3` invalid input, `4` no memory, `5` too deep. |
+| `storage` | `persistenceError`, `cacheSource`, `cacheMounted`, `callbackInvoked`, `eventAccepted`, `persisted`, `installed`. Persistence errors: `none`, `limit`, `mount`, `write`, `rotate`, `recover`, `stage`, `commit`. Cache source: `not_loaded`, `primary`, `backup`, `recovery`. Fallback preserves the original fetch failure. |
+| `memory` | `startedAtMs`, `updatedAtMs`, `freeHeap`, `largestBlock` at the last diagnostic update. |
 
-A completed fetch reports `stage=installed`, `parseCode=0`, `persisted=true`
-and `installed=true`. `cacheMounted` describes a fallback cache load only;
+A completed fetch summary reports `stage=installed` and `parseCode=0`; its
+storage view reports `persisted=true` and `installed=true`.
+`cacheMounted` describes a fallback cache load only;
 it remains false when no fallback was attempted, including successful fetches.
 Diagnostics reset for a new fetch and after reboot.
 Snapshots contain no request/response text, identifiers, network addresses or

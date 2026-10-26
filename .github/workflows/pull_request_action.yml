@@ -47,7 +47,9 @@ jobs:
 
       # Native tests above install ArduinoJson and Unity for these host checks.
       - name: Test dashboard transport and session cache boundaries
-        run: python test/security_dashboard_transport/test_source_behaviour.py
+        run: |
+          python test/security_dashboard_transport/test_source_behaviour.py --prepare-reply-dependency
+          python test/security_dashboard_transport/test_source_behaviour.py
 
       - name: Test captive portal isolation and deadlines
         run: python test/native_wifi_portal/test_portal_safety.py

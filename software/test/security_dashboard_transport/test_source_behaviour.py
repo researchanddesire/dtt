@@ -1,12 +1,16 @@
 """Offline regressions for the actual transport/cache helpers and portal renderer.
 
-Run: python3 test/security_dashboard_transport/test_source_behaviour.py
-Requires a C++17 compiler and the locally installed test_native ArduinoJson headers.
+Prepare the pinned reply dependency with --prepare-reply-dependency, then run:
+python3 test/security_dashboard_transport/test_source_behaviour.py
+Requires a C++17 compiler and test_native ArduinoJson/RadBLE headers and sources.
 The ESP32 HTTP/TLS and SPIFFS ports are synthetic; this is not a hardware TLS test.
 """
 from pathlib import Path
 import os
+import json
+import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -28,6 +32,15 @@ class SourceBehaviourTests(unittest.TestCase):
         load = between(wifi, "void loadSessionTask(", "\nvoid fetchSettingsTask(")
         fetch = between(wifi, "void fetchSettingsTask(", "\nvoid saveResultsTask(")
         html = between(portal, "String WiFiManager::htmlEntities(", "\n/**")
+        # This is the actual pinned dependency used by the firmware, including
+        # its final envelope serialization and unchanged 509-byte rejection gate.
+        reply_root = ROOT / ".pio/libdeps/test_native/RadBLE/src"
+        reply_source = (reply_root / "RadBle.cpp").read_text()
+        reply = between(reply_source, "void Server::sendStage(", "\nvoid Server::sendSerialized(")
+        result = between(reply_source, "Result Result::success(", "\nServer::Server()")
+        ble = (ROOT / "src/services/rad_ble.cpp").read_text()
+        handler = between(ble, "radble::Result settingsFetchDiagnostic(", "\nradble::Result sessionDefinition(")
+        states = sorted(set(re.findall(r'"([A-Za-z][A-Za-z0-9_.]*)"_s', (ROOT / "src/state/machine.h").read_text())))
         source = (HERE / "fixture.cpp.in").read_text()
         source = source.replace("// ACTUAL_TRANSPORT", transport)
         source = source.replace("// ACTUAL_CACHE", cache)
@@ -35,6 +48,10 @@ class SourceBehaviourTests(unittest.TestCase):
         source = source.replace("// ACTUAL_LOAD", load)
         source = source.replace("// ACTUAL_FETCH", fetch)
         source = source.replace("// ACTUAL_HTML", html)
+        source = source.replace("// ACTUAL_REPLY", reply)
+        source = source.replace("// ACTUAL_RESULT", result)
+        source = source.replace("// ACTUAL_DIAGNOSTIC_HANDLER", handler)
+        source = source.replace("// DTT_STATE_NAMES", "static const char *dttStates[] = {" + ",".join(json.dumps(s) for s in states) + "};")
         includes = ROOT / ".pio/libdeps/test_native/ArduinoJson/src"
         self.assertTrue((includes / "ArduinoJson.h").is_file())
         with tempfile.TemporaryDirectory(prefix="dtt-security-transport-") as directory:
@@ -48,12 +65,15 @@ class SourceBehaviourTests(unittest.TestCase):
             for local_http in (False, True):
                 with self.subTest(local_http=local_http):
                     binary = Path(directory) / ("development" if local_http else "production")
-                    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-I", directory, "-I", str(includes), "-I", str(ROOT / "src"), "-I", str(ROOT / "lib/TrainingTypes/src"), "-I", str(ROOT / "lib/FirmwareUpdateProtocol/src"), str(cpp), "-o", str(binary)]
+                    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-I", directory, "-I", str(includes), "-I", str(reply_root), "-I", str(ROOT / "src"), "-I", str(ROOT / "lib/TrainingTypes/src"), "-I", str(ROOT / "lib/FirmwareUpdateProtocol/src"), str(cpp), "-o", str(binary)]
                     if local_http:
                         command += ["-DDTT_ALLOW_LOCAL_HTTP"]
                     subprocess.run(command, check=True, capture_output=True, text=True)
                     result = subprocess.run([str(binary)], check=True, capture_output=True, text=True)
                     self.assertIn("all assertions passed", result.stdout)
+                    for line in result.stdout.splitlines():
+                        if line.startswith("actual reply budget:"):
+                            print(f"local_http={local_http}: {line}")
 
     def test_rendering_and_session_entry_points_are_wired(self):
         source = (ROOT / "lib/WiFiManager/WiFiManager.cpp").read_text()
@@ -79,4 +99,12 @@ class SourceBehaviourTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if sys.argv[1:] == ["--prepare-reply-dependency"]:
+        pins = set(re.findall(r"https://github\.com/researchanddesire/rad-ble\.git#[0-9a-fA-F]{40}", (ROOT / "platformio.ini").read_text()))
+        if len(pins) != 1:
+            raise SystemExit("Expected one unique pinned RadBLE dependency")
+        subprocess.run([sys.executable, "-m", "platformio", "pkg", "install",
+                        "-e", "test_native", "--library", pins.pop(),
+                        "--no-save", "--skip-dependencies"], cwd=ROOT, check=True)
+    else:
+        unittest.main()

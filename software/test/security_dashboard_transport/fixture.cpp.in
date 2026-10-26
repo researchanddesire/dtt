@@ -13,6 +13,7 @@
 #include <vector>
 #include <ArduinoJson.h>
 #include <SessionValidation.h>
+#include <RadBleProtocol.generated.h>
 #include "services/settings_fetch_status.h"
 
 static uint32_t clockMs = 0;
@@ -41,6 +42,7 @@ class String : public std::string {
  public:
     using std::string::string;
     String(const std::string &value) : std::string(value) {}
+    explicit String(uint32_t value) : std::string(std::to_string(value)) {}
     bool isEmpty() const { return empty(); }
     bool startsWith(const String &value) const { return rfind(value, 0) == 0; }
     bool endsWith(const String &value) const {
@@ -136,6 +138,25 @@ struct {
     unsigned getFreeHeap() const { return heap; }
     unsigned getMaxAllocHeap() const { return heap / 2; }
 } ESP;
+struct {
+    template <typename... Args> void printf(const char *, Args...) {}
+} Serial;
+namespace radble {
+struct Result {
+    bool ok;
+    String code, message, resultJson;
+    static Result success(const String &resultJson = "{}");
+    static Result failure(const char *code, const char *message);
+};
+// ACTUAL_RESULT
+struct Server {
+    String sent;
+    void sendStage(uint16_t, uint32_t, const char *, bool, const char *,
+                   const char *, const String &, const String &, const String &);
+    void sendSerialized(uint16_t, const String &payload, bool) { sent = payload; }
+};
+// ACTUAL_REPLY
+}  // namespace radble
 static String configuredOrigin = "https://dashboard.invalid";
 #define RAD_SERVER configuredOrigin
 #define RAD_PUBLIC_KEY "synthetic-test-only"
@@ -257,6 +278,7 @@ class WiFiManager { public: static String htmlEntities(String, bool = false); };
 // Actual fetch/cache task bodies run against synthetic scheduler/state ports.
 // The network and filesystem failures below do not touch a device or host file.
 // ACTUAL_DIAGNOSTICS
+// ACTUAL_DIAGNOSTIC_HANDLER
 static constexpr int WL_CONNECTED = 1;
 static int wifiStatus = WL_CONNECTED;
 struct WiFiClass { static int status() { return wifiStatus; } };
@@ -300,7 +322,11 @@ static void resetFetch() {
     response = Response{}; session = Session{}; machine = StateMachine{};
     wifiStatus = WL_CONNECTED; liveInstalls = flushCalls = loadFailures = 0;
     clockMs = 1000; ESP.heap = 200000;
+#ifdef DTT_ALLOW_LOCAL_HTTP
+    configuredOrigin = "http://127.0.0.1:3000";
+#else
     configuredOrigin = "https://dashboard.invalid";
+#endif
     auto document = sessionDocument("sentinel-private-name");
     document["id"] = "sentinel-private-identifier";
     document["description"] = "sentinel-private-body";
@@ -397,7 +423,7 @@ static void testFetchDiagnostics() {
     assert(encoded.find("sentinel") == std::string::npos);
     assert(encoded.find("synthetic-device") == std::string::npos);
     assert(!diagnostic["url"].is<const char *>() && !diagnostic["id"].is<const char *>());
-    assert(diagnostic.size() == 22 && diagnostic["stage"] == "requesting");
+    assert(diagnostic.size() == 10 && diagnostic["stage"] == "requesting");
 
     // Coherent fixed-size snapshots while a worker publishes a new phase.
     std::thread writer([next]() {
@@ -432,6 +458,80 @@ static void testFetchDiagnostics() {
     old["description"] = std::string(MAX_DASHBOARD_RESPONSE_BYTES, 'x');
     assert(!persistSessionDocument(old, error, &failure));
     assert(failure == SessionPersistenceError::Limit);
+}
+
+// These names come from the actual DTT state table, not a guessed short name.
+// DTT_STATE_NAMES
+static void testDiagnosticReplyBudget() {
+    SettingsFetchStatus worst;
+    worst.generation = UINT32_MAX;
+    worst.stage = SettingsFetchStage::PersistenceFailed;
+    worst.error = SettingsFetchError::RequestPage;
+    worst.persistenceError = SessionPersistenceError::Recover;
+    worst.cacheSource = SettingsCacheSource::NotLoaded;
+    worst.attempt = UINT8_MAX;
+    worst.httpStatus = INT32_MAX;
+    worst.clientStatus = INT32_MIN;
+    worst.responseBytes = worst.retainedBodyBytes = UINT32_MAX;
+    worst.parseCode = UINT8_MAX;
+    worst.startedAtMs = worst.updatedAtMs = UINT32_MAX;
+    worst.freeHeap = worst.largestBlock = UINT32_MAX;
+    settingsFetchStatus = worst;
+    radble::Server server;
+    size_t maximumReply = 0;
+    unsigned combinations = 0;
+    for (const char *view : {"summary", "transport", "parse", "storage", "memory"}) {
+        JsonDocument args; args["view"] = view;
+        const auto result = settingsFetchDiagnostic(args.as<JsonObjectConst>());
+        assert(result.ok);
+        JsonDocument body;
+        assert(!deserializeJson(body, result.resultJson));
+        assert(body["v"] == 2 && body["view"] == view);
+        assert(body["path"] == "connectivity.settings");
+        assert(result.resultJson.find("sentinel") == std::string::npos);
+        for (const char *before : dttStates) {
+            for (const char *after : dttStates) {
+                // Actual pinned Result and Server::sendStage implementations,
+                // including the envelope, state names and 509-byte safety gate.
+                server.sendStage(1, UINT32_MAX, "completed", result.ok,
+                                 result.code.c_str(), result.message.c_str(),
+                                 result.resultJson, before, after);
+                assert(server.sent.size() <= radble::MAX_MESSAGE_BYTES);
+                JsonDocument reply;
+                assert(!deserializeJson(reply, server.sent));
+                assert(reply["ok"] == true && reply["code"] == "ok");
+                assert(reply["result"]["view"] == view);
+                maximumReply = std::max(maximumReply, server.sent.size());
+                ++combinations;
+            }
+        }
+    }
+    JsonDocument emptyArgs;
+    auto result = settingsFetchDiagnostic(emptyArgs.as<JsonObjectConst>());
+    JsonDocument defaultBody;
+    assert(result.ok && !deserializeJson(defaultBody, result.resultJson));
+    assert(defaultBody["view"] == "summary");
+    for (const char *invalid : {"all", "sentinel-private-name", ""}) {
+        JsonDocument args; args["view"] = invalid;
+        result = settingsFetchDiagnostic(args.as<JsonObjectConst>());
+        assert(!result.ok && result.code == "invalid_value");
+        assert(result.message.find("sentinel") == std::string::npos);
+    }
+    JsonDocument invalidArgs; invalidArgs["view"] = 5;
+    assert(!settingsFetchDiagnostic(invalidArgs.as<JsonObjectConst>()).ok);
+    invalidArgs["view"] = std::string("summary\0private", 15);
+    assert(!settingsFetchDiagnostic(invalidArgs.as<JsonObjectConst>()).ok);
+
+    // Reproduce ab151eb's actual oversized shape through the same real gate.
+    const String legacy = R"({"path":"connectivity.settings","v":1,"generation":0,"stage":"idle","error":"none","persistenceError":"none","cacheSource":"not_loaded","attempt":0,"httpStatus":0,"clientStatus":0,"responseBytes":0,"retainedBodyBytes":0,"parseCode":255,"overflow":false,"callbackInvoked":false,"eventAccepted":false,"persisted":false,"installed":false,"cacheMounted":false,"startedAtMs":0,"updatedAtMs":0,"freeHeap":0,"largestBlock":0})";
+    server.sendStage(1, UINT32_MAX, "completed", true, "", "", legacy,
+                     "play.calibration.min", "play.calibration.min");
+    JsonDocument rejected;
+    assert(!deserializeJson(rejected, server.sent));
+    assert(rejected["ok"] == false && rejected["code"] == "response_too_large");
+    std::cout << "actual reply budget: " << combinations
+              << " combinations, max=" << maximumReply
+              << "/" << radble::MAX_MESSAGE_BYTES << " bytes\n";
 }
 int main() {
     JsonDocument doc; doc["id"] = "synthetic";
@@ -548,5 +648,6 @@ int main() {
     assert(WiFiManager::htmlEntities("&lt;") == "&amp;lt;");
     assert(WiFiManager::htmlEntities(" a ", true) == "&#160;a&#160;");
     testFetchDiagnostics();
+    testDiagnosticReplyBudget();
     std::cout << "all assertions passed\n";
 }

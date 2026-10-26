@@ -3,6 +3,8 @@
 #include <ArduinoJson.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <initializer_list>
 
 // Diagnostics contain only fixed categories and numeric telemetry. Never add
 // session text, identifiers, addresses, credentials or response excerpts here.
@@ -24,6 +26,7 @@ enum class SessionPersistenceError : uint8_t {
     None, Limit, Mount, Write, Rotate, Recover, Stage, Commit
 };
 enum class SettingsCacheSource : uint8_t { NotLoaded, Primary, Backup, Recovery };
+enum class SettingsFetchView : uint8_t { Summary, Transport, Parse, Storage, Memory };
 
 struct SettingsFetchStatus {
     uint32_t generation = 0;
@@ -104,28 +107,68 @@ inline const char *settingsCacheSourceName(SettingsCacheSource source) {
     }
     return "unknown";
 }
-inline void writeSettingsFetchStatus(JsonObject output,
-                                     const SettingsFetchStatus &status) {
-    output["v"] = 1;
+inline const char *settingsFetchViewName(SettingsFetchView view) {
+    switch (view) {
+        case SettingsFetchView::Summary: return "summary";
+        case SettingsFetchView::Transport: return "transport";
+        case SettingsFetchView::Parse: return "parse";
+        case SettingsFetchView::Storage: return "storage";
+        case SettingsFetchView::Memory: return "memory";
+    }
+    return "unknown";
+}
+inline bool parseSettingsFetchView(const char *name, SettingsFetchView &view) {
+    for (const auto candidate : {SettingsFetchView::Summary, SettingsFetchView::Transport,
+                                SettingsFetchView::Parse, SettingsFetchView::Storage,
+                                SettingsFetchView::Memory}) {
+        if (name && std::strcmp(name, settingsFetchViewName(candidate)) == 0) {
+            view = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Each fixed view must fit RadBLE's complete reply envelope, not just this
+// object. Do not add an unbounded "all" view or increase protocol limits.
+inline void writeSettingsFetchStatus(
+    JsonObject output, const SettingsFetchStatus &status,
+    SettingsFetchView view = SettingsFetchView::Summary) {
+    output["v"] = 2;
+    output["view"] = settingsFetchViewName(view);
     output["generation"] = status.generation;
     output["stage"] = settingsFetchStageName(status.stage);
-    output["error"] = settingsFetchErrorName(status.error);
-    output["persistenceError"] = sessionPersistenceErrorName(status.persistenceError);
-    output["cacheSource"] = settingsCacheSourceName(status.cacheSource);
-    output["attempt"] = status.attempt;
-    output["httpStatus"] = status.httpStatus;
-    output["clientStatus"] = status.clientStatus;
-    output["responseBytes"] = status.responseBytes;
-    output["retainedBodyBytes"] = status.retainedBodyBytes;
-    output["parseCode"] = status.parseCode;
-    output["overflow"] = status.overflow;
-    output["callbackInvoked"] = status.callbackInvoked;
-    output["eventAccepted"] = status.eventAccepted;
-    output["persisted"] = status.persisted;
-    output["installed"] = status.installed;
-    output["cacheMounted"] = status.cacheMounted;
-    output["startedAtMs"] = status.startedAtMs;
-    output["updatedAtMs"] = status.updatedAtMs;
-    output["freeHeap"] = status.freeHeap;
-    output["largestBlock"] = status.largestBlock;
+    if (view == SettingsFetchView::Summary) {
+        output["error"] = settingsFetchErrorName(status.error);
+        output["httpStatus"] = status.httpStatus;
+        output["clientStatus"] = status.clientStatus;
+        output["parseCode"] = status.parseCode;
+        output["persistenceError"] = sessionPersistenceErrorName(status.persistenceError);
+        output["cacheSource"] = settingsCacheSourceName(status.cacheSource);
+    } else if (view == SettingsFetchView::Transport) {
+        output["attempt"] = status.attempt;
+        output["httpStatus"] = status.httpStatus;
+        output["clientStatus"] = status.clientStatus;
+        output["responseBytes"] = status.responseBytes;
+        output["retainedBodyBytes"] = status.retainedBodyBytes;
+    } else if (view == SettingsFetchView::Parse) {
+        output["error"] = settingsFetchErrorName(status.error);
+        output["parseCode"] = status.parseCode;
+        output["overflow"] = status.overflow;
+        output["callbackInvoked"] = status.callbackInvoked;
+        output["eventAccepted"] = status.eventAccepted;
+    } else if (view == SettingsFetchView::Storage) {
+        output["persistenceError"] = sessionPersistenceErrorName(status.persistenceError);
+        output["cacheSource"] = settingsCacheSourceName(status.cacheSource);
+        output["cacheMounted"] = status.cacheMounted;
+        output["callbackInvoked"] = status.callbackInvoked;
+        output["eventAccepted"] = status.eventAccepted;
+        output["persisted"] = status.persisted;
+        output["installed"] = status.installed;
+    } else if (view == SettingsFetchView::Memory) {
+        output["startedAtMs"] = status.startedAtMs;
+        output["updatedAtMs"] = status.updatedAtMs;
+        output["freeHeap"] = status.freeHeap;
+        output["largestBlock"] = status.largestBlock;
+    }
 }

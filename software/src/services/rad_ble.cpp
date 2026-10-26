@@ -62,7 +62,7 @@ const radble::Resource RESOURCES[] = {
      "float", "V", RWP, "{\"min\":-1,\"max\":1}"},
 #ifndef PROVISION
     {"settings_fetch", "connectivity.settings", "connectivity", "object", "", R,
-     "{\"diagnosticOnly\":true,\"schema\":1}"},
+     "{\"diagnosticOnly\":true,\"schema\":2}"},
     {"position", "motion.position", "motion", "float", "cm", RS, ""},
     {"speed", "motion.speed", "motion", "float", "cm/s", RS, ""},
     {"rpm", "motion.rpm", "motion", "float", "rpm", RS, ""},
@@ -209,6 +209,22 @@ radble::Result calibrationValue(const String &path) {
 }
 
 #ifndef PROVISION
+radble::Result settingsFetchDiagnostic(JsonObjectConst args) {
+    const auto requested = args["view"];
+    SettingsFetchView view;
+    if ((!requested.isNull() &&
+         (!requested.is<const char *>() ||
+          requested.as<JsonString>().size() != std::strlen(requested.as<const char *>()))) ||
+        !parseSettingsFetchView(requested | "summary", view))
+        return radble::Result::failure("invalid_value", "Unknown settings diagnostic view");
+    JsonDocument document;
+    document["path"] = "connectivity.settings";
+    writeSettingsFetchStatus(document.as<JsonObject>(), getSettingsFetchStatus(), view);
+    String output;
+    serializeJson(document, output);
+    return radble::Result::success(output);
+}
+
 radble::Result sessionDefinition(size_t index) {
     if (index >= session.segments.size())
         return radble::Result::failure("invalid_value", "Segment index is out of range");
@@ -356,8 +372,7 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             return calibrationValue(path);
 #ifndef PROVISION
         else if (path == "connectivity.settings")
-            writeSettingsFetchStatus(document.as<JsonObject>(),
-                                     getSettingsFetchStatus());
+            return settingsFetchDiagnostic(args);
         else if (path == "motion.position")
             document["value"] = currentSegment ? currentSegment->currentPosition : 0;
         else if (path == "motion.speed")
