@@ -15,6 +15,8 @@ so the plate comes off without releasing the PCB.
 
 - [DTT.FCStd](../DTT.FCStd): editable model. The `MountParameters` spreadsheet
   drives the bosses, insert holes, standoffs, plate, keyholes and cup proxies.
+  The plate outline, keyholes and cups follow the three-cup backplate reference
+  model `DTT-Backplate-Proxy.FCStd`.
 - [build_screw_mount.py](build_screw_mount.py): rebuilds the mount geometry,
   exploded copies, exports and previews from the spreadsheet. Run from the
   repository root: `freecad hardware/cad/screw-mount/build_screw_mount.py`.
@@ -66,15 +68,17 @@ Considered and rejected:
 | 4 | Hex standoff, male-female | M2.5, 5 mm AF, 6 mm body, 6 mm male thread, female thread at least 5 mm deep, brass |
 | 4 | Countersunk screw | M2.5 x 8, ISO 10642 hex socket (or ISO 7046 Phillips), A2 stainless |
 | 1 | Backplate | Printed, PETG or PLA, 100 % infill around the screw holes |
-| 3 | Suction cup | Stud-mount, Ø40 mm, stud neck Ø5 mm, stud head Ø9 mm |
+| 3 | Suction cup | Stud-mount, Ø35 mm, stem Ø7.5 mm, head Ø12 x 1.8 mm |
 
 The full device BOM is [hardware/bom.csv](../../bom.csv).
 
 ## Dimensions
 
 Verified values come from the rev4 KiCad source or the assembly datum.
-Assumed values come from photos and must be measured before printing a plate.
-Edit them in `MountParameters`; the plate, keyholes and cups follow.
+Reference values come from the backplate reference model, whose thickness and
+cup sizes are estimates; measure them before printing a plate. Edit them in
+`MountParameters`; the plate, keyholes and cups follow. Plate coordinates are
+from the bottom centre of the plate.
 
 | Parameter | Value | Basis |
 | --- | --- | --- |
@@ -85,13 +89,15 @@ Edit them in `MountParameters`; the plate, keyholes and cups follow.
 | Standoff body (PCB back to plate front) | 6.0 | design |
 | Screw thread engagement in standoff | 4.0 | design |
 | Male thread engagement in insert | 4.0 of 6.0 (2 mm through the PCB) | design |
-| Plate thickness | 4.0 | assumed |
-| Plate outline | 90 x 120, R8, centred on the device | assumed |
-| Upper cups | ±24 x, +40 y from plate centre | assumed |
-| Lower cup | 0 x, −40 y | assumed |
-| Cup | Ø40, 8 mm seated height | assumed |
-| Cup stud | neck Ø5 x 3, head Ø9 x 2.5 | assumed |
-| Keyhole | entry Ø10, slot 5.4 wide, 8 mm upward, head pocket on the rear | design (follows stud) |
+| Plate thickness | 4.0 | reference (estimate) |
+| Plate outline | 200 tall; upper section 75 wide with R5 top corners and R12.5 shoulders; R15 waist 50 wide; Ø80 lower pad | reference |
+| Device position | centred, housing top 17 below the plate top | reference |
+| Plate screw holes (plate coordinates) | ±18.58, 166.0 / ±17.70, 117.5 | follows the PCB holes |
+| Upper cup stems | ±28.5, 187 | reference |
+| Lower cup stem | 0, 87 | reference |
+| Cup | Ø35 rim, 14 deep from the plate rear | reference (estimate) |
+| Cup stem and head | stem Ø7.5, head Ø12 x 1.8, 0.4 above the plate front | reference (estimate) |
+| Keyhole | entry Ø14, slot 9 wide, 12 travel; upper slots outward, lower slot down | reference |
 | Countersink | Ø5.0 x 90° | design |
 
 If `PlateT` changes, change `PlateScrewL` so engagement stays 4 mm
@@ -105,27 +111,25 @@ If `PlateT` changes, change `PlateScrewL` so engagement stays 4 mm
 2. Fit the PCB into the housing. Screw a standoff through each PCB hole into
    its insert until the hex seats on the board. Torque about 0.2 N·m by hand;
    do not use a driver.
-3. Push each cup stud head through its keyhole entry from the rear and slide
-   it up into the slot. On the wall the plate's weight keeps the studs at the
-   top of the slots.
+3. Push each cup head through its keyhole entry from the rear, then slide the
+   upper cups outward and the lower cup down into the ends of their slots.
 4. Place the plate on the PCB side and drive the four countersunk screws into
-   the standoffs from the plate rear, about 0.3 N·m. Slide any cup that covers
-   a screw out of its keyhole first.
+   the standoffs from the plate rear, about 0.3 N·m. The screws sit clear of
+   the cups, so the cups can stay in place.
 
-Disassembly is the reverse. Slide the upper cups down and out of their
-keyholes, then remove the plate screws to take the device off the
+Disassembly is the reverse. Remove the plate screws to take the device off the
 plate; the PCB stays clamped. Remove the standoffs only to take the PCB out.
 
-An existing flat plate can be reused: drill four Ø2.9 holes with Ø5.0
-countersinks to the DXF pattern, provided its cups clear the holes. Otherwise
-print `DTT-Backplate`.
+An existing plate of the reference shape can be reused: drill four Ø2.9 holes
+with Ø5.0 countersinks on the rear to the DXF pattern. Otherwise print
+`DTT-Backplate`.
 
 ## Printing
 
 - **Housing:** rim down, as in the 3MF. The boss faces print on the bed and
   the insert holes open there, so the faces are flat and need no support.
-- **Backplate:** rear face down, countersinks up. Keyhole pockets bridge
-  10 mm. Use at least 4 perimeters.
+- **Backplate:** flat on either face; the keyholes and holes go straight
+  through. Use at least 4 perimeters.
 
 ## Validation
 
@@ -140,18 +144,20 @@ Geometric checks in the FreeCAD model:
 - The housing fit items listed in [the CAD README](../README.md) are unchanged.
 - Screw engagement: 4.0 mm of the 5 mm standoff female thread; standoff male
   thread 4.0 mm in the 4 mm insert, with 1 mm run-out below it.
-- Installation access: plate screws drive from the plate rear. With the
-  proxy cup positions the upper cups cover the two upper screws, so those cups
-  slide out of their keyholes first. Standoffs turn with a 5 mm nut driver
+- Installation access: plate screws drive from the plate rear, clear of all
+  three cups (11.9 mm at the closest). Standoffs turn with a 5 mm nut driver
   from the PCB side before the plate goes on.
+- Cup heads on the plate front: the lower head reaches 2 mm under the PCB
+  bottom edge with 3.8 mm to the board; the upper heads sit outside the
+  device outline.
 - PCB: DRC shows the seven documented findings and nothing new; all nets
   connected. The schematic is unchanged.
 - Native model, STEP, STL, DXF and 3MF are generated by one script run.
 
 Physical checks still needed:
 
-- Measure the real plate thickness, cup positions, cup diameter and stud
-  dimensions, then update `MountParameters` and re-run the builder.
+- Measure the real plate thickness and cup stem and head sizes against the
+  reference values, then update `MountParameters` and re-run the builder.
 - Fit print: insert hole size, boss face flatness, and keyhole fit on the
   printer and filament used.
 - Insert pull-out and torque-out in the printed housing.

@@ -9,5 +9,5 @@
 8,M2.5 hex standoffs,FST,M2.5 male-female brass hex standoff; 5 mm AF; 6 mm body; 6 mm male thread; female thread at least 5 mm deep,4,each,–,–,–,–,cad/screw-mount/README.md,Clamp the PCB to the housing inserts
 9,M2.5 x 8 countersunk screws,FST,M2.5 x 8 ISO 10642 countersunk screw; A2 stainless,4,each,–,–,–,–,cad/screw-mount/README.md,Fasten the backplate to the standoffs
 10,3D printed DTT backplate,FDM,Printed suction-cup backplate,1,each,–,–,–,–,cad/screw-mount/README.md,Print rear face down
-11,Suction cups,FBO,Stud-mount suction cup; 40 mm; 5 mm stud neck; 9 mm stud head,3,each,–,–,–,–,cad/screw-mount/README.md,Slide into the backplate keyholes
+11,Suction cups,FBO,Stud-mount suction cup; 35 mm; 7.5 mm stem; 12 mm head,3,each,–,–,–,–,cad/screw-mount/README.md,Slide into the backplate keyholes
 12,Hot glue,ADH,Assembly adhesive,1,application,–,–,–,–,–,Used to secure screen sensor and battery

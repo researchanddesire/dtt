@@ -43,33 +43,58 @@ PARAMS = [
     ('StandoffL', 6.0, 'mm', 'design: PCB back to plate front'),
     ('StandoffMaleL', 6.0, 'mm', 'supplier'),
     ('StandoffFemaleDepth', 5.0, 'mm', 'supplier: minimum full-thread depth (check)'),
-    ('Plate', None, None, 'Backplate and suction-cup proxy'),
-    ('PlateT', 4.0, 'mm', 'assumed: measure the existing plate'),
-    ('PlateW', 90.0, 'mm', 'assumed: photo-based proxy'),
-    ('PlateH', 120.0, 'mm', 'assumed: photo-based proxy'),
-    ('PlateCornerR', 8.0, 'mm', 'assumed'),
-    ('PlateCx', 21.0, 'mm', 'design: plate centred on the device'),
-    ('PlateCy', 47.0, 'mm', 'design: plate centred on the device'),
+    ('Plate', None, None, 'Backplate outline from DTT-Backplate-Proxy.FCStd; plate-local origin at bottom centre'),
+    ('PlateT', 4.0, 'mm', 'reference proxy: estimated, measure the existing plate'),
+    ('PlateH', 200.0, 'mm', 'reference proxy: bottom to top'),
+    ('PlateUpperW', 75.0, 'mm', 'reference proxy: width of the straight upper sides'),
+    ('PlateTopR', 5.0, 'mm', 'reference proxy: upper corner radius'),
+    ('PlateShoulderR', 12.5, 'mm', 'reference proxy: convex lower corner of the upper section'),
+    ('PlateWaistW', 50.0, 'mm', 'reference proxy: narrowest width at the waist'),
+    ('PlateNeckR', 15.0, 'mm', 'reference proxy: concave waist radius'),
+    ('PlatePadD', 80.0, 'mm', 'reference proxy: lower circular pad diameter'),
+    ('DeviceTopInset', 17.0, 'mm', 'reference proxy: plate top to housing top'),
+    ('DeviceCx', 21.0, 'mm', 'verified: housing centreline'),
+    ('DeviceTopY', 93.0, 'mm', 'verified: housing top'),
+    ('PlateX0', '=DeviceCx', 'mm', 'derived: plate-local origin in device X'),
+    ('PlateY0', '=DeviceTopY + DeviceTopInset - PlateH', 'mm', 'derived: plate-local origin in device Y'),
+    ('PlatePadR', '=PlatePadD / 2', 'mm', 'derived'),
+    ('PlateNeckX', '=PlateWaistW / 2 + PlateNeckR', 'mm', 'derived: neck circle centre'),
+    ('PlateNeckY', '=PlatePadR + sqrt((PlatePadR + PlateNeckR) ^ 2 - PlateNeckX ^ 2)', 'mm', 'derived: neck tangent to pad'),
+    ('PlateShoulderX', '=PlateUpperW / 2 - PlateShoulderR', 'mm', 'derived: shoulder circle centre'),
+    ('PlateShoulderY', '=PlateNeckY + sqrt((PlateNeckR + PlateShoulderR) ^ 2 - (PlateNeckX - PlateShoulderX) ^ 2)', 'mm', 'derived: shoulder tangent to neck'),
+    ('PlateJoinX', '=PlateNeckX - (PlateNeckX - PlateShoulderX) * PlateNeckR / (PlateNeckR + PlateShoulderR)', 'mm', 'derived: neck/shoulder tangent point'),
+    ('PlateJoinY', '=PlateNeckY + (PlateShoulderY - PlateNeckY) * PlateNeckR / (PlateNeckR + PlateShoulderR)', 'mm', 'derived: neck/shoulder tangent point'),
+    ('PlatePadJoinY', '=PlatePadR + (PlateNeckY - PlatePadR) * PlatePadR / (PlatePadR + PlateNeckR)', 'mm', 'derived: pad/neck tangent point'),
     ('PlateHoleD', 2.9, 'mm', 'design: M2.5 clearance'),
     ('CsinkD', 5.0, 'mm', 'design: 90 deg countersink for ISO 10642 M2.5'),
     ('PlateScrewL', 8.0, 'mm', 'design: PlateT + 4 mm thread engagement'),
-    ('CupUpperDx', 24.0, 'mm', 'assumed: upper cups either side of centre'),
-    ('CupUpperDy', 40.0, 'mm', 'assumed: above plate centre'),
-    ('CupLowerDy', -40.0, 'mm', 'assumed: below plate centre'),
-    ('CupD', 40.0, 'mm', 'assumed: suction cup diameter'),
-    ('CupH', 8.0, 'mm', 'assumed: cup height from plate rear to wall, seated'),
-    ('StudNeckD', 5.0, 'mm', 'assumed: cup stud neck'),
-    ('StudNeckL', 3.0, 'mm', 'assumed: neck length, plate rear to head'),
-    ('StudHeadD', 9.0, 'mm', 'assumed: cup stud head'),
-    ('StudHeadT', 2.5, 'mm', 'assumed'),
-    ('KeyholeD', 10.0, 'mm', 'design: StudHeadD + 1.0'),
-    ('KeySlotW', 5.4, 'mm', 'design: StudNeckD + 0.4'),
-    ('KeySlotL', 8.0, 'mm', 'design: entry centre to locked centre, upward'),
+    ('Cups', None, None, 'Suction cups and keyholes from DTT-Backplate-Proxy.FCStd'),
+    ('TopCupInset', 13.0, 'mm', 'reference proxy: top stem row below the plate top'),
+    ('TopEntryX', 16.5, 'mm', 'reference proxy: top entry circles from the centreline'),
+    ('LowerStemY', 87.0, 'mm', 'reference proxy: lower stem above the plate bottom'),
+    ('KeySlotTravel', 12.0, 'mm', 'reference proxy: entry to retained stem; top slots outward, lower slot down'),
+    ('KeyEntryD', 14.0, 'mm', 'reference proxy: head insertion diameter'),
+    ('KeySlotW', 9.0, 'mm', 'reference proxy: stem retaining slot width'),
+    ('CupD', 35.0, 'mm', 'reference proxy: cup rim diameter'),
+    ('CupDepth', 14.0, 'mm', 'reference proxy: plate rear to cup rim'),
+    ('CupShoulderR', 5.5, 'mm', 'reference proxy: cup radius behind the stem'),
+    ('CupWall', 1.2, 'mm', 'reference proxy'),
+    ('CupRearGap', 0.6, 'mm', 'reference proxy: cup shoulder to plate rear'),
+    ('StemD', 7.5, 'mm', 'reference proxy: stem through the slot'),
+    ('HeadD', 12.0, 'mm', 'reference proxy: retaining head'),
+    ('HeadT', 1.8, 'mm', 'reference proxy'),
+    ('HeadGap', 0.4, 'mm', 'reference proxy: plate front to head underside'),
 ]
 
 
 def spreadsheet(doc):
     sheet = doc.getObject('MountParameters')
+    wanted = {alias for alias, value, _, _ in PARAMS if value is not None}
+    if sheet is not None:
+        present = {sheet.getAlias('B%d' % r) for r in range(2, 200) if sheet.getAlias('B%d' % r)}
+        if present - wanted:   # parameter set changed: start again from the defaults below
+            doc.removeObject(sheet.Name)
+            sheet = None
     if sheet is None:
         sheet = doc.addObject('Spreadsheet::Sheet', 'MountParameters')
         sheet.Label = 'Screw mount parameters'
@@ -83,7 +108,11 @@ def spreadsheet(doc):
             continue
         sheet.set('A%d' % row, alias)
         if value is not None:
-            sheet.set('B%d' % row, '=%g %s' % (value, unit) if unit else str(value))
+            if isinstance(value, str):
+                contents = value
+            else:
+                contents = '=%g %s' % (value, unit) if unit else str(value)
+            sheet.set('B%d' % row, contents)
             sheet.setAlias('B%d' % row, alias)
             sheet.set('C%d' % row, unit)
         sheet.set('D%d' % row, note)
@@ -203,107 +232,122 @@ def build_hardware(doc):
     return made
 
 
-CUPS = [('UL', '-MountParameters.CupUpperDx', 'MountParameters.CupUpperDy'),
-        ('UR', 'MountParameters.CupUpperDx', 'MountParameters.CupUpperDy'),
-        ('LO', '0 mm', 'MountParameters.CupLowerDy')]
+M = 'MountParameters.'
+# key, stem centre and entry centre in plate-local coordinates
+CUPS = [('UL', '-(%sTopEntryX + %sKeySlotTravel)' % (M, M), '%sPlateH - %sTopCupInset' % (M, M), '-%sTopEntryX' % M, '%sPlateH - %sTopCupInset' % (M, M)),
+        ('UR', '%sTopEntryX + %sKeySlotTravel' % (M, M), '%sPlateH - %sTopCupInset' % (M, M), '%sTopEntryX' % M, '%sPlateH - %sTopCupInset' % (M, M)),
+        ('LO', '0 mm', M + 'LowerStemY', '0 mm', '%sLowerStemY + %sKeySlotTravel' % (M, M))]
 PLATE_FRONT = 'MountParameters.PCBTopZ - MountParameters.PCBThickness - MountParameters.StandoffL'
+PLATE_REAR = PLATE_FRONT + ' - MountParameters.PlateT'
+
+
+def gx(u):
+    return '%sPlateX0 + (%s)' % (M, u)
+
+
+def gy(v):
+    return '%sPlateY0 + (%s)' % (M, v)
+
+
+def plate_prism(doc, kind, name, label, exprs, through=False):
+    """Primitive spanning the plate thickness (or slightly beyond it for cutters)."""
+    pad = '0.1 mm' if through else '0 mm'
+    exprs = dict(exprs)
+    exprs['Height'] = '%sPlateT + 2 * %s' % (M, pad)
+    exprs['Placement.Base.z'] = '%s - %s' % (PLATE_REAR, pad)
+    return prim(doc, kind, name, label, exprs)
+
+
+def disc(doc, name, label, r, u, v, through=False):
+    return plate_prism(doc, 'Part::Cylinder', name, label, {
+        'Radius': r, 'Placement.Base.x': gx(u), 'Placement.Base.y': gy(v)}, through)
+
+
+def rect(doc, name, label, u0, u1, v0, v1, through=False):
+    return plate_prism(doc, 'Part::Box', name, label, {
+        'Length': '(%s) - (%s)' % (u1, u0), 'Width': '(%s) - (%s)' % (v1, v0),
+        'Placement.Base.x': gx(u0), 'Placement.Base.y': gy(v0)}, through)
 
 
 def build_plate(doc):
     group = doc.getObject('Backplate') or doc.addObject('App::Part', 'Backplate')
     group.Label = 'Backplate'
     tagged(group)
-    blank = prim(doc, 'Part::Box', 'PlateBlank', 'Plate blank', {
-        'Length': 'MountParameters.PlateW', 'Width': 'MountParameters.PlateH', 'Height': 'MountParameters.PlateT',
-        'Placement.Base.x': 'MountParameters.PlateCx - MountParameters.PlateW / 2',
-        'Placement.Base.y': 'MountParameters.PlateCy - MountParameters.PlateH / 2',
-        'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT'})
-    corners = []
-    for i, (sx, sy) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
-        # corner trim: a box minus a cylinder at each corner
-        cb = prim(doc, 'Part::Box', 'PlateCornerBox%d' % i, 'Plate corner box %d' % i, {
-            'Length': 'MountParameters.PlateCornerR + 0.01 mm', 'Width': 'MountParameters.PlateCornerR + 0.01 mm',
-            'Height': 'MountParameters.PlateT + 0.02 mm',
-            'Placement.Base.x': 'MountParameters.PlateCx %s MountParameters.PlateW / 2 %s' % ('-' if sx < 0 else '+', '- 0.01 mm' if sx < 0 else '- MountParameters.PlateCornerR'),
-            'Placement.Base.y': 'MountParameters.PlateCy %s MountParameters.PlateH / 2 %s' % ('-' if sy < 0 else '+', '- 0.01 mm' if sy < 0 else '- MountParameters.PlateCornerR'),
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.01 mm'})
-        cc = prim(doc, 'Part::Cylinder', 'PlateCornerArc%d' % i, 'Plate corner arc %d' % i, {
-            'Radius': 'MountParameters.PlateCornerR', 'Height': 'MountParameters.PlateT + 0.04 mm',
-            'Placement.Base.x': 'MountParameters.PlateCx %s (MountParameters.PlateW / 2 - MountParameters.PlateCornerR)' % ('-' if sx < 0 else '+'),
-            'Placement.Base.y': 'MountParameters.PlateCy %s (MountParameters.PlateH / 2 - MountParameters.PlateCornerR)' % ('-' if sy < 0 else '+'),
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.02 mm'})
-        trim = tagged(doc.addObject('Part::Cut', 'PlateCornerTrim%d' % i)); trim.Base = cb; trim.Tool = cc
-        trim.Label = 'Plate corner trim %d' % i
-        corners += [cb, cc, trim]
-    cutters = [c for c in corners if c.TypeId == 'Part::Cut']
+    # Outline: straight upper section with rounded top corners, convex shoulders, concave waist, round lower pad.
+    hw, tr = M + 'PlateUpperW / 2', M + 'PlateTopR'
+    sx, sy, sr = M + 'PlateShoulderX', M + 'PlateShoulderY', M + 'PlateShoulderR'
+    pieces = [
+        rect(doc, 'PlateUpper', 'Plate upper section', '-' + hw, hw, sy, M + 'PlateH - ' + tr),
+        rect(doc, 'PlateTopEdge', 'Plate top edge', '-(%s - %s)' % (hw, tr), '%s - %s' % (hw, tr), M + 'PlateH - ' + tr, M + 'PlateH'),
+        disc(doc, 'PlateTopCornerL', 'Plate top corner L', tr, '-(%s - %s)' % (hw, tr), M + 'PlateH - ' + tr),
+        disc(doc, 'PlateTopCornerR', 'Plate top corner R', tr, '%s - %s' % (hw, tr), M + 'PlateH - ' + tr),
+        disc(doc, 'PlateShoulderL', 'Plate shoulder L', sr, '-' + sx, sy),
+        disc(doc, 'PlateShoulderR', 'Plate shoulder R', sr, sx, sy),
+        rect(doc, 'PlateShoulderBridge', 'Plate shoulder bridge', '-' + sx, sx, '%s - %s' % (sy, sr), sy),
+        rect(doc, 'PlateWaist', 'Plate waist', '-' + M + 'PlateJoinX', M + 'PlateJoinX', M + 'PlatePadJoinY', M + 'PlateJoinY'),
+        disc(doc, 'PlatePad', 'Plate lower pad', M + 'PlatePadR', '0 mm', M + 'PlatePadR'),
+    ]
+    union = tagged(doc.addObject('Part::MultiFuse', 'PlateOutlineUnion')); union.Label = 'Plate outline union'
+    union.Shapes = pieces
+    necks = [disc(doc, 'PlateNeck' + side, 'Plate neck ' + side, M + 'PlateNeckR',
+                  ('-' if side == 'L' else '') + M + 'PlateNeckX', M + 'PlateNeckY', True) for side in 'LR']
+    cutters = list(necks)
     for key, xs, ys in HOLES:
-        at = {'Placement.Base.x': 'MountParameters.' + xs, 'Placement.Base.y': 'MountParameters.' + ys}
+        at = {'Placement.Base.x': M + xs, 'Placement.Base.y': M + ys}
         cutters.append(prim(doc, 'Part::Cylinder', 'PlateHole' + key, 'Plate screw hole ' + key, dict(at, **{
-            'Radius': 'MountParameters.PlateHoleD / 2', 'Height': 'MountParameters.PlateT + 0.2 mm',
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.1 mm'})))
+            'Radius': M + 'PlateHoleD / 2', 'Height': M + 'PlateT + 0.2 mm',
+            'Placement.Base.z': PLATE_REAR + ' - 0.1 mm'})))
         cutters.append(prim(doc, 'Part::Cone', 'PlateCsink' + key, 'Plate countersink ' + key, dict(at, **{
-            'Radius1': 'MountParameters.CsinkD / 2 + 0.1 mm', 'Radius2': 'MountParameters.PlateHoleD / 2',
-            'Height': '(MountParameters.CsinkD - MountParameters.PlateHoleD) / 2 + 0.1 mm',
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.1 mm'})))
-    for key, dx, dy in CUPS:
-        cx = 'MountParameters.PlateCx + ' + dx
-        cy = 'MountParameters.PlateCy + ' + dy
-        cutters.append(prim(doc, 'Part::Cylinder', 'KeyEntry' + key, 'Keyhole entry ' + key, {
-            'Radius': 'MountParameters.KeyholeD / 2', 'Height': 'MountParameters.PlateT + 0.2 mm',
-            'Placement.Base.x': cx, 'Placement.Base.y': cy + ' - MountParameters.KeySlotL',
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.1 mm'}))
-        cutters.append(prim(doc, 'Part::Box', 'KeySlot' + key, 'Keyhole slot ' + key, {
-            'Length': 'MountParameters.KeySlotW', 'Width': 'MountParameters.KeySlotL',
-            'Height': 'MountParameters.PlateT + 0.2 mm',
-            'Placement.Base.x': cx + ' - MountParameters.KeySlotW / 2', 'Placement.Base.y': cy + ' - MountParameters.KeySlotL',
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.1 mm'}))
-        cutters.append(prim(doc, 'Part::Cylinder', 'KeyEnd' + key, 'Keyhole locked end ' + key, {
-            'Radius': 'MountParameters.KeySlotW / 2', 'Height': 'MountParameters.PlateT + 0.2 mm',
-            'Placement.Base.x': cx, 'Placement.Base.y': cy,
-            'Placement.Base.z': PLATE_FRONT + ' - MountParameters.PlateT - 0.1 mm'}))
-        # front pocket so the stud head seats when the plate is thicker than the neck
-        cutters.append(prim(doc, 'Part::Box', 'KeyPocket' + key, 'Keyhole head pocket ' + key, {
-            'Length': 'MountParameters.StudHeadD + 0.6 mm', 'Width': 'MountParameters.KeySlotL + MountParameters.StudHeadD + 0.6 mm',
-            'Height': 'max(MountParameters.PlateT - MountParameters.StudNeckL; 0 mm) + 0.1 mm',
-            'Placement.Base.x': cx + ' - (MountParameters.StudHeadD + 0.6 mm) / 2',
-            'Placement.Base.y': cy + ' - MountParameters.KeySlotL - (MountParameters.StudHeadD + 0.6 mm) / 2',
-            'Placement.Base.z': PLATE_FRONT + ' - max(MountParameters.PlateT - MountParameters.StudNeckL; 0 mm)'}))
+            'Radius1': M + 'CsinkD / 2 + 0.1 mm', 'Radius2': M + 'PlateHoleD / 2',
+            'Height': '(%sCsinkD - %sPlateHoleD) / 2 + 0.1 mm' % (M, M),
+            'Placement.Base.z': PLATE_REAR + ' - 0.1 mm'})))
+    for key, su, sv, eu, ev in CUPS:
+        cutters.append(disc(doc, 'KeyEntry' + key, 'Keyhole entry ' + key, M + 'KeyEntryD / 2', eu, ev, True))
+        cutters.append(disc(doc, 'KeyEnd' + key, 'Keyhole retained end ' + key, M + 'KeySlotW / 2', su, sv, True))
+        w = M + 'KeySlotW / 2'
+        if key == 'LO':
+            slot = ('-' + w, w, sv, ev)
+        else:
+            slot = ((su, eu) if key == 'UL' else (eu, su)) + ('(%s) - %s' % (sv, w), '(%s) + %s' % (sv, w))
+        cutters.append(rect(doc, 'KeySlot' + key, 'Keyhole slot ' + key, *slot, through=True))
     tool = tagged(doc.addObject('Part::MultiFuse', 'PlateCutters')); tool.Label = 'Plate cutters'; tool.Shapes = cutters
     plate = tagged(doc.addObject('Part::Cut', 'BackplatePlate')); plate.Label = 'Backplate - printed'
-    plate.Base = blank; plate.Tool = tool; plate.Refine = True
-    for o in [blank, tool] + corners + cutters:
+    plate.Base = union; plate.Tool = tool; plate.Refine = True
+    for o in [union, tool] + pieces + cutters:
         o.Visibility = False
     group.addObject(plate)
     parts = [plate]
-    for key, dx, dy in CUPS:
-        cx = 'MountParameters.PlateCx + ' + dx
-        cy = 'MountParameters.PlateCy + ' + dy
-        rear = PLATE_FRONT + ' - MountParameters.PlateT'
-        skirt = prim(doc, 'Part::Cone', 'CupSkirt' + key, 'Cup skirt ' + key, {
-            'Radius1': 'MountParameters.CupD / 2', 'Radius2': 'MountParameters.CupD / 5',
-            'Height': 'MountParameters.CupH',
-            'Placement.Base.x': cx, 'Placement.Base.y': cy, 'Placement.Base.z': rear + ' - MountParameters.CupH'})
-        neck = prim(doc, 'Part::Cylinder', 'CupNeck' + key, 'Cup neck ' + key, {
-            'Radius': 'MountParameters.StudNeckD / 2', 'Height': 'MountParameters.StudNeckL',
-            'Placement.Base.x': cx, 'Placement.Base.y': cy, 'Placement.Base.z': rear})
-        head = prim(doc, 'Part::Cylinder', 'CupHead' + key, 'Cup head ' + key, {
-            'Radius': 'MountParameters.StudHeadD / 2', 'Height': 'MountParameters.StudHeadT',
-            'Placement.Base.x': cx, 'Placement.Base.y': cy,
-            'Placement.Base.z': rear + ' + MountParameters.StudNeckL'})
+    names = {'UL': 'upper left', 'UR': 'upper right', 'LO': 'lower'}
+    for key, su, sv, eu, ev in CUPS:
+        at = {'Placement.Base.x': gx(su), 'Placement.Base.y': gy(sv)}
+        rim = '%s - %sCupDepth' % (PLATE_REAR, M)
+        outside = prim(doc, 'Part::Cone', 'CupOutside' + key, 'Cup outside ' + key, dict(at, **{
+            'Radius1': M + 'CupD / 2', 'Radius2': M + 'CupShoulderR',
+            'Height': '%sCupDepth - %sCupRearGap' % (M, M), 'Placement.Base.z': rim}))
+        inside = prim(doc, 'Part::Cone', 'CupInside' + key, 'Cup inside ' + key, dict(at, **{
+            'Radius1': '%sCupD / 2 - %sCupWall' % (M, M), 'Radius2': '%sCupShoulderR - %sCupWall' % (M, M),
+            'Height': '%sCupDepth - %sCupRearGap - 1.5 mm' % (M, M), 'Placement.Base.z': rim + ' - 0.1 mm'}))
+        bell = tagged(doc.addObject('Part::Cut', 'CupBell' + key)); bell.Label = 'Cup bell ' + key
+        bell.Base = outside; bell.Tool = inside
+        stem = prim(doc, 'Part::Cylinder', 'CupStem' + key, 'Cup stem ' + key, dict(at, **{
+            'Radius': M + 'StemD / 2', 'Height': '%sPlateT + %sCupRearGap + 0.5 mm + %sHeadGap' % (M, M, M),
+            'Placement.Base.z': '%s - %sCupRearGap - 0.5 mm' % (PLATE_REAR, M)}))
+        head = prim(doc, 'Part::Cylinder', 'CupHead' + key, 'Cup head ' + key, dict(at, **{
+            'Radius': M + 'HeadD / 2', 'Height': M + 'HeadT',
+            'Placement.Base.z': '%s + %sHeadGap' % (PLATE_FRONT, M)}))
         cup = tagged(doc.addObject('Part::MultiFuse', 'SuctionCup' + key))
-        cup.Label = 'Suction cup %s (proxy)' % {'UL': 'upper left', 'UR': 'upper right', 'LO': 'lower'}[key]
-        cup.Shapes = [skirt, neck, head]; cup.Refine = True
-        for o in (skirt, neck, head):
+        cup.Label = 'Suction cup %s (proxy)' % names[key]
+        cup.Shapes = [bell, stem, head]; cup.Refine = True
+        for o in (outside, inside, bell, stem, head):
             o.Visibility = False
         group.addObject(cup); parts.append(cup)
     for i, (key, xs, ys) in enumerate(HOLES, 1):
-        at = {'Placement.Base.x': 'MountParameters.' + xs, 'Placement.Base.y': 'MountParameters.' + ys}
-        rear = PLATE_FRONT + ' - MountParameters.PlateT'
+        at = {'Placement.Base.x': M + xs, 'Placement.Base.y': M + ys}
         csk = prim(doc, 'Part::Cone', 'ScrewHead' + key, 'Screw head ' + key, dict(at, **{
-            'Radius1': 'MountParameters.CsinkD / 2 - 0.25 mm', 'Radius2': '1.25 mm',
-            'Height': '(MountParameters.CsinkD - 0.5 mm - 2.5 mm) / 2', 'Placement.Base.z': rear}))
+            'Radius1': M + 'CsinkD / 2 - 0.25 mm', 'Radius2': '1.25 mm',
+            'Height': '(%sCsinkD - 0.5 mm - 2.5 mm) / 2' % M, 'Placement.Base.z': PLATE_REAR}))
         shank = prim(doc, 'Part::Cylinder', 'ScrewShank' + key, 'Screw shank ' + key, dict(at, **{
-            'Radius': '1.0 mm', 'Height': 'MountParameters.PlateScrewL', 'Placement.Base.z': rear}))
+            'Radius': '1.0 mm', 'Height': M + 'PlateScrewL', 'Placement.Base.z': PLATE_REAR}))
         screw = tagged(doc.addObject('Part::Fuse', 'PlateScrew%d' % i))
         screw.Label = 'Plate screw %d - M2.5 x 8 countersunk' % i; screw.Base = csk; screw.Tool = shank
         csk.Visibility = shank.Visibility = False
