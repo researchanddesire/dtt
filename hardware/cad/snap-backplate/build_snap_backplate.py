@@ -14,8 +14,8 @@ S-shaped swoop down into the wings ahead of the side switch). The outer top edge
 continuous fillet and the module cavity is cut out of that form. The latch is a release lever
 that is part of the plate outline: two slots run from under the module out through the top edge,
 the flex zone is thinned from the front, and the full-thickness press tab carries grip grooves.
-The print is black; the touch point, the front of the press tab, is a 1 mm blue inlay kept as a
-separate body for two-colour printing.
+The print is black; the touch point, the front of the press tab, is a 0.6 mm blue inlay kept as a
+separate body for two-colour printing. The grip grooves cut through it, so their bottoms are black.
 
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
 PCB rear face is Z -5.1. The wall is at -Z; the part prints rear face down.
@@ -89,11 +89,12 @@ PARAMS = {
     'RampAngle': (30.0, 'design: lead-in ramp, degrees from the plate'),
     'GripN': (4.0, 'design: grip grooves across the press tab'),
     'GripPitch': (2.0, 'design'),
-    'GripR': (0.6, 'design: groove radius'),
-    'GripDepth': (0.35, 'design: groove depth'),
+    'GripW': (1.0, 'design: groove width; straight walls with a round bottom'),
+    'GripDepth': (0.9, 'design: groove depth, through the blue inlay so the groove bottoms are black'),
+    'GripStart': (1.5, 'design: first groove centre past the back foot of the teeth'),
     # colour: black print with the touch point (the press tab) in blue, as a separate body
     'TouchY0': (99.5, 'design: blue starts just past the teeth (back foot at Y 99.3), so the teeth stay on black'),
-    'TouchInlayT': (1.0, 'design: blue inlay depth from the front face; only about 5 layers need both colours'),
+    'TouchInlayT': (0.6, 'design: blue inlay depth from the front face; only 3 layers need both colours'),
     # cups, keyhole travel and head size from the reference proxy
     'TopCupX': (28.0, 'design: from the centreline (reference 28.5), heads just outside the module'),
     'TopCupDrop': (13.0, 'reference proxy: below the plate top'),
@@ -423,10 +424,12 @@ def latch_cut():
         cuts += [box(xa, xa + g, y0, FAR, zr - 1, zf + 1), cyl(rr, xa + g / 2, y0, zr - 1, zf + 1)]
     zt = zr + P['LatchT']; ramp = P['LatchRootRamp']; ye = P['LatchFlexEndY']
     cuts.append(prism_yz([(y0, zf), (y0 + ramp, zt), (ye, zt), (ye + ramp, zf), (ye + ramp, zf + 1), (y0, zf + 1)], x0, x1))
-    y = max(y for y, _ in tooth_profile()) + 1.0
+    y = max(y for y, _ in tooth_profile()) + P['GripStart']
+    r = P['GripW'] / 2; zb = zf - P['GripDepth'] + r       # axis of the round groove bottom
     for i in range(int(P['GripN'])):
-        cuts.append(Part.makeCylinder(P['GripR'], x1 - x0 - 3.0,
-                                      V(x0 + 1.5, y + i * P['GripPitch'], zf + P['GripR'] - P['GripDepth']), V(1, 0, 0)))
+        yc = y + i * P['GripPitch']
+        cuts += [Part.makeCylinder(r, x1 - x0 - 3.0, V(x0 + 1.5, yc, zb), V(1, 0, 0)),
+                 box(x0 + 1.5, x1 - 1.5, yc - r, yc + r, zb, zf + 1)]
     return cuts
 
 

@@ -49,8 +49,10 @@ side elevation, with the module cavity cut out of it.
 - **Release lever:** part of the plate outline at the top edge, between two
   slots, with grip grooves across the press tab.
 - **Colour:** the print is black. The touch point is blue: the front of the
-  lever's press tab, from just past the teeth to the top edge, as a 1 mm deep
-  inlay that includes the grip grooves. The teeth stay black. The blue in the
+  lever's press tab, from just past the teeth to the top edge, as a 0.6 mm deep
+  inlay. The four grip grooves are 0.9 mm deep, with straight walls and a round
+  bottom, so they cut through the blue and their bottoms are black. The teeth
+  stay black. The blue in the
   renders (RGB 0.09/0.42/0.93) is a placeholder for the product blue.
 
 ## How it holds the module
@@ -111,7 +113,8 @@ side elevation, with the module cavity cut out of it.
 | Plate | 4.0 thick | reference (estimate) |
 | Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
 | Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
-| Blue touch point | X 9-33, Y 99.5 to the top edge, 1.0 deep from the front | design |
+| Blue touch point | X 9-33, Y 99.5 to the top edge, 0.6 deep from the front | design |
+| Grip grooves | 4 at 2.0 pitch, 1.0 wide, 0.9 deep | design |
 | Wall screws | X 21, Y 40 and 59; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
 | Screw | #6 drywall, head Ø8.3, shank Ø3.5 | reference (estimate) |
 
@@ -154,7 +157,7 @@ chamfer.
 
 For two colours, load `DTT-Snap-Backplate-Black.stl` and
 `DTT-Snap-Backplate-Blue.stl` together as one object with two parts, and give
-the blue part the blue filament. The blue inlay is the top 1 mm of the press
-tab, so both colours share only about five layers (Z 3.0-4.0 mm above the bed).
+the blue part the blue filament. The blue inlay is the top 0.6 mm of the press
+tab, so both colours share only three layers (Z 3.4-4.0 mm above the bed).
 Use the same material for both colours. For one colour, print
 `DTT-Snap-Backplate.stl`.
