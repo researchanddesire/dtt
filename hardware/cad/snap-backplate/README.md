@@ -2,7 +2,8 @@
 
 A printed backplate with a track that the unmodified DTT module slides into,
 held by a sprung printed release lever. The plate holds three suction cups, two
-upper and one lower. The module needs no changes beyond removing the
+upper and one lower, or screws to the wall with two optional countersunk
+drywall screws. The module needs no changes beyond removing the
 hook-and-loop backing. The toy's own suction base sticks straight to the
 mounting surface and does not touch the plate.
 
@@ -17,7 +18,7 @@ CAD previews: [assembled](Snap-Backplate-Assembled.png), [front](Snap-Backplate-
 ## Files
 
 - [DTT-Snap-Backplate-Concept.FCStd](DTT-Snap-Backplate-Concept.FCStd): the DTT
-  assembly with the `Snap backplate` part, cup proxies and a
+  assembly with the `Snap backplate` part, cup and wall screw proxies and a
   `Snap backplate parameters` sheet listing every value and its basis.
 - [build_snap_backplate.py](build_snap_backplate.py): builds the concept from
   `hardware/cad/DTT.FCStd`, which it does not modify, and renders the previews.
@@ -72,7 +73,7 @@ side elevation, with the module cavity cut out of it.
   out toward the USB-C end.
 - The jack, USB-C, side switch and buttons stay open.
 
-## Plate and cups
+## Plate, cups and wall screws
 
 - Plate 4 mm thick, about 79 x 112 mm overall.
 - Upper cup stems at X 21 ± 28, Y 97, in the wings beside the module's USB-C
@@ -82,6 +83,13 @@ side elevation, with the module cavity cut out of it.
   at the closed ends. Keyhole web to the plate edge is 3.5 mm for the upper
   keyholes.
 - Fit the cups before sliding the module in.
+- Optional wall screws: two countersunk holes on the centreline of the bed, at
+  Y 40 and Y 59, between the skids. They take #6 (3.5 mm) or #8 (4.2 mm)
+  drywall screws: 4.5 mm clearance hole, 90° countersink Ø9, with a 0.4 mm
+  counterbore above it so a #6 head sits 0.7 mm below the bed. Screw the
+  plate on before sliding the module in. The module then covers the screws.
+- Use either the cups or the screws. Screwed on, the plate sits flat on the
+  wall with the cups removed.
 
 | Parameter | Value | Basis |
 | --- | --- | --- |
@@ -95,19 +103,23 @@ side elevation, with the module cavity cut out of it.
 | Plate | 4.0 thick | reference (estimate) |
 | Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
 | Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
+| Wall screws | X 21, Y 40 and 59; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
+| Screw | #6 drywall, head Ø8.3, shank Ø3.5 | reference (estimate) |
 
 Every value and its basis is in `PARAMS` in the builder.
 
 ## Validation (geometric, in the model)
 
 - The printed part is one valid solid.
-- At rest there are no intersections with the housing, PCB, PCB screws or
-  cups. Smallest gaps: track to housing 0.2 mm, lower cup head to PCB 0.4 mm,
-  cup heads to plate 0.4 mm. The skids touch the PCB rear by design.
+- At rest there are no intersections with the housing, PCB, PCB screws, cups
+  or wall screws. The lower wall screw passes through the lower cup's place,
+  since the two are alternatives. Smallest gaps: track to housing 0.2 mm,
+  lower cup head to PCB 0.4 mm, cup heads to plate 0.4 mm. The skids touch the
+  PCB rear by design. Seated wall screw heads sit 0.7 mm below the bed.
 - Sweep check: the module was stepped out along the track in 3 mm steps over
   its full travel (0-96 mm). Nothing it carries below the housing collides with
-  the plate, track or cups. The only contact is with the release lever, which is
-  meant to deflect.
+  the plate, track, cups or seated wall screws. The only contact is with the
+  release lever, which is meant to deflect.
 
 ## Needs physical checks
 
@@ -120,6 +132,8 @@ Every value and its basis is in `PARAMS` in the builder.
 - The USB-C plug overmold fits in the 13 mm gap between the teeth.
 - Plate thickness and cup stem and head sizes against the real cups, and
   suction hold on a wall.
+- Wall screw heads seat below the bed. Drywall bugle heads are not exactly 90°;
+  tune `ScrewCskD` and `ScrewSink`.
 
 ## Printing
 

@@ -106,6 +106,15 @@ PARAMS = {
     'HeadD': (12.0, 'reference proxy (estimate)'),
     'HeadT': (1.8, 'reference proxy (estimate)'),
     'HeadGap': (0.4, 'reference proxy'),
+    # optional wall screws: countersunk through the bed on the centreline, hidden under the module
+    'ScrewLowY': (40.0, 'design: above the lower cup head (Y 34)'),
+    'ScrewHighY': (59.0, 'design: below the lever root ramp (Y 66)'),
+    'ScrewClearD': (4.5, 'design: clears #6 (3.5 mm) and #8 (4.2 mm) drywall screws'),
+    'ScrewCskD': (9.0, 'design: 90 deg countersink diameter'),
+    'ScrewSink': (0.4, 'design: counterbore above the countersink, so the head sits below the bed'),
+    'ScrewHeadD': (8.3, 'reference: #6 drywall screw bugle head (estimate)'),
+    'ScrewShankD': (3.5, 'reference: #6 drywall screw'),
+    'ScrewLen': (32.0, 'reference: 1-1/4 in drywall screw'),
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
 
@@ -359,6 +368,32 @@ def keyholes():
     return cut
 
 
+def screw_centres():
+    return [(P['DeviceCx'], P['ScrewLowY']), (P['DeviceCx'], P['ScrewHighY'])]
+
+
+def screw_holes():
+    """Clearance hole, 90 deg countersink and a short counterbore, cut from the front of the bed."""
+    zf, zr = z_front(), z_rear()
+    rc, rk, sink = P['ScrewClearD'] / 2, P['ScrewCskD'] / 2, P['ScrewSink']
+    zc = zf - sink - (rk - rc)                            # countersink meets the clearance hole
+    cuts = []
+    for x, y in screw_centres():
+        cuts += [cyl(rc, x, y, zr - 1, zf + 1), Part.makeCone(rc, rk, rk - rc, V(x, y, zc)),
+                 cyl(rk, x, y, zf - sink, zf + 1)]
+    return cuts
+
+
+def screw_shape(x, y):
+    """Seated drywall screw: 90 deg head (lifted 0.05 off the seat) and a plain shank into the wall."""
+    zf = z_front(); rc, rk, rh = P['ScrewClearD'] / 2, P['ScrewCskD'] / 2, P['ScrewHeadD'] / 2
+    rs = P['ScrewShankD'] / 2
+    ztop = zf - P['ScrewSink'] - (rk - rh) + 0.05         # head top, where the countersink is head-sized
+    head = Part.makeCone(rs, rh, rh - rs, V(x, y, ztop - (rh - rs)))
+    shank = cyl(rs, x, y, ztop - P['ScrewLen'], ztop - (rh - rs) + 0.01)
+    return head.fuse(shank).removeSplitter()
+
+
 def tooth_profile():
     """YZ profile of a tooth on the full-thickness press tab: stop face, flat, 30 deg lead-in ramp to
     just below the PCB rear, then a 45 deg back slope down to the plate front."""
@@ -535,6 +570,7 @@ def printed_part():
         ex, ey = entry_centre(key)
         kboxes.append((sx - w, sx + w, ey - w, sy + P['KeySlotW'] / 2 + 0.1))
     body = fillet_edges_in(body, kboxes, P['KeyEdgeR'], zf, 'keyholes')
+    body = body.cut(screw_holes()).removeSplitter()
     body = body.cut(latch_cut()).removeSplitter()
     g = P['LatchSlot'] + 0.1
     body = fillet_edges_in(body, [(P['LatchX0'] - g - 2, P['LatchX1'] + g + 2, P['LatchRootY'] - 2,
@@ -567,6 +603,13 @@ def design_checks(printed):
                         box(sx - w, sx + w, ey, sy, zr, zr + 1)], zr)
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
+    zf = z_front()
+    for x, y in screw_centres():
+        near = {'lower keyhole and cup head': y - P['ScrewCskD'] / 2 - (P['LowCupY'] + P['HeadD'] / 2),
+                'lever root': P['LatchRootY'] - (y + P['ScrewCskD'] / 2),
+                'skids': min(abs(x - a) for s in SKIDS for a in s) - P['ScrewCskD'] / 2}
+        print('CHECK screw (%.1f, %.1f): rim to %s' % (x, y, ', '.join('%s %.2f' % kv for kv in near.items())))
+    print('CHECK screw head top %.2f mm below the bed' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
     bb = printed.BoundBox
@@ -596,6 +639,7 @@ def parameter_sheet(doc):
 
 PLATE_COLOUR = (0.86, 0.85, 0.83)    # warm 'pebble' white, a quiet foil to the purple housing
 CUP_COLOUR = (0.80, 0.84, 0.88)
+SCREW_COLOUR = (0.25, 0.25, 0.27)
 
 
 def main():
@@ -612,6 +656,9 @@ def main():
     group.addObject(tagged(doc, 'SnapBackplatePrinted', 'Snap backplate - printed', printed, PLATE_COLOUR))
     for key, (x, y) in cup_centres().items():
         group.addObject(tagged(doc, 'SnapCup' + key, 'Suction cup %s (proxy)' % key, cup_shape(x, y), CUP_COLOUR, 35))
+    for key, (x, y) in zip(('L', 'U'), screw_centres()):
+        group.addObject(tagged(doc, 'SnapScrew' + key, 'Wall screw %s (optional, proxy)' % key, screw_shape(x, y),
+                               SCREW_COLOUR))
     doc.recompute()
     os.makedirs(HERE, exist_ok=True); os.makedirs(OUT, exist_ok=True)
     printed.exportStep(os.path.join(OUT, 'DTT-Snap-Backplate.step'))
@@ -638,6 +685,9 @@ def render(doc):
     housing.Visibility = True
     tops = [o for o in doc.RootObjects if o.TypeId == 'App::Part']
     saved = {o.Name: o.Visibility for o in tops}
+    screws = [o for o in doc.Objects if o.Name.startswith('SnapScrew')]
+    for o in screws:                                      # optional; the previews show the cups
+        o.Visibility = False
     # standard previews (same set as the baseline concept)
     shell.ViewObject.Transparency = 55
     view.viewIsometric(); view.fitAll()
@@ -679,6 +729,8 @@ def render(doc):
     for n, v in saved.items():
         doc.getObject(n).Visibility = v
     housing.Visibility = True
+    for o in screws:
+        o.Visibility = True
 
 
 if __name__ == '__main__' or True:
