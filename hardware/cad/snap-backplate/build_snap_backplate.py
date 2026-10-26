@@ -14,6 +14,8 @@ S-shaped swoop down into the wings ahead of the side switch). The outer top edge
 continuous fillet and the module cavity is cut out of that form. The latch is a release lever
 that is part of the plate outline: two slots run from under the module out through the top edge,
 the flex zone is thinned from the front, and the full-thickness press tab carries grip grooves.
+The print is black; the touch point, the front of the press tab, is a 1 mm blue inlay kept as a
+separate body for two-colour printing.
 
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
 PCB rear face is Z -5.1. The wall is at -Z; the part prints rear face down.
@@ -89,6 +91,9 @@ PARAMS = {
     'GripPitch': (2.0, 'design'),
     'GripR': (0.6, 'design: groove radius'),
     'GripDepth': (0.35, 'design: groove depth'),
+    # colour: black print with the touch point (the press tab) in blue, as a separate body
+    'TouchY0': (99.5, 'design: blue starts just past the teeth (back foot at Y 99.3), so the teeth stay on black'),
+    'TouchInlayT': (1.0, 'design: blue inlay depth from the front face; only about 5 layers need both colours'),
     # cups, keyhole travel and head size from the reference proxy
     'TopCupX': (28.0, 'design: from the centreline (reference 28.5), heads just outside the module'),
     'TopCupDrop': (13.0, 'reference proxy: below the plate top'),
@@ -425,6 +430,19 @@ def latch_cut():
     return cuts
 
 
+def touch_region():
+    """The blue touch point: the front of the press tab between the lever slots, from just past the
+    teeth out to the top edge."""
+    zf = z_front()
+    return box(P['LatchX0'], P['LatchX1'], P['TouchY0'], FAR, zf - P['TouchInlayT'], zf)
+
+
+def split_colours(printed):
+    """(black, blue) bodies of the printed part."""
+    reg = touch_region()
+    return printed.cut(reg).removeSplitter(), printed.common(reg).removeSplitter()
+
+
 def latch_teeth():
     """Two teeth on the press tab, either side of the USB-C plug."""
     prof = tooth_profile(); zt0 = prof[0][1]
@@ -593,8 +611,8 @@ def cup_shape(x, y):
     return outside.cut(inside).fuse([stem, head]).removeSplitter()
 
 
-def design_checks(printed):
-    """Numbers worth reading after a change: keyhole webs, latch strain, overall size."""
+def design_checks(printed, black, blue):
+    """Numbers worth reading after a change: keyhole webs, latch strain, overall size, colour split."""
     outline = plan_face()
     for key in cup_centres():
         sx, sy = cup_centres()[key]; ex, ey = entry_centre(key)
@@ -612,6 +630,9 @@ def design_checks(printed):
     print('CHECK screw head top %.2f mm below the bed' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
+    print('CHECK colour split: black valid %s (%d solid), blue valid %s (%d solid), volume %.1f + %.1f = %.1f of %.1f' % (
+        black.isValid(), len(black.Solids), blue.isValid(), len(blue.Solids), black.Volume, blue.Volume,
+        black.Volume + blue.Volume, printed.Volume))
     bb = printed.BoundBox
     print('CHECK printed part %.1f x %.1f x %.1f mm, valid %s, solids %d' % (
         bb.XLength, bb.YLength, bb.ZLength, printed.isValid(), len(printed.Solids)))
@@ -637,7 +658,8 @@ def parameter_sheet(doc):
     return sheet
 
 
-PLATE_COLOUR = (0.86, 0.85, 0.83)    # warm 'pebble' white, a quiet foil to the purple housing
+PLATE_COLOUR = (0.13, 0.13, 0.14)    # black print
+TOUCH_COLOUR = (0.09, 0.42, 0.93)    # blue touch points (placeholder for the product blue)
 CUP_COLOUR = (0.80, 0.84, 0.88)
 SCREW_COLOUR = (0.25, 0.25, 0.27)
 
@@ -650,10 +672,14 @@ def main():
         if o is not None:
             o.Visibility = False
     printed = printed_part()
-    design_checks(printed)
+    black, blue = split_colours(printed)
+    design_checks(printed, black, blue)
     group = doc.addObject('App::Part', 'SnapBackplate'); group.Label = 'Snap backplate'
     parameter_sheet(doc)
-    group.addObject(tagged(doc, 'SnapBackplatePrinted', 'Snap backplate - printed', printed, PLATE_COLOUR))
+    bodies = [tagged(doc, 'SnapBackplatePrinted', 'Snap backplate - printed, black', black, PLATE_COLOUR),
+              tagged(doc, 'SnapBackplateTouch', 'Snap backplate - printed, blue touch point', blue, TOUCH_COLOUR)]
+    for o in bodies:
+        group.addObject(o)
     for key, (x, y) in cup_centres().items():
         group.addObject(tagged(doc, 'SnapCup' + key, 'Suction cup %s (proxy)' % key, cup_shape(x, y), CUP_COLOUR, 35))
     for key, (x, y) in zip(('L', 'U'), screw_centres()):
@@ -661,10 +687,15 @@ def main():
                                SCREW_COLOUR))
     doc.recompute()
     os.makedirs(HERE, exist_ok=True); os.makedirs(OUT, exist_ok=True)
-    printed.exportStep(os.path.join(OUT, 'DTT-Snap-Backplate.step'))
+    if App.GuiUp:
+        import ImportGui                                  # keeps the two bodies and their colours
+        ImportGui.export(bodies, os.path.join(OUT, 'DTT-Snap-Backplate.step'))
+    else:
+        Part.makeCompound([black, blue]).exportStep(os.path.join(OUT, 'DTT-Snap-Backplate.step'))
     import MeshPart
-    MeshPart.meshFromShape(Shape=printed, LinearDeflection=0.02, AngularDeflection=0.2, Relative=False).write(
-        os.path.join(OUT, 'DTT-Snap-Backplate.stl'))
+    for shape, suffix in ((printed, ''), (black, '-Black'), (blue, '-Blue')):
+        MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.02, AngularDeflection=0.2, Relative=False).write(
+            os.path.join(OUT, 'DTT-Snap-Backplate%s.stl' % suffix))
     if App.GuiUp:
         render(doc)
     doc.saveAs(os.path.join(HERE, 'DTT-Snap-Backplate-Concept.FCStd'))
@@ -709,7 +740,7 @@ def render(doc):
     pv.SetBool('Gradient', True); pv.SetBool('Simple', False)
     pv.SetUnsigned('BackgroundColor2', _rgb_uint(0.93, 0.93, 0.95))
     pv.SetUnsigned('BackgroundColor3', _rgb_uint(0.70, 0.71, 0.75))
-    for o in (printed,):
+    for o in (printed, doc.getObject('SnapBackplateTouch')):
         o.ViewObject.DisplayMode = 'Shaded'
     for k in ('UL', 'UR', 'L'):
         doc.getObject('SnapCup' + k).ViewObject.DisplayMode = 'Shaded'

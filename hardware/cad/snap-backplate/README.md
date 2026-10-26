@@ -24,8 +24,13 @@ CAD previews: [assembled](Snap-Backplate-Assembled.png), [front](Snap-Backplate-
   `hardware/cad/DTT.FCStd`, which it does not modify, and renders the previews.
   Edit `PARAMS` and re-run from the repository root:
   `freecad hardware/cad/snap-backplate/build_snap_backplate.py`.
-- [Print exports](../../production-exports/cad/snap-backplate/):
-  `DTT-Snap-Backplate` as STEP and STL, one piece, in assembly orientation.
+- [Print exports](../../production-exports/cad/snap-backplate/), in assembly
+  orientation:
+  - `DTT-Snap-Backplate.step`: the black body and the blue touch point as two
+    coloured bodies.
+  - `DTT-Snap-Backplate-Black.stl` and `DTT-Snap-Backplate-Blue.stl`: the two
+    colours, for a two-colour print.
+  - `DTT-Snap-Backplate.stl`: the whole part, for a one-colour print.
 
 ## Form
 
@@ -43,7 +48,10 @@ side elevation, with the module cavity cut out of it.
   rounded 0.8 mm.
 - **Release lever:** part of the plate outline at the top edge, between two
   slots, with grip grooves across the press tab.
-- Colour: warm pebble white (RGB 0.86/0.85/0.83).
+- **Colour:** the print is black. The touch point is blue: the front of the
+  lever's press tab, from just past the teeth to the top edge, as a 1 mm deep
+  inlay that includes the grip grooves. The teeth stay black. The blue in the
+  renders (RGB 0.09/0.42/0.93) is a placeholder for the product blue.
 
 ## How it holds the module
 
@@ -103,6 +111,7 @@ side elevation, with the module cavity cut out of it.
 | Plate | 4.0 thick | reference (estimate) |
 | Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
 | Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
+| Blue touch point | X 9-33, Y 99.5 to the top edge, 1.0 deep from the front | design |
 | Wall screws | X 21, Y 40 and 59; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
 | Screw | #6 drywall, head Ø8.3, shank Ø3.5 | reference (estimate) |
 
@@ -110,7 +119,8 @@ Every value and its basis is in `PARAMS` in the builder.
 
 ## Validation (geometric, in the model)
 
-- The printed part is one valid solid.
+- The printed part is one valid solid. The black and blue bodies are one valid
+  solid each and add up to it exactly.
 - At rest there are no intersections with the housing, PCB, PCB screws, cups
   or wall screws. The lower wall screw passes through the lower cup's place,
   since the two are alternatives. Smallest gaps: track to housing 0.2 mm,
@@ -141,3 +151,10 @@ Print rear face down in PETG with at least 4 perimeters and no supports. The
 lever's rear stays on the bed. The overhangs are the 0.6 mm lips (45°/55°), the
 hood lip, which runs parallel to the housing slope at 54°, and the 0.6 mm bed
 chamfer.
+
+For two colours, load `DTT-Snap-Backplate-Black.stl` and
+`DTT-Snap-Backplate-Blue.stl` together as one object with two parts, and give
+the blue part the blue filament. The blue inlay is the top 1 mm of the press
+tab, so both colours share only about five layers (Z 3.0-4.0 mm above the bed).
+Use the same material for both colours. For one colour, print
+`DTT-Snap-Backplate.stl`.
