@@ -101,6 +101,14 @@ if str(env.get("PIOENV", "")).startswith(("production", "staging")):
 
 
 sys.path.insert(0, str(Path(env.subst("$PROJECT_DIR")) / "scripts"))
+if str(env.get("PIOENV", "")) in ("development-v1", "development-v2"):
+    from development_server import development_server
+
+    if has_build_define("RAD_SERVER"):
+        raise ValueError("Configure Development through ignored local.settings.json")
+    server = development_server(Path(env.subst("$PROJECT_DIR")))
+    env.Append(CPPDEFINES=[("RAD_SERVER", env.StringifyMacro(server))])
+
 from check_dhcp_patch import verify_link_map
 
 
