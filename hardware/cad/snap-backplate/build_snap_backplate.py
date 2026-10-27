@@ -23,7 +23,8 @@ sticks to the wall, and the plate hangs on it.
 The same run builds a Double Double version for the OSSM Double Double toy mount. Its plate runs on
 past the jack end to a boss. A printed hex flange screw with the OSSM 24 mm thread sits in a hex pocket
 from the rear, so it cannot turn, and the Double Double threads onto it from the front. A fourth cup
-sits below the screw.
+sits right under the toy: its stem slides into a slot in the screw head, and the pocket closes the
+slot once the screw is in.
 
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
 PCB rear face is Z -5.1. The wall is at -Z; the part prints rear face down.
@@ -172,7 +173,7 @@ PARAMS = {
     'DDHoleClear': (0.35, 'design: thread hole in the boss top, radial'),
     'DDBossD': (38.0, 'design: boss on the plate front under the Double Double base'),
     'DDBossT': (6.0, 'design: boss height; with the 4 mm plate the screw sits in 10 mm'),
-    'DDCupDrop': (30.0, 'design: fourth cup stem below the screw axis; its head recess clears the boss'),
+    'DDCupHeadClear': (0.3, 'design: room over the fourth cup head in the screw head'),
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
 DD = False   # True while main() builds the Double Double version
@@ -253,9 +254,14 @@ def flat_face(solids, z):
 
 def cup_centres():
     cx, yt = P['DeviceCx'], plate_top() - P['TopCupDrop']
-    cups = {'UL': (cx - P['TopCupX'], yt), 'UR': (cx + P['TopCupX'], yt), 'L': (cx, P['LowCupY'])}
+    return {'UL': (cx - P['TopCupX'], yt), 'UR': (cx + P['TopCupX'], yt), 'L': (cx, P['LowCupY'])}
+
+
+def cup_positions():
+    """Every cup: the keyhole cups, and in the Double Double version the one held by the screw."""
+    cups = cup_centres()
     if DD:
-        cups['D'] = (cx, dd_axis()[1] - P['DDCupDrop'])
+        cups['D'] = dd_axis()
     return cups
 
 
@@ -290,13 +296,9 @@ def plan_face():
     t = 1.0
     parts = [box(xl, xr, y_end(), top, zr, zr + t), box(wx0, wx1, uly, top, zr, zr + t),
              cyl(re, ulx, uly, zr, zr + t), cyl(re, urx, uly, zr, zr + t)]
-    if DD:   # the body runs on to a round end around the screw, then tapers into a lobe around the fourth keyhole
-        ay = dd_axis()[1]; dx, dy = entry_centre('D'); rl = re; cx, rb = (xl + xr) / 2, (xr - xl) / 2
-        a = math.asin((rb - rl) / (ay - dy)); c, s = math.cos(a), math.sin(a)     # common tangents of the two ends
-        taper = [V(cx + rb * c, ay + rb * s, zr), V(dx + rl * c, dy + rl * s, zr), V(dx - rl * c, dy + rl * s, zr),
-                 V(cx - rb * c, ay + rb * s, zr)]
-        parts += [box(xl, xr, ay, y_end() + 1, zr, zr + t), cyl(rb, cx, ay, zr, zr + t), cyl(rl, dx, dy, zr, zr + t),
-                  Part.Face(Part.makePolygon(taper + [taper[0]])).extrude(V(0, 0, t))]
+    if DD:   # the body runs on to a round end around the screw
+        ay = dd_axis()[1]
+        parts += [box(xl, xr, ay, y_end() + 1, zr, zr + t), cyl((xr - xl) / 2, (xl + xr) / 2, ay, zr, zr + t)]
     return round_face(flat_face(parts, zr), P['FlareR'], P['CornerR'])
 
 
@@ -877,11 +879,23 @@ def dd_screw_head(c=0.0):
     return seat.fuse([hex_prism(af, z0, hh), cham]).removeSplitter()
 
 
+def dd_cup_socket():
+    """Keyhole for the fourth cup in the screw head's rear face, open to +Y: a slot for the stem groove
+    through a land as thick as the plate's, and a recess behind it for the head. The stem slides in
+    from the +Y side, and the pocket wall closes that side once the screw is in. The slot opens away
+    from the print flat, so it prints as an open channel."""
+    w, re = P['KeySlotW'] / 2, P['KeyEntryD'] / 2
+    zl, zh = P['KeyLandT'], cup_head_top() - z_rear() + P['DDCupHeadClear']
+    return cyl(w, 0, 0, -1, zl + 0.01).fuse([box(-w, w, 0, 50, -1, zl + 0.01), cyl(re, 0, 0, zl, zh),
+                                            box(-re, re, 0, 50, zl, zh)])
+
+
 def dd_screw():
     """The printed screw about its own axis Z, z 0 at the plate rear, with the print flat on -Y."""
     tip = P['PlateT'] + P['DDBossT'] + P['ThreadOut']
     s = dd_screw_head().fuse(thread_solid(P['DDScrewHexH'] - 1.0, tip)).removeSplitter()
-    return s.common(box(-50, 50, -P['ThreadFlat'], 50, -10, tip + 10)).removeSplitter()
+    s = s.common(box(-50, 50, -P['ThreadFlat'], 50, -10, tip + 10)).removeSplitter()
+    return s.cut(dd_cup_socket()).removeSplitter()
 
 
 def dd_placed(shape):
@@ -916,6 +930,13 @@ def dd_checks(printed, screw):
     print('CHECK Double Double on the boss: overlap %.4f mm3, gap %.2f mm; base edge %.1f mm below the hood' % (
         dd.common(printed).Volume, dd.distToShape(printed)[0], y_end() - (ay + P['DDBaseD'] / 2)))
     print('CHECK Double Double to the screw: overlap %.4f mm3' % dd.common(screw).Volume)
+    cup = cup_shape(ax, ay); rs = P['StemD'] / 2
+    head = cyl(rs, ax, ay, z_rear() - P['StemSeat'] + P['GrooveH'], cup_head_top())
+    print('CHECK fourth cup in the screw: overlap %.4f mm3 with the screw, %.4f with the plate; head %.2f mm thick in a %.2f mm recess' % (
+        cup.common(screw).Volume, cup.common(printed).Volume, P['HeadT'],
+        cup_head_top() + P['DDCupHeadClear'] - z_rear() - P['KeyLandT']))
+    print('CHECK fourth cup captive: head slid 20 mm out along its slot overlaps the plate by %.0f mm3' % (
+        head.translated(V(0, 20, 0)).common(printed).Volume))
 
 
 def design_checks(printed, black, blue, bracket):
@@ -1016,7 +1037,7 @@ def build(dd):
               tagged(doc, 'SnapBackplateTouch', 'Snap backplate - printed, blue touch point', blue, TOUCH_COLOUR)]
     for o in bodies:
         group.addObject(o)
-    for key, (x, y) in cup_centres().items():
+    for key, (x, y) in cup_positions().items():
         group.addObject(tagged(doc, 'SnapCup' + key, 'Suction cup %s (proxy)' % key, cup_shape(x, y), CUP_COLOUR, 35))
     if dd:
         screw = dd_screw()
@@ -1081,7 +1102,7 @@ def render(doc, pic):
     view = Gui.getDocument(doc.Name).ActiveView
     printed = doc.getObject('SnapBackplatePrinted')
     housing = doc.getObject('Cover___V3_v5'); shell = doc.getObject('Part__Feature001')
-    cups = [doc.getObject('SnapCup' + k) for k in cup_centres()]
+    cups = [doc.getObject('SnapCup' + k) for k in cup_positions()]
     extras = [o for o in (doc.getObject('SnapDDScrew'), doc.getObject('SnapDoubleDouble')) if o is not None]
     proxy = doc.getObject('SnapDoubleDouble')
     out = lambda name: os.path.join(IMAGES, '%s-%s.png' % (pic, name))
@@ -1175,7 +1196,7 @@ def render_bracket(doc):
 
 def render_double_double(doc, pic):
     """The screw from the side, lying on its print flat; the screw, plate and Double Double pulled apart
-    along the screw axis; and the screw going into its pocket from the wall side."""
+    along the screw axis; and the screw, with the fourth cup, going into its pocket from the wall side."""
     grey = {'SnapDDScrew': BRACKET_PREVIEW_COLOUR}
     names = ['SnapBackplatePrinted', 'SnapBackplateTouch', 'SnapDDScrew', 'SnapDoubleDouble']
     apart = {'SnapDDScrew': V(0, 0, -45), 'SnapDoubleDouble': V(0, 0, 30)}
@@ -1183,9 +1204,9 @@ def render_double_double(doc, pic):
             App.Rotation(V(0, 1, 0), 70).multiply(App.Rotation(V(1, 0, 0), -18)), colours=grey)
     preview(doc, pic + '-Exploded.png', names,
             App.Rotation(V(0, 1, 0), 50).multiply(App.Rotation(V(1, 0, 0), -15)), moves=apart, colours=grey)
-    preview(doc, pic + '-Exploded-Rear.png', names[:3],
+    preview(doc, pic + '-Exploded-Rear.png', names[:3] + ['SnapCupD'],
             App.Rotation(V(0, 1, 0), -35).multiply(App.Rotation(V(1, 0, 0), -20)),
-            moves={'SnapDDScrew': V(0, 0, -40)}, turned=True, colours=grey)
+            moves={'SnapDDScrew': V(0, 0, -40), 'SnapCupD': V(0, 30, -40)}, turned=True, colours=grey)
 
 
 if __name__ == '__main__' or True:

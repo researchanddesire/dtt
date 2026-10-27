@@ -40,16 +40,17 @@ The files are in
 ## Double Double version
 
 For the OSSM Double Double 24 mm threaded toy mount. A printed hex flange screw
-holds it 12.5 mm below the jack end, with a fourth cup below. Use a right-angle
-vibrator plug, or a straight one under 13.7 mm long.
+holds it 12.5 mm below the jack end, with a fourth cup right under it. Use a
+right-angle vibrator plug, or a straight one under 13.7 mm long.
 
 ![Double Double](images/Snap-Backplate-Double-Double-Hero.png)
 
-| Backplate | Screw | Screw in from the back | Toy mount on from the front |
+| Backplate | Screw | Cup and screw in from the back | Toy mount on from the front |
 | --- | --- | --- | --- |
 | ![Part](images/Snap-Backplate-Double-Double-Hero-Part.png) | ![Screw](images/Snap-Backplate-Double-Double-Screw.png) | ![Pocket](images/Snap-Backplate-Double-Double-Exploded-Rear.png) | ![Exploded](images/Snap-Backplate-Double-Double-Exploded.png) |
 
-- Push the screw into the hex pocket, flat toward the bottom cup.
+- Slide the cup's stem into the slot in the screw head, then push the screw
+  into the hex pocket, flat toward the bottom. The pocket locks the cup in.
 - Print the screw on its flat, black, no supports, at least 4 walls.
 
 ## Source
