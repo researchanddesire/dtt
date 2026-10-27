@@ -1,0 +1,258 @@
+"""Build DTT-Enclosed.FCStd, its STEP, the printed-part exports and the renders.
+
+    xvfb-run -a freecad make_assembly.FCMacro
+
+Geometry and dimensions live in build_enclosed_case.py (PARAMS).
+"""
+
+import math
+import os
+import sys
+
+import FreeCAD as App
+import FreeCADGui as Gui
+import ImportGui
+import MeshPart
+import Part
+
+HERE = os.path.dirname(os.path.abspath(globals().get("__file__") or next(
+    a for a in sys.argv if a.endswith("make_assembly.FCMacro"))))
+sys.path.insert(0, HERE)
+import build_enclosed_case as B  # noqa: E402
+
+V = App.Vector
+BLACK = (0.16, 0.16, 0.17)
+BLUE = (0.09, 0.42, 0.93)
+STEEL = (0.25, 0.25, 0.27)
+BRASS = (0.78, 0.62, 0.30)
+IMAGES = os.path.join(HERE, "images")
+EXPLODE = {"housing": 45.0, "inserts": 32.0, "cover": -14.0, "screws": -26.0, "slider": 14.0}
+
+
+def paint(o, colour):
+    o.ViewObject.ShapeAppearance = (App.Material(DiffuseColor=colour),)
+    o.ViewObject.ShapeColor = colour
+
+
+def feature(doc, name, label, shape, colour, group=None):
+    o = doc.addObject("Part::Feature", name)
+    o.Label = label
+    o.Shape = shape
+    paint(o, colour)
+    if group is not None:
+        group.addObject(o)
+    return o
+
+
+def exploded(doc, src, offset):
+    e = doc.getObject("Exploded_" + src.Name)
+    if e is None:
+        e = doc.addObject("Part::Feature", "Exploded_" + src.Name)
+        doc.getObject("ExplodedView").addObject(e)
+    e.Label = "Exploded " + src.Label
+    s = src.Shape.copy()
+    s.translate(offset)
+    e.Shape = s
+    paint(e, src.ViewObject.ShapeColor)
+    return e
+
+
+def remove(doc, name):
+    for n in (name, "Exploded_" + name):
+        if doc.getObject(n):
+            doc.removeObject(n)
+
+
+def assemble():
+    doc = App.openDocument(B.SOURCE)
+    g = B.build_all(doc)
+    for k in ("housing", "slider", "cover"):
+        s = g[k]
+        print(k, s.isValid(), len(s.Solids), round(s.Volume, 1))
+
+    housing = doc.getObject("Part__Feature001")
+    housing.Shape = g["housing"]
+    housing.Label = "Outer Body - enclosed"
+    paint(housing, BLACK)
+    s1 = doc.getObject("Part__Feature002")
+    s1.Shape = g["s1"]
+
+    for n in ["LoopVelcro"] + ["PCBMountScrew%d" % i for i in range(1, 5)]:
+        remove(doc, n)
+    lb = doc.getObject("LoopBacking")
+    lb.Label = "Rear cover"
+    lb.Visibility = True
+    fasteners = doc.getObject("Fasteners")
+    cover = feature(doc, "RearCover", "Rear cover - print black", g["cover"], BLACK, lb)
+    slider = feature(doc, "SwitchCover", "Switch cover - print blue", g["slider"], BLUE,
+                     doc.getObject("Cover___V3_v5"))
+    screws = [feature(doc, "CoverScrew%d" % (i + 1), "Cover screw %d - M3x8 countersunk" % (i + 1), s, STEEL, fasteners)
+              for i, s in enumerate(g["screws"])]
+    inserts = [feature(doc, "Insert%d" % (i + 1), "Heat-set insert %d - M3x4" % (i + 1), s, BRASS, fasteners)
+               for i, s in enumerate(g["inserts"])]
+
+    exploded(doc, housing, V(0, 0, EXPLODE["housing"]))
+    exploded(doc, s1, V(0, 0, 0))
+    exploded(doc, cover, V(0, 0, EXPLODE["cover"]))
+    exploded(doc, slider, V(EXPLODE["slider"], 0, EXPLODE["housing"]))
+    for o in screws:
+        exploded(doc, o, V(0, 0, EXPLODE["screws"]))
+    for o in inserts:
+        exploded(doc, o, V(0, 0, EXPLODE["inserts"]))
+
+    doc.getObject("Cover___V3_v5").Label = "Housing - black shell, white diffuser, blue switch cover"
+    fasteners.Label = "Fasteners - 4 cover screws, 4 inserts, 2 sensor screws"
+    for n in ("Cover___V3_v5", "Part", "LoopBacking", "Fasteners"):
+        doc.getObject(n).Visibility = True
+    p = doc.getObject("AssemblyParameters")
+    for k, label in [("cover_thickness", "RearCoverThickness"), ("wall", "EdgeWallThickness"),
+                     ("travel", "SwitchCoverTravel")]:
+        if not hasattr(p, label):
+            p.addProperty("App::PropertyLength", label, "Enclosed case")
+        setattr(p, label, B.P[k])
+    doc.recompute()
+    doc.saveAs(B.OUT_FCSTD)
+    return doc
+
+
+def step_objects(doc):
+    skip = {"ExplodedView", "DiffuserConstruction", "AssemblyReferences"}
+    roots = [doc.getObject("Cover___V3_v5")] + list(doc.RootObjects)  # the logo binder links the housing group
+    return [o for o in roots if o.TypeId == "App::Part" and o.Name not in skip and o.Visibility]
+
+
+def export(doc):
+    ImportGui.export(step_objects(doc), B.OUT_STEP)
+    os.makedirs(B.PARTS, exist_ok=True)
+    parts = [
+        ("Housing-Black", doc.getObject("Part__Feature001").Shape),
+        ("Housing-Diffuser-White", doc.getObject("IntegratedDiffuser").Shape),
+        ("Housing-Logo-Inlay", doc.getObject("Body").Shape),
+        ("Switch-Cover-Blue", doc.getObject("SwitchCover").Shape),
+        ("Rear-Cover-Black", doc.getObject("RearCover").Shape),
+    ]
+    for name, s in parts:
+        s.exportStep(os.path.join(B.PARTS, name + ".step"))
+        m = MeshPart.meshFromShape(Shape=s, LinearDeflection=0.02, AngularDeflection=0.2)
+        m.write(os.path.join(B.PARTS, name + ".stl"))
+    # Rear cover outline for laser/CNC or checking against a print.
+    cover = doc.getObject("RearCover").Shape
+    sec = cover.slice(V(0, 0, 1), B.P["pcb_bottom_z"] - B.P["cover_thickness"] + 0.05)
+    import importDXF
+    tmp = App.newDocument("dxf")
+    objs = []
+    for i, w in enumerate(sec):
+        o = tmp.addObject("Part::Feature", "w%d" % i)
+        o.Shape = w
+        objs.append(o)
+    importDXF.export(objs, os.path.join(B.PARTS, "Rear-Cover-Outline.dxf"))
+    App.closeDocument("dxf")
+
+
+def camera(view, d, up=(0, 0, 1)):
+    from pivy import coin
+    d = V(*d)
+    d.normalize()
+    z = -d
+    u = V(*up)
+    x = u.cross(z)
+    if x.Length < 1e-6:
+        x = V(1, 0, 0)
+    x.normalize()
+    y = z.cross(x)
+    m = App.Matrix(x.x, y.x, z.x, 0, x.y, y.y, z.y, 0, x.z, y.z, z.z, 0, 0, 0, 0, 1)
+    q = App.Rotation(m).Q
+    view.getCameraNode().orientation.setValue(coin.SbRotation(q[0], q[1], q[2], q[3]))
+    view.fitAll()
+
+
+def show_only(doc, names):
+    keep = set(names)
+    for o in doc.Objects:
+        if o.TypeId.startswith("Part::") or o.TypeId in ("App::Link", "PartDesign::Body"):
+            o.Visibility = o.Name in keep
+
+
+def render(doc):
+    os.makedirs(IMAGES, exist_ok=True)
+    saved = {o.Name: o.Visibility for o in doc.Objects if hasattr(o, "Visibility")}
+    gd = Gui.getDocument(doc.Name)
+    view = gd.activeView()
+    view.setCameraType("Orthographic")
+    Gui.runCommand("Std_DrawStyle", 0)
+    shapes = [o.Name for o in doc.Objects if o.TypeId.startswith("Part::") or o.TypeId in ("App::Link", "PartDesign::Body")]
+    assembled = []
+    for grp in step_objects(doc):
+        for o in grp.OutListRecursive:
+            if o.Name in shapes:
+                assembled.append(o.Name)
+    always = ("Part__Feature001", "Diffuser", "Body", "RearCover", "SwitchCover")
+    assembled = [n for n in assembled if saved.get(n) or n in always]
+    # Assembled views.
+    show_only(doc, assembled)
+    for name, d in [("Enclosed-Front", (-1, 1.3, -0.9)), ("Enclosed-Rear", (-1, 1.2, 1.0)),
+                    ("Enclosed-Switch-Side", (-1, -0.35, -0.35)), ("Enclosed-USB-End", (-0.4, -1, -0.35))]:
+        camera(view, d)
+        view.saveImage(os.path.join(IMAGES, name + ".png"), 1400, 1100, "White")
+    # Exploded view.
+    ex = [o.Name for o in doc.getObject("ExplodedView").Group if o.Name.startswith("Exploded_")]
+    show_only(doc, ex)
+    doc.getObject("ExplodedView").Visibility = True
+    camera(view, (-1, 1.4, -0.8))
+    view.saveImage(os.path.join(IMAGES, "Enclosed-Exploded.png"), 1400, 1400, "White")
+    # Printed parts.
+    doc.getObject("ExplodedView").Visibility = False
+    for name, d in [("SwitchCover", (-1, 0.8, -0.6)), ("RearCover", (-0.6, 0.9, -1.0))]:
+        show_only(doc, [name])
+        camera(view, d)
+        view.saveImage(os.path.join(IMAGES, "Part-" + name + ".png"), 1200, 1000, "White")
+    for n, vis in saved.items():
+        doc.getObject(n).Visibility = vis
+
+
+def sections(doc):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    parts = [("Part__Feature001", "#2a2a2c"), ("RearCover", "#55555a"), ("SwitchCover", "#176bee"),
+             ("BoardRev4", "#1f6b3a"), ("Part__Feature002", "#9a9a9a"), ("Part__Feature003", "#9a9a9a"),
+             ("Part__Feature006", "#9a9a9a"), ("Insert1", "#c79e4c"), ("Insert2", "#c79e4c"),
+             ("CoverScrew1", "#777"), ("CoverScrew2", "#777")]
+    cuts = [("Switch cover, Y = %.1f" % B.P["act_y"], V(0, 1, 0), B.P["act_y"], (30, 49), 0),
+            ("Screw, Y = 76", V(0, 1, 0), 76.0, (-4, 8), 0),
+            ("Jack and USB-C, X = 20.9", V(1, 0, 0), 20.9, None, 1)]
+    fig, axs = plt.subplots(3, 1, figsize=(11, 12), gridspec_kw={"height_ratios": [1, 1, 1.2]})
+    for ax, (title, n, off, xlim, axis) in zip(axs, cuts):
+        for name, col in parts:
+            shp = doc.getObject(name).Shape
+            try:
+                wires = shp.slice(n, off)
+            except Exception:
+                continue
+            for w in wires:
+                pts = w.discretize(Deflection=0.01)
+                ax.fill([p.x if axis == 0 else p.y for p in pts], [p.z for p in pts], color=col, lw=0.3, ec="k")
+        ax.set_aspect("equal")
+        ax.set_title(title, fontsize=10)
+        if xlim:
+            ax.set_xlim(*xlim)
+            ax.set_ylim(-9, 4)
+        else:
+            ax.set_ylim(-9, 16)
+        ax.tick_params(labelsize=7)
+        ax.grid(True, lw=0.2)
+    plt.tight_layout()
+    plt.savefig(os.path.join(IMAGES, "Enclosed-Sections.png"), dpi=110)
+
+
+def main():
+    doc = assemble()
+    export(doc)
+    if App.GuiUp:
+        render(doc)
+    sections(doc)
+    doc.save()
+    os._exit(0)
+
+
+main()
