@@ -8,40 +8,6 @@ This reference documents internal, engineering, and validation error codes emitt
 
 Internal status codes surfaced when the device attempts to upload calibration or session data but can't reach the server. Codes like **"69 0"** are internal status codes — when offline, they don't prevent training; they simply indicate that data couldn't be uploaded at that moment.
 
-## Settings-fetch diagnostics over BLE
-
-Ordinary BLE-enabled firmware exposes the read-only `connectivity.settings`
-resource through `sensor.read` or `setting.read`. It reports the most recent
-dashboard settings fetch without enabling verbose logs. Reading it does not
-retry the request, change the session or write storage.
-
-Schema 2 returns a compact `summary` by default. Set `args.view` to `transport`,
-`parse`, `storage`, `write` or `memory` for the corresponding details. Each fixed view
-fits the complete 509-byte RadBLE reply, including request ID and both state
-names. Compare `generation` across reads to ensure they describe the same fetch.
-There is no combined `all` view.
-
-The snapshot contains only fixed categories, counters and memory telemetry:
-
-| View | Fields and meaning |
-| --- | --- |
-| All views | `v=2`, `view`, `generation` since boot and last fetch `stage`. |
-| `summary` | `error`, `httpStatus`, `clientStatus`, `parseCode`, `persistenceError`, `cacheSource`. |
-| `transport` | `attempt` (up to three), `httpStatus` (zero if none), `clientStatus`, `responseBytes`, `retainedBodyBytes`. A server `200` can accompany a negative client result if body reading failed. Byte counts distinguish the bounded sink's accepted bytes from the body retained for parsing. |
-| `parse` | `error`, `parseCode`, `overflow`, `callbackInvoked`, `eventAccepted`. Parse codes: `255` not run, `0` success, `1` empty input, `2` incomplete input, `3` invalid input, `4` no memory, `5` too deep. |
-| `storage` | `persistenceError`, `cacheSource`, `cacheMounted`, `callbackInvoked`, `eventAccepted`, `persisted`, `installed`. Persistence errors: `none`, `limit`, `mount`, `write`, `rotate`, `recover`, `stage`, `commit`. Cache source: `not_loaded`, `primary`, `backup`, `recovery`. Fallback preserves the original fetch failure. |
-| `write` | `expected`, `written`, `openReportedSize`, `reopenedSize`, `verifiedBytes`, `opened`, `reopened`, `verified`. The open-handle size is diagnostic-only. A staging file is flushed, closed, reopened and compared byte-for-byte before cache rotation. `verified` describes this staging check; `persisted` describes the later cache commit. |
-| `memory` | `startedAtMs`, `updatedAtMs`, `freeHeap`, `largestBlock` at the last diagnostic update; `fsUsed` and `fsTotal` measured before the staging write. |
-
-A completed fetch summary reports `stage=installed` and `parseCode=0`; its
-storage view reports `persisted=true` and `installed=true`.
-`cacheMounted` describes a fallback cache load only;
-it remains false when no fallback was attempted, including successful fetches.
-Diagnostics reset for a new fetch and after reboot.
-Snapshots contain no request/response text, identifiers, network addresses or
-credentials. Existing validation, transport, cache and formatting policies
-remain in effect.
-
 ## Segment validation errors
 
 ### "Invalid Range"

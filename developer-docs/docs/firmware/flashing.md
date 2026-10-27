@@ -22,24 +22,6 @@ See the [Software 2.0 Preview](https://docs.researchanddesire.com/dtt/software-2
 
 ## Manual USB flashing
 
-### Local development builds
-
-Run PlatformIO from `software/`. The `development-v1` and `development-v2`
-profiles disable automatic firmware updates and default to
-`http://127.0.0.1:3000`. For a physical device, copy
-`local.settings.example.json` to ignored `local.settings.json` and set `server`
-to the computer's explicit private LAN origin, for example
-`http://192.168.1.50:3000`. A trainer's loopback address refers to the trainer.
-The build accepts loopback and private LAN IP addresses without resolving DNS;
-it rejects credentials, public hosts, paths, query strings and fragments.
-Staging and production do not read local development settings.
-
-Use `pio run -e development-v2 -t buildprog` to compile without connecting to
-or flashing a device. Select V1 or V2 only after verifying the enrolled board's
-identity, physical flash and existing partition layout. Provision bench Wi-Fi
-through the supported BLE commands and keep Wi-Fi credentials out of build
-flags and source files.
-
 If a Trainer can't receive OTA updates (due to connectivity issues or network restrictions), firmware can be manually flashed using a USB cable and the Web Flasher.
 
 !!! info
