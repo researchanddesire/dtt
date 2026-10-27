@@ -49,7 +49,7 @@ right-angle vibrator plug, or a straight one under 13.7 mm long.
 | --- | --- | --- | --- |
 | ![Part](images/Snap-Backplate-Double-Double-Hero-Part.png) | ![Screw](images/Snap-Backplate-Double-Double-Screw.png) | ![Pocket](images/Snap-Backplate-Double-Double-Exploded-Rear.png) | ![Exploded](images/Snap-Backplate-Double-Double-Exploded.png) |
 
-- Slide the cup's stem into the slot in the screw head, then push the screw
+- Click the cup's stem into the slot in the screw head, then push the screw
   into the hex pocket, flat toward the bottom. The pocket locks the cup in.
 - Print the screw on its flat, black, no supports, at least 4 walls.
 
@@ -67,4 +67,4 @@ It writes an `.FCStd` for each version, the exports and the images in `images/`.
 - Stop fingers print free of the lever (`StopClear`).
 - Cups and bracket studs seat without rattling (`KeyLandT`, `KeySlotW`, `StudGap`).
 - PCB through-hole leads stay under 1.2 mm over the lower cup.
-- Double Double: screw tight in its pocket (`DDPocketClear`), thread fit (`ThreadCrest`).
+- Double Double: screw tight in its pocket (`DDPocketClear`), thread fit (`ThreadCrest`), cup click (`DDCupSnap`).

@@ -23,7 +23,7 @@ sticks to the wall, and the plate hangs on it.
 The same run builds a Double Double version for the OSSM Double Double toy mount. Its plate runs on
 past the jack end to a boss. A printed hex flange screw with the OSSM 24 mm thread sits in a hex pocket
 from the rear, so it cannot turn, and the Double Double threads onto it from the front. A fourth cup
-sits right under the toy: its stem slides into a slot in the screw head, and the pocket closes the
+sits right under the toy: its stem clicks into a slot in the screw head, and the pocket closes the
 slot once the screw is in.
 
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
@@ -174,6 +174,8 @@ PARAMS = {
     'DDBossD': (38.0, 'design: boss on the plate front under the Double Double base'),
     'DDBossT': (6.0, 'design: boss height; with the 4 mm plate the screw sits in 10 mm'),
     'DDCupHeadClear': (0.3, 'design: room over the fourth cup head in the screw head'),
+    'DDCupSnap': (0.4, 'design (Lucy: the cup clicks in): slot mouth this much narrower than the stem groove; tune on a test print'),
+    'DDCupSnapLead': (1.5, 'design: lead-in from the free slot width down to the mouth'),
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
 DD = False   # True while main() builds the Double Double version
@@ -882,12 +884,17 @@ def dd_screw_head(c=0.0):
 def dd_cup_socket():
     """Keyhole for the fourth cup in the screw head's rear face, open to +Y: a slot for the stem groove
     through a land as thick as the plate's, and a recess behind it for the head. The stem slides in
-    from the +Y side, and the pocket wall closes that side once the screw is in. The slot opens away
-    from the print flat, so it prints as an open channel."""
+    from the +Y side and clicks past a mouth narrower than the groove, and the pocket wall closes that
+    side once the screw is in. The slot opens away from the print flat, so it prints as an open channel."""
     w, re = P['KeySlotW'] / 2, P['KeyEntryD'] / 2
+    m = dd_cup_mouth() / 2; ym = math.sqrt(w * w - m * m); yl = ym + P['DDCupSnapLead']
     zl, zh = P['KeyLandT'], cup_head_top() - z_rear() + P['DDCupHeadClear']
-    return cyl(w, 0, 0, -1, zl + 0.01).fuse([box(-w, w, 0, 50, -1, zl + 0.01), cyl(re, 0, 0, zl, zh),
-                                            box(-re, re, 0, 50, zl, zh)])
+    slot = prism([(-m, ym), (m, ym), (w, yl), (w, 50), (-w, 50), (-w, yl)], -1, zl + 0.01)
+    return cyl(w, 0, 0, -1, zl + 0.01).fuse([slot, cyl(re, 0, 0, zl, zh), box(-re, re, 0, 50, zl, zh)])
+
+
+def dd_cup_mouth():
+    return P['GrooveD'] - P['DDCupSnap']
 
 
 def dd_screw():
@@ -937,6 +944,9 @@ def dd_checks(printed, screw):
         cup_head_top() + P['DDCupHeadClear'] - z_rear() - P['KeyLandT']))
     print('CHECK fourth cup captive: head slid 20 mm out along its slot overlaps the plate by %.0f mm3' % (
         head.translated(V(0, 20, 0)).common(printed).Volume))
+    m, rg = dd_cup_mouth(), P['GrooveD'] / 2
+    print('CHECK fourth cup click: %.2f mm mouth on the %.2f mm groove, %.2f mm a side, so the slot wraps %.0f deg of the groove' % (
+        m, P['GrooveD'], P['DDCupSnap'] / 2, 360 - 2 * math.degrees(math.asin(m / 2 / rg))))
 
 
 def design_checks(printed, black, blue, bracket):
