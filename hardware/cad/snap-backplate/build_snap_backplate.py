@@ -158,7 +158,8 @@ SECTIONS = {'bottom': (4.0, 24.0, 2.0, 40.0, 13.18, 0.99),
 # face and chamfer lip of the section at its top end, so in the steps between sections the wall
 # clears the narrower housing. The module slides toward -Y, so a band is only ever passed by its own
 # section or narrower ones. The walls have fallen to the plate before the S1 switch (Y 79.4).
-TRACK = [('bottom', 23.0), ('mid', 56.0), ('wide', None)]   # (section, band top Y; None = open)
+# The mid band (and the side lips) end where the swoop starts, at Y 44, so the swoop is a plain wall.
+TRACK = [('bottom', 23.0), ('mid', 44.0), ('wide', None)]   # (section, band top Y; None = open)
 # Skids under the PCB (X ranges). They sit between the tracks swept by the PCB screw heads
 # (X 0.6-5.7, 36.3-41.4) and clear of the J5 and J2/J6 through-hole parts.
 SKIDS = [(11.0, 13.0), (29.0, 31.0)]
@@ -346,18 +347,31 @@ def cavity():
     by the housing's chamfered plan corners and its sloped end, both offset by the clearance."""
     zf = z_front(); c = P['WallClear']; ch = P['InnerChamfer']; ztop = z_wall_top() + 5
     he = P['HookEngage']
-    parts = []; ya = -10.0
-    for sec, yb in TRACK:
-        yb = FAR if yb is None else yb
+
+    def prof(sec, lips):
         _, _, xl, xr, zc, inset = SECTIONS[sec]
-        slope = (P['HousingTopZ'] - zc) / inset
-        il, ir = xl - c, xr + c
-        tl, tr = xl + (he - c), xr - (he - c)
-        zl = zc + c; zt = zc + he * slope + c
-        prof = [(il + ch, zf), (ir - ch, zf), (ir, zf + ch), (ir, zl), (tr, zt), (tr, ztop),
+        il, ir, zl = xl - c, xr + c, zc + c
+        if lips:
+            zt = zc + he * (P['HousingTopZ'] - zc) / inset + c
+            tl, tr = xl + (he - c), xr - (he - c)
+        else:                                             # same vertices, the lip faces run straight up
+            tl, tr, zt = il, ir, zl + he
+        return [(il + ch, zf), (ir - ch, zf), (ir, zf + ch), (ir, zl), (tr, zt), (tr, ztop),
                 (tl, ztop), (tl, zt), (il, zl), (il, zf + ch)]
-        parts.append(prism_xz(prof, ya, yb))
-        ya = yb
+
+    def ramp(p0, y0, p1, y1):
+        w = [Part.makePolygon([V(x, y, z) for x, z in pr + pr[:1]]) for pr, y in ((p0, y0), (p1, y1))]
+        return Part.makeLoft(w, True, True)
+
+    # Bands follow the housing sections, except that the side lips and the mid band end where the swoop
+    # starts: the cavity tapers out to the wide band at 45 deg in plan on the flat top, so the swoop is a
+    # plain 2 mm wall. The housing's mid section is only guided below Y 44 (it passes the swoop with 1.2
+    # mm a side), and the wide section never reaches the swoop's lower end.
+    (_, y_bm), (_, le), _ = TRACK
+    mid, wide = prof('mid', True), prof('wide', False)
+    taper = (mid[6][0] - wide[6][0])                      # lip tip to the wide inner face, along X
+    parts = [prism_xz(prof('bottom', True), -10.0, y_bm), prism_xz(mid, y_bm, le - taper),
+             ramp(mid, le - taper, wide, le), prism_xz(wide, le, FAR)]
     # jack end: plan corners
     _, _, bxl, bxr, _, _ = SECTIONS['bottom']
     yb0, cc = P['DeviceBottomY'], P['EndCornerC']
@@ -680,7 +694,19 @@ def fillet_inner_top(shape):
         except Exception:
             pass
     print('inner top edges: %d of %d can be rounded' % (len(ok), len(sel)))
-    return try_fillet(shape, ok, (r,), 'inner top edges (subset)')
+    s = try_fillet(shape, ok, (r,), 'inner top edges (subset)')
+    if s is not shape:
+        return s
+    chosen = []                                           # together they fail: add them one at a time
+    for e in ok:
+        try:
+            t = shape.makeFillet(r, chosen + [e])
+            if t.isValid() and len(t.Solids) == 1:
+                chosen.append(e); s = t
+        except Exception:
+            pass
+    print('inner top edges: fillet R%.2f on %d of them, one at a time' % (r, len(chosen)))
+    return s
 
 
 def fillet_jack_opening(shape):

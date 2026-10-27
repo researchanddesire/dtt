@@ -61,13 +61,13 @@ side elevation, with the module cavity cut out of it.
 ## How it holds the module
 
 - **Track:** the module slides in from the USB-C end, jack end first, until it
-  sits in the hood. The cavity follows the three housing sections (bottom to
-  Y 23, mid to Y 56, then wide) with 0.2 mm clearance. It carries a 0.6 mm lip
-  over the top chamfer, and a 0.6 mm hood lip over the housing's sloped jack
-  end. The housing steps wider toward the USB-C end, so each band is only passed
-  by its own section or narrower ones. The lips run to about Y 50, where the wall
-  top drops below the chamfer. The side switch S1 (Y 79.4 and above) is open
-  from the side and front.
+  sits in the hood. The cavity follows the housing sections (bottom to Y 23,
+  mid to Y 44, then wide) with 0.2 mm clearance. It carries a 0.6 mm lip over
+  the top chamfer, and a 0.6 mm hood lip over the housing's sloped jack end. The
+  housing steps wider toward the USB-C end, so each band is only passed by its
+  own section or narrower ones. The lips and the mid band end at Y 44, where the
+  wall starts to swoop down, through one 45° taper, so the swoop is a plain 2 mm
+  wall. The side switch S1 (Y 79.4 and above) is open from the side and front.
 - **Support:** the PCB back rides on two skids (X 11-13 and 29-31, Y 5-64,
   45° end ramps), 2.6 mm above the plate. They sit between the tracks swept by
   the PCB screw heads and clear of the jack and the connectors with through-hole
