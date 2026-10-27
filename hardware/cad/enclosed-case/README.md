@@ -18,7 +18,7 @@ It replaces the loop backing.
 
 | Part | File | Colour | Orientation |
 | --- | --- | --- | --- |
-| Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl` in white, `Housing-Logo-Blue.stl` in blue) | black | top face down |
+| Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl` in white, `Housing-Inlays-Blue.stl` (logo and button) in blue) | black | top face down |
 | Rear cover | `parts/Rear-Cover-Black.stl` | black | outer face down |
 | Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flange face down |
 

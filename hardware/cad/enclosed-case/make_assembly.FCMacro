@@ -76,6 +76,7 @@ def assemble():
     body.removeObjectsFromDocument()
     doc.removeObject("Body")
     logo = feature(doc, "LogoInlay", "R+D logo inlay - print blue", logo_shape, CYAN, doc.getObject("Part"))
+    button = feature(doc, "ButtonInlay", "Button inlay - print blue", g["button"], BLUE, doc.getObject("Part"))
 
     housing = doc.getObject("Part__Feature001")
     housing.Shape = g["housing"]
@@ -103,6 +104,7 @@ def assemble():
     exploded(doc, housing, V(0, 0, EXPLODE["housing"]))
     exploded(doc, s1, V(0, 0, 0))
     exploded(doc, logo, V(0, 0, EXPLODE["housing"]))
+    exploded(doc, button, V(0, 0, EXPLODE["housing"]))
     exploded(doc, cover, V(0, 0, EXPLODE["cover"]))
     exploded(doc, slider, V(EXPLODE["slider"], 0, EXPLODE["housing"]))
     for o in screws:
@@ -136,7 +138,8 @@ def export(doc):
     parts = [
         ("Housing-Black", doc.getObject("Part__Feature001").Shape),
         ("Housing-Diffuser-White", doc.getObject("IntegratedDiffuser").Shape),
-        ("Housing-Logo-Blue", doc.getObject("LogoInlay").Shape),
+        ("Housing-Inlays-Blue", Part.makeCompound([doc.getObject("LogoInlay").Shape,
+                                                   doc.getObject("ButtonInlay").Shape])),
         ("Switch-Cover-Blue", doc.getObject("SwitchCover").Shape),
         ("Rear-Cover-Black", doc.getObject("RearCover").Shape),
     ]
@@ -195,7 +198,7 @@ def render(doc):
         for o in grp.OutListRecursive:
             if o.Name in shapes:
                 assembled.append(o.Name)
-    always = ("Part__Feature001", "Diffuser", "LogoInlay", "RearCover", "SwitchCover")
+    always = ("Part__Feature001", "Diffuser", "LogoInlay", "ButtonInlay", "RearCover", "SwitchCover")
     assembled = [n for n in assembled if saved.get(n) or n in always]
     # Assembled views.
     show_only(doc, assembled)

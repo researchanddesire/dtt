@@ -85,6 +85,11 @@ PARAMS = {
     "tongue": (0.9, 0.8, 1.0),  # inset from the outer face, width, height
     "tongue_y": (6.0, 89.0),
     "tongue_clear": 0.1,
+    # Blue inlay on the flexure button (a touch point), inside its slot.
+    "button_left": (17.806, 65.004, 3.0),  # centre x, y, radius
+    "button_right": (33.414, 68.725, 3.5),
+    "button_bar_y": (66.725, 70.725),
+    "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
 }
 P = PARAMS
 
@@ -319,6 +324,15 @@ def tongue(grow=0.0):
         [box(g.XMin, g.YMin - 0.6, zs - 1, g.XMax + 2, g.YMax + 0.6, zs + 3) for g in gaps])
 
 
+def button_inlay(grow=0.2):
+    """Button outline, grown into the slot so the cut never lands on its walls."""
+    (lx, ly, lr), (rx, ry, rr) = P["button_left"], P["button_right"]
+    b0, b1 = P["button_bar_y"]
+    z0, z1 = P["inlay_z"]
+    return zcyl(lx, ly, 2 * (lr + grow), z0, z1 + 1).fuse(
+        [zcyl(rx, ry, 2 * (rr + grow), z0, z1 + 1), box(lx, b0 - grow, z0, rx, b1 + grow, z1 + 1)]).removeSplitter()
+
+
 def build_all(doc):
     H = doc.getObject("Part__Feature001").Shape
     board = doc.getObject("BoardRev4").Shape
@@ -330,6 +344,8 @@ def build_all(doc):
     cover = cover.fuse(housing.common(jack_tab())).removeSplitter()
     housing = housing.cut(jack_tab(P["tab_clear"])).removeSplitter()
     cover = cover.fuse(tongue()).removeSplitter()
+    button = housing.common(button_inlay()).removeSplitter()
+    housing = housing.cut(button_inlay()).removeSplitter()
     housing = housing.cut(tongue(P["tongue_clear"])).removeSplitter()
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
@@ -340,5 +356,6 @@ def build_all(doc):
         slider=slider,
         cover=cover,
         s1=build_s1(doc.getObject("Part__Feature002").Shape),
+        button=button,
         screws=[build_screw(x, y) for (x, y) in P["screw_axes"]],
     )
