@@ -14,6 +14,7 @@ S-shaped swoop down into the wings ahead of the side switch). The outer top edge
 continuous fillet and the module cavity is cut out of that form. The latch is a release lever
 that is part of the plate outline: two slots run from under the module out through the top edge,
 the flex zone is thinned from the front, and the full-thickness press tab carries grip grooves.
+Printed-in stops limit the lever both ways: fingers under the tab and a strap across the flex zone.
 The print is black; the touch point, the front of the press tab, is a 0.6 mm blue inlay kept as a
 separate body for two-colour printing. The grip grooves cut through it, so their bottoms are black.
 Instead of the cups, an optional one-piece wall bracket carries the three keyhole studs. It screws or
@@ -93,10 +94,13 @@ PARAMS = {
     # lever's rear; the pocket roof is bridged over the finger and bottoms out on it when pressed too far
     'StopY0': (92.6, 'design: fingers start just past the flex zone (the lever is full thickness from Y 92)'),
     'StopW': (4.0, 'design: finger width along Y'),
-    'StopH': (1.4, 'design: finger height above the bed'),
-    'StopGap': (1.8, 'design: finger top to pocket roof, the press travel at the fingers'),
+    'StopLand': (0.5, 'design: square lever edge at the slot above the 45 deg pocket roof, clear of the slot edge round'),
+    'StopGap': (1.8, 'design: finger top to pocket roof, measured along Z: the press travel at the fingers'),
     'StopPen': (0.9, 'design: finger overlap into the lever, beside the teeth'),
     'StopClear': (0.5, 'design: clearance around the fingers, wide enough that elephant foot does not fuse them'),
+    'StrapY0': (78.0, 'design: strap bridged across the front of the flex zone, ending where its end ramp starts (Y 86)'),
+    'StrapW': (8.0, 'design: strap width along Y'),
+    'StrapT': (1.2, 'design: strap thickness down from the plate front, leaving 0.8 mm above the flex zone'),
     'GripN': (4.0, 'design: grip grooves across the press tab'),
     'GripPitch': (2.0, 'design'),
     'GripW': (1.0, 'design: groove width; straight walls with a round bottom'),
@@ -506,14 +510,41 @@ def latch_teeth():
 
 def stop_parts():
     """(fingers, pockets): a finger from each slot's outer wall on the bed, and the pocket it sits in
-    under the lever. The pocket is open to the rear and the slot; its roof bridges along Y."""
-    zr = z_rear(); g = P['LatchSlot']; x0, x1 = P['LatchX0'], P['LatchX1']
-    y0, w, h, c, pen = P['StopY0'], P['StopW'], P['StopH'], P['StopClear'], P['StopPen']
-    fingers = [box(x0 - g - 0.5, x0 + pen, y0, y0 + w, zr, zr + h), box(x1 - pen, x1 + g + 0.5, y0, y0 + w, zr, zr + h)]
-    zt = zr + h + P['StopGap']
-    pockets = [box(x0 - 0.01, x0 + pen + c, y0 - c, y0 + w + c, zr - 1, zt),
-               box(x1 - pen - c, x1 + 0.01, y0 - c, y0 + w + c, zr - 1, zt)]
+    under the lever. The pocket is open to the rear and the slot. Its roof rises at 45 deg toward the
+    slot, so it prints without a bridge, and the finger top runs parallel to it, StopGap below."""
+    zr, zf = z_rear(), z_front(); g = P['LatchSlot']
+    y0, w, c, pen, gap = P['StopY0'], P['StopW'], P['StopClear'], P['StopPen'], P['StopGap']
+    z_edge = zf - P['StopLand']                           # roof where it meets the slot
+    fingers, pockets = [], []
+    for edge, inward in ((P['LatchX0'], 1), (P['LatchX1'], -1)):
+        x = lambda d: edge + inward * d                    # d: distance into the lever from its edge
+        zt = z_edge - gap
+        fingers.append(prism_xz([(x(-g - 0.5), zr), (x(pen), zr), (x(pen), zt - pen), (x(0), zt),
+                                 (x(-g - 0.5), zt)], y0, y0 + w))
+        d1 = pen + c
+        pockets.append(prism_xz([(x(-0.01), zr - 1), (x(d1), zr - 1), (x(d1), z_edge - d1),
+                                 (x(-0.01), z_edge + 0.01)], y0 - c, y0 + w + c))
     return fingers, pockets
+
+
+def strap():
+    """Strap across both lever slots and the front of the flex zone, flush with the plate front. It
+    stops the lever being pulled outward and prints as a bridge over the lever."""
+    zf = z_front(); g = P['LatchSlot']
+    return box(P['LatchX0'] - g - 0.5, P['LatchX1'] + g + 0.5, P['StrapY0'], P['StrapY0'] + P['StrapW'],
+               zf - P['StrapT'], zf)
+
+
+def strap_checks():
+    """Gap over the flex zone, teeth travel and lever strain when pulled onto the strap, and the
+    strap's bending stress per 10 N (both ends fixed)."""
+    gap = z_front() - P['StrapT'] - (z_rear() + P['LatchT'])
+    teeth = P['DeviceTopY'] + P['ToothClear']
+    d_teeth = gap * lever_shape(teeth) / lever_shape(P['StrapY0'] + P['StrapW'])
+    strain = latch_strain() * d_teeth / (P['ToothRise'] + 0.2)
+    span = P['LatchX1'] - P['LatchX0'] + 2 * P['LatchSlot']
+    stress = 10.0 * span / 8 / (P['StrapW'] * P['StrapT'] ** 2 / 6)
+    return gap, d_teeth, strain, stress
 
 
 def lever_shape(y):
@@ -534,7 +565,8 @@ def stop_checks():
     d_teeth = P['StopGap'] * lever_shape(teeth) / lever_shape(yc)
     strain = latch_strain() * d_teeth / (P['ToothRise'] + 0.2)
     arm = P['LatchSlot'] + P['StopPen'] / 2
-    stress = 6 * 10.0 * arm / (P['StopW'] * P['StopH'] ** 2)
+    h = z_front() - P['StopLand'] - P['StopGap'] - z_rear()   # finger height over the slot
+    stress = 6 * 10.0 * arm / (P['StopW'] * h ** 2)
     return d_teeth, strain, stress
 
 
@@ -679,7 +711,7 @@ def printed_part():
                                      P['LatchRootY'] + 0.01)])
     fingers, pockets = stop_parts()
     body = body.cut(pockets).removeSplitter()
-    printed = body.fuse(skids() + latch_teeth() + fingers).removeSplitter()
+    printed = body.fuse(skids() + latch_teeth() + fingers + [strap()]).removeSplitter()
     return printed
 
 
@@ -725,8 +757,11 @@ def design_checks(printed, black, blue, bracket):
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
     d_teeth, s_stop, sigma = stop_checks()
-    print('CHECK stop: teeth travel %.2f mm (%.2f below the PCB rear), lever strain %.2f %%, finger stress %.1f MPa per 10 N'
+    print('CHECK stop: teeth travel %.2f mm (%.2f below the PCB rear), lever strain %.2f %%, finger root stress %.1f MPa per 10 N'
           % (d_teeth, d_teeth - P['ToothRise'], s_stop * 100, sigma))
+    gap, d_out, s_out, s_strap = strap_checks()
+    print('CHECK pull stop: strap gap %.2f mm, teeth move out %.2f mm, lever strain %.2f %%, strap stress %.1f MPa per 10 N'
+          % (gap, d_out, s_out * 100, s_strap))
     print('CHECK colour split: black valid %s (%d solid), blue valid %s (%d solid), volume %.1f + %.1f = %.1f of %.1f' % (
         black.isValid(), len(black.Solids), blue.isValid(), len(blue.Solids), black.Volume, blue.Volume,
         black.Volume + blue.Volume, printed.Volume))
