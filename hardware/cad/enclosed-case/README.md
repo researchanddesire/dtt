@@ -2,7 +2,7 @@
 
 The DTT case at one constant width, with a blue switch cover that slides S1
 and a rear cover tray that holds the PCB from its top face down. The original
-four PCB screws hold it together, with their heads flush in the rear cover.
+four PCB screws hold it together, flush in countersinks in the rear cover.
 It replaces the loop backing.
 
 ![Front](images/Enclosed-Front.png)
@@ -25,7 +25,7 @@ It replaces the loop backing.
 
 | Qty | Part |
 | --- | --- |
-| 4 | The original PCB screws, 0408LTFB (#4 × 1/2" pan head, self-tapping) |
+| 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" flat head) |
 
 ## Assemble
 
@@ -51,8 +51,8 @@ Size: 50.0 × 95.2 × 22.3 mm.
   (actuator at Y 82.4, 1.5 mm wide) and allows 3.2 mm of travel. The old CAD
   switch model put the actuator 5 mm further along, so check the real part.
 - The switch cover slides freely (0.15 mm clearance) and stays in the window.
-- The screw heads sit flush in their 5.4 mm counterbores. They reach 9.6 mm
-  into the bosses; a #4 × 5/8" also fits if that feels short.
+- The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
+  reach 8 mm into the bosses.
 - USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
 
 The CAD checks are geometric only. Clamp force, thread hold and drop

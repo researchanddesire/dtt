@@ -48,10 +48,13 @@ PARAMS = {
     "cover_pocket_depth": 1.3,  # clears USB shell legs and jack pegs
     "cover_relief": 0.2,  # floor stays clear of the PCB except at the pads
     "cover_pad_d": 7.5,
-    # Original PCB screws (0408LTFB, #4 x 1/2", 4.8 mm pan head) sunk flush.
+    # Original short self-tapping PCB screws (0408LTFB, #4 x 1/2"), as flat
+    # heads sunk flush in 82 degree countersinks.
     "screw_clear_d": 3.2,
-    "cbore_d": 5.4,
-    "screw_drop": 1.5,  # screws sit this much lower than in DTT.FCStd
+    "csk_d": 5.9,  # #4 flat head is 5.7 max
+    "csk_angle": 82.0,
+    "screw_len": 12.7,  # overall, head included
+    "screw_d": 2.8,
     # S1 (JS102011JAQN). Actuator position from the KiCad F.Fab drawing.
     "sw_body": ((36.7, 79.1, -3.5), (43.3, 88.9, 0.6)),  # clearance box
     "act_y": 82.39,  # actuator centre, drawn position (pcb y 69.59)
@@ -246,7 +249,10 @@ def build_cover(pcb):
     holes = []
     for (x, y) in P["screw_axes"]:
         holes.append(zcyl(x, y, P["screw_clear_d"], zb - 1, zt + 1))
-        holes.append(zcyl(x, y, P["cbore_d"], zb - 1, zb + P["screw_drop"]))
+        r = P["csk_d"] / 2
+        h = (r - P["screw_clear_d"] / 2) / math.tan(math.radians(P["csk_angle"] / 2))
+        holes.append(Part.makeCone(r + 0.5 * math.tan(math.radians(P["csk_angle"] / 2)), P["screw_clear_d"] / 2,
+                                   h + 0.5, V(x, y, zb - 0.5)))
     cover = cover.cut(holes)
     return cover.removeSplitter()
 
@@ -257,6 +263,20 @@ def build_s1(model):
     w = P["act_w"]
     act = box(P["pcb_edge_x"] - 0.01, P["act_y"] - w / 2, -1.9, 44.97, P["act_y"] + w / 2, -0.3)
     return body.fuse(act).removeSplitter()
+
+
+def build_screw(x, y):
+    """Flat-head self-tapping screw, head flush with the rear cover."""
+    zb = P["pcb_bottom_z"] - P["cover_thickness"]
+    dk = P["csk_d"] - 0.2
+    k = (dk - P["screw_d"]) / 2 / math.tan(math.radians(P["csk_angle"] / 2))
+    head = Part.makeCone(dk / 2, P["screw_d"] / 2, k, V(x, y, zb))
+    shank = zcyl(x, y, P["screw_d"], zb + k - 0.01, zb + P["screw_len"] - 0.6)
+    tip = Part.makeCone(P["screw_d"] / 2, 0.6, 0.6, V(x, y, zb + P["screw_len"] - 0.6))
+    s = head.fuse([shank, tip])
+    slot = box(x - 0.3, y - 1.6, zb - 0.1, x + 0.3, y + 1.6, zb + 0.8)
+    cross = box(x - 1.6, y - 0.3, zb - 0.1, x + 1.6, y + 0.3, zb + 0.8)
+    return s.cut([slot, cross]).removeSplitter()  # Phillips, drawn as a cross
 
 
 def build_all(doc):
@@ -275,4 +295,5 @@ def build_all(doc):
         slider=slider,
         cover=cover,
         s1=build_s1(doc.getObject("Part__Feature002").Shape),
+        screws=[build_screw(x, y) for (x, y) in P["screw_axes"]],
     )
