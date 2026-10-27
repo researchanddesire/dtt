@@ -81,6 +81,10 @@ PARAMS = {
     "jack_tab_w": 10.2,
     "jack_tab_y1": 0.6,  # inner face, short of the PCB pocket
     "tab_clear": 0.1,
+    # Tongue on the rear cover rim, in a groove in the housing.
+    "tongue": (0.9, 0.8, 1.0),  # inset from the outer face, width, height
+    "tongue_y": (6.0, 89.0),
+    "tongue_clear": 0.1,
 }
 P = PARAMS
 
@@ -301,6 +305,20 @@ def build_screw(x, y):
     return s.cut(recess).removeSplitter()
 
 
+def tongue(grow=0.0):
+    """Tongues on the rear cover rim along the two long sides, in grooves in the
+    housing. The end walls are too thin beside the PCB for one."""
+    x0, y0, x1, y1 = P["outer"]
+    a, w, h = P["tongue"]
+    ya, yb = P["tongue_y"]
+    zs = P["pcb_top_z"]
+    t = [box(x0 + a - grow, ya - grow, zs - 0.01, x0 + a + w + grow, yb + grow, zs + h + grow),
+         box(x1 - a - w - grow, ya - grow, zs - 0.01, x1 - a + grow, yb + grow, zs + h + grow)]
+    gaps = [g.BoundBox for g in slider_cuts()]
+    return Part.makeCompound(t).fuse([]).cut(
+        [box(g.XMin, g.YMin - 0.6, zs - 1, g.XMax + 2, g.YMax + 0.6, zs + 3) for g in gaps])
+
+
 def build_all(doc):
     H = doc.getObject("Part__Feature001").Shape
     board = doc.getObject("BoardRev4").Shape
@@ -311,6 +329,8 @@ def build_all(doc):
     # The part of the end wall below the jack axis moves to the rear cover.
     cover = cover.fuse(housing.common(jack_tab())).removeSplitter()
     housing = housing.cut(jack_tab(P["tab_clear"])).removeSplitter()
+    cover = cover.fuse(tongue()).removeSplitter()
+    housing = housing.cut(tongue(P["tongue_clear"])).removeSplitter()
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
     print("cover", cover.isValid(), len(cover.Solids), round(cover.Volume, 1))
