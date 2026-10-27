@@ -91,14 +91,17 @@ side elevation, with the module cavity cut out of it.
   the fingers. The teeth have then moved 1.66 mm, 0.46 mm past release, and the
   lever strain is 0.85 %. Each finger sees about 10 MPa bending per 10 N of
   press force.
-- **Pull-out stop:** beside the press tab (Y 101-107), an outcrop from the
-  plate reaches across each slot and 0.9 mm over the lever's front edge, flush
-  with the front. Its underside rises at 45° toward its tip, so it prints
-  without support. The lever's front corner under it is cut back to a parallel
-  45° face, 1.0 mm below, with 0.5 mm clearance at the tip. Pulling the tab
-  outward lands it on the outcrops after 1.0 mm, when the teeth have moved
-  0.55 mm. Each outcrop sees about 2.5 MPa bending per 10 N. The outcrops are
-  black, so the blue inlay steps in around them.
+- **Pull-out stop:** a rail from the plate runs along each side of the press
+  tab, from just past the stop pockets (Y 98) out to the top edge, where it
+  takes the same R1 round as the plate. It reaches across the slot and 0.9 mm
+  over the lever's front edge, flush with the front. Its underside rises at 45°
+  toward its tip, so it prints without support. The lever's front corner under
+  it is cut back to a parallel 45° face, 1.0 mm below, with 0.5 mm clearance at
+  the tip. Pulling the tab outward lands its top end on the rails after 1.0 mm,
+  when the teeth have moved 0.50 mm. Each rail sees about 1.2 MPa bending per
+  10 N. The rails are black and frame the blue inlay. They stop short of the
+  stop pockets because the 4 mm lever edge can't take the rail's front cut and
+  a pocket from the rear at the same place.
 - **Release:** unplug USB-C, press the tab toward the wall and slide the module
   out toward the USB-C end.
 - The jack, USB-C, side switch and buttons stay open.
@@ -145,7 +148,7 @@ side elevation, with the module cavity cut out of it.
 | Skids | X 11-13 and 29-31, Y 5-64 | design |
 | Release lever | X 9-33 from Y 66, flex zone 2.0 thick to Y 86, teeth 1.2 rise, 30° ramp | design |
 | Over-travel stop | fingers 4.0 wide, 0.9 into the lever, 45° roof and finger top with 0.5 land, 1.8 travel, 0.5 clearance | design |
-| Pull-out stop | outcrops Y 101-107, 0.9 over the lever edge, 0.4 tip, 45° faces, 1.0 travel, 0.5 clearance | design |
+| Pull-out stop | rails Y 98 to the top edge, 0.9 over the lever edge, 0.4 tip, 45° faces, 1.0 travel, 0.5 clearance | design |
 | Plate | 4.0 thick | reference (estimate) |
 | Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
 | Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
