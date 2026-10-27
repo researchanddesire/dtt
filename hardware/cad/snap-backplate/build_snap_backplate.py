@@ -59,7 +59,7 @@ PARAMS = {
     'HoodTopR': (4.0, 'design: blend from the hood slope into the flat top'),
     'SwoopY0': (44.0, 'design: wall top starts to fall here; lips run to about Y 50'),
     'SwoopY1': (78.0, 'design: wall reaches the plate here, below the S1 switch at Y 79.4'),
-    'EdgeR': (2.0, 'design: fillet along the whole outer top edge of the sleeve and wings'),
+    'EdgeR': (1.0, 'design: fillet along the whole outer top edge of the sleeve and wings, half the 2 mm wall so its top stays square'),
     'BedChamfer': (0.6, 'design: rear outer edge, against elephant foot'),
     'InnerChamfer': (1.0, 'design: 45 deg fillet-chamfer at the inner foot of the walls'),
     'HookEngage': (0.6, 'design: lip overlap onto the top chamfer and onto the jack-end slope'),

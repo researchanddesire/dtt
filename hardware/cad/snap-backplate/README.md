@@ -46,8 +46,8 @@ side elevation, with the module cavity cut out of it.
   top then runs flat along the module, 0.8 mm above its front face. From Y 44 it
   drops to the plate in one S-curve, reaching it at Y 78, just below the side
   switch.
-- **Edges:** one R2 fillet runs around the whole outer top edge (hood, walls,
-  curve and wings). The bed edge has a 0.6 mm chamfer. Keyhole front edges are
+- **Edges:** one R1 fillet runs around the whole outer top edge (hood, walls,
+  curve and wings). It is half the 2 mm wall, so the wall tops stay square. The bed edge has a 0.6 mm chamfer. Keyhole front edges are
   rounded 0.8 mm.
 - **Release lever:** part of the plate outline at the top edge, between two
   slots, with grip grooves across the press tab.
@@ -141,7 +141,7 @@ side elevation, with the module cavity cut out of it.
 | Housing width | 38 / 42 / 44 by section, top chamfer 0.99-1.41 | verified |
 | Plate front to PCB rear | 2.6 | design |
 | Track | 0.2 clearance, 0.6 lips, 2.0 wall at the widest section | design |
-| Side profile | flat top 0.8 above the module, S-curve Y 44-78, R2 outer edge | design |
+| Side profile | flat top 0.8 above the module, S-curve Y 44-78, R1 outer edge | design |
 | Skids | X 11-13 and 29-31, Y 5-64 | design |
 | Release lever | X 9-33 from Y 66, flex zone 2.0 thick to Y 86, teeth 1.2 rise, 30° ramp | design |
 | Over-travel stop | fingers 4.0 wide, 0.9 into the lever, 45° roof and finger top with 0.5 land, 1.8 travel, 0.5 clearance | design |
