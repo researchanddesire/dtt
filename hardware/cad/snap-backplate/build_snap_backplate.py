@@ -35,6 +35,7 @@ import Part
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')) if '__file__' in globals() else os.getcwd()
 CAD = os.path.join(ROOT, 'hardware', 'cad')
 HERE = os.path.join(CAD, 'snap-backplate')
+IMAGES = os.path.join(HERE, 'images')
 OUT = os.path.join(ROOT, 'hardware', 'production-exports', 'cad', 'snap-backplate')
 TAG = 'SnapBackplate'
 
@@ -1035,7 +1036,7 @@ def build(dd):
             o.Visibility = False
             group.addObject(o)
     doc.recompute()
-    os.makedirs(HERE, exist_ok=True); os.makedirs(OUT, exist_ok=True)
+    os.makedirs(IMAGES, exist_ok=True); os.makedirs(OUT, exist_ok=True)
     if App.GuiUp:
         import ImportGui                                  # keeps the two bodies and their colours
         ImportGui.export(bodies, os.path.join(OUT, stem + '.step'))
@@ -1083,7 +1084,7 @@ def render(doc, pic):
     cups = [doc.getObject('SnapCup' + k) for k in cup_centres()]
     extras = [o for o in (doc.getObject('SnapDDScrew'), doc.getObject('SnapDoubleDouble')) if o is not None]
     proxy = doc.getObject('SnapDoubleDouble')
-    out = lambda name: os.path.join(HERE, '%s-%s.png' % (pic, name))
+    out = lambda name: os.path.join(IMAGES, '%s-%s.png' % (pic, name))
     housing.Visibility = True
     tops = [o for o in doc.RootObjects if o.TypeId == 'App::Part']
     saved = {o.Name: o.Visibility for o in tops}
@@ -1154,7 +1155,7 @@ def preview(doc, fname, names, cam, moves=None, turned=False, colours=None):
     view = Gui.getDocument(tmp.Name).ActiveView
     # fit again once the new view is up, or it can keep the clipping planes of the last scene
     view.setCameraOrientation(cam); view.fitAll(); Gui.updateGui(); view.fitAll(); Gui.updateGui()
-    view.saveImage(os.path.join(HERE, fname), 1600, 1600, 'Current')
+    view.saveImage(os.path.join(IMAGES, fname), 1600, 1600, 'Current')
     App.closeDocument(tmp.Name)
 
 

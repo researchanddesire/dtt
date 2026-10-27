@@ -4,15 +4,15 @@ A printed backplate the DTT module slides into and clicks onto. The module only
 loses its hook-and-loop backing. Mount the plate on three suction cups, or hang
 it on the wall bracket.
 
-![Hero](Snap-Backplate-Hero.png)
+![Hero](images/Snap-Backplate-Hero.png)
 
 | Backplate | Wall side | Side |
 | --- | --- | --- |
-| ![Part](Snap-Backplate-Hero-Part.png) | ![Rear](Snap-Backplate-Rear.png) | ![Side](Snap-Backplate-Side.png) |
+| ![Part](images/Snap-Backplate-Hero-Part.png) | ![Rear](images/Snap-Backplate-Rear.png) | ![Side](images/Snap-Backplate-Side.png) |
 
 | Wall bracket | Hanging the plate | On the bracket, wall side |
 | --- | --- | --- |
-| ![Bracket](Snap-Backplate-Wall-Bracket.png) | ![Exploded](Snap-Backplate-Bracket-Exploded.png) | ![Bracket rear](Snap-Backplate-Bracket-Rear.png) |
+| ![Bracket](images/Snap-Backplate-Wall-Bracket.png) | ![Exploded](images/Snap-Backplate-Bracket-Exploded.png) | ![Bracket rear](images/Snap-Backplate-Bracket-Rear.png) |
 
 ## Use
 
@@ -43,11 +43,11 @@ For the OSSM Double Double 24 mm threaded toy mount. A printed hex flange screw
 holds it 12.5 mm below the jack end, with a fourth cup below. Use a right-angle
 vibrator plug, or a straight one under 13.7 mm long.
 
-![Double Double](Snap-Backplate-Double-Double-Hero.png)
+![Double Double](images/Snap-Backplate-Double-Double-Hero.png)
 
 | Backplate | Screw | Screw in from the back | Toy mount on from the front |
 | --- | --- | --- | --- |
-| ![Part](Snap-Backplate-Double-Double-Hero-Part.png) | ![Screw](Snap-Backplate-Double-Double-Screw.png) | ![Pocket](Snap-Backplate-Double-Double-Exploded-Rear.png) | ![Exploded](Snap-Backplate-Double-Double-Exploded.png) |
+| ![Part](images/Snap-Backplate-Double-Double-Hero-Part.png) | ![Screw](images/Snap-Backplate-Double-Double-Screw.png) | ![Pocket](images/Snap-Backplate-Double-Double-Exploded-Rear.png) | ![Exploded](images/Snap-Backplate-Double-Double-Exploded.png) |
 
 - Push the screw into the hex pocket, flat toward the bottom cup.
 - Print the screw on its flat, black, no supports, at least 4 walls.
@@ -57,7 +57,7 @@ vibrator plug, or a straight one under 13.7 mm long.
 `build_snap_backplate.py` builds everything from `hardware/cad/DTT.FCStd`
 without modifying it. Every dimension and its basis is in `PARAMS`. Run it from
 the repository root with `freecad hardware/cad/snap-backplate/build_snap_backplate.py`.
-It writes an `.FCStd` for each version, the exports and these images.
+It writes an `.FCStd` for each version, the exports and the images in `images/`.
 
 ## Check on a test print
 
