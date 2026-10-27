@@ -76,6 +76,11 @@ PARAMS = {
     "usb_center": (20.95, -2.155),
     "usb_size": (12.6, 6.8),
     "usb_r": 3.0,
+    "usb_recess": (16.0, 10.0, 1.2),  # oval pocket around USB-C: width, height, depth
+    # Tab on the rear cover that splits the jack hole across its middle.
+    "jack_tab_w": 10.2,
+    "jack_tab_y1": 0.6,  # inner face, short of the PCB pocket
+    "tab_clear": 0.1,
 }
 P = PARAMS
 
@@ -160,7 +165,21 @@ def connector_cuts():
     jx, jz = P["jack_axis"]
     ux, uz = P["usb_center"]
     return [Part.makeCylinder(P["jack_d"] / 2, 6.0, V(jx, -3.5, jz), V(0, 1, 0)),
-            stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], 91.0, 97.0)]
+            stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], 91.0, 97.0),
+            usb_recess()]
+
+
+def usb_recess():
+    ux, uz = P["usb_center"]
+    w, h, d = P["usb_recess"]
+    y1 = P["outer"][3]
+    return stadium_y(ux, uz, w, h, h / 2 - 1e-3, y1 - d, y1 + 1)
+
+
+def jack_tab(grow=0.0):
+    jx, jz = P["jack_axis"]
+    w = P["jack_tab_w"] / 2 + grow
+    return box(jx - w, P["outer"][1] - 1, P["pcb_top_z"] - 0.01, jx + w, P["jack_tab_y1"] + grow, jz + grow)
 
 
 def build_housing(H, board):
@@ -289,6 +308,9 @@ def build_all(doc):
     housing, pcb = build_housing(H, board)
     slider = build_slider()
     cover = build_cover(pcb)
+    # The part of the end wall below the jack axis moves to the rear cover.
+    cover = cover.fuse(housing.common(jack_tab())).removeSplitter()
+    housing = housing.cut(jack_tab(P["tab_clear"])).removeSplitter()
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
     print("cover", cover.isValid(), len(cover.Solids), round(cover.Volume, 1))

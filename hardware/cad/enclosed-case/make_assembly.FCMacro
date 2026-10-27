@@ -203,6 +203,19 @@ def render(doc):
                     ("Enclosed-Switch-Side", (-1, -0.35, -0.35)), ("Enclosed-USB-End", (-0.4, -1, -0.35))]:
         camera(view, d)
         view.saveImage(os.path.join(IMAGES, name + ".png"), 1400, 1100, "White")
+    # Close-ups of the connector ends.
+    for name, d, target in [("Detail-Jack", (0.35, 1, -0.3), (B.P["jack_axis"][0], -0.6, B.P["jack_axis"][1])),
+                            ("Detail-USB", (0.35, -1, -0.3), (B.P["usb_center"][0], 94.6, B.P["usb_center"][1]))]:
+        camera(view, d)
+        cam = view.getCameraNode()
+        dv = V(*d)
+        dv.normalize()
+        p = V(*cam.position.getValue().getValue())
+        t = V(*target) - p
+        p = p + t - dv * t.dot(dv)  # slide sideways so the target is centred
+        cam.position.setValue(p.x, p.y, p.z)
+        cam.height.setValue(26)
+        view.saveImage(os.path.join(IMAGES, name + ".png"), 900, 700, "White")
     # Exploded view.
     ex = [o.Name for o in doc.getObject("ExplodedView").Group if o.Name.startswith("Exploded_")]
     show_only(doc, ex)

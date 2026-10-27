@@ -10,6 +10,7 @@ It replaces the loop backing.
 | <img src="images/Enclosed-Front.png" width="320"> | <img src="images/Enclosed-Rear.png" width="320"> |
 | <img src="images/Enclosed-Exploded.png" width="320"> | <img src="images/Enclosed-Switch-Side.png" width="320"> |
 | <img src="images/Part-SwitchCover.png" width="320"> | <img src="images/Part-RearCover.png" width="320"> |
+| <img src="images/Detail-Jack.png" width="320"> | <img src="images/Detail-USB.png" width="320"> |
 
 <img src="images/Enclosed-Sections.png" width="560">
 
