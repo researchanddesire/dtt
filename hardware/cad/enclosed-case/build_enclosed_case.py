@@ -39,6 +39,8 @@ PARAMS = {
     # Sloped sensor end of the original housing: z = z0 + k * (y - y0).
     "slope": (9.774, 1.2, 1.368),
     "wall_overlap": 0.6,  # bond depth into the original wall
+    "top_overlap": 2.0,  # in the top plate, past the original edge chamfer
+    "top_band_z": 12.4,  # just under the top plate (underside at 12.6)
     "pcb_edge_gap": 0.3,  # PCB edge to rear cover wall
     # Rear cover (a tray that holds the PCB).
     "cover_thickness": 3.0,  # floor under the PCB
@@ -167,7 +169,10 @@ def build_housing(H, board):
     # Fill between the original housing and the outer rectangle. Inside the
     # original wall keep the housing as it is, except above its sloped end,
     # where the fill thickens the slope so it meets the larger outline.
-    keep = ext(p0.makeOffset2D(-P["wall_overlap"]), zs - 1, zt).cut(above_slope(0.0))
+    keep = ext(p0.makeOffset2D(-P["wall_overlap"]), zs - 1, P["top_band_z"])
+    # The slope cut sits 0.3 mm inside the original slope so the two bond
+    # instead of meeting on one plane.
+    keep = keep.fuse(ext(p0.makeOffset2D(-P["top_overlap"]), P["top_band_z"], zt)).cut(above_slope(-0.3))
     fill = outer_upper().cut(keep)
     h = H.fuse(fill).common(box(-20, -20, zs, 70, 120, zt)).removeSplitter()
 
