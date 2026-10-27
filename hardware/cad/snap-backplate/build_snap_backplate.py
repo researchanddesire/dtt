@@ -16,6 +16,8 @@ that is part of the plate outline: two slots run from under the module out throu
 the flex zone is thinned from the front, and the full-thickness press tab carries grip grooves.
 The print is black; the touch point, the front of the press tab, is a 0.6 mm blue inlay kept as a
 separate body for two-colour printing. The grip grooves cut through it, so their bottoms are black.
+Instead of the cups, an optional one-piece wall bracket carries the three keyhole studs. It screws or
+sticks to the wall, and the plate hangs on it.
 
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
 PCB rear face is Z -5.1. The wall is at -Z; the part prints rear face down.
@@ -120,18 +122,25 @@ PARAMS = {
     'HeadD': (12.0, 'reference proxy (estimate)'),
     'HeadT': (1.8, 'reference proxy (estimate)'),
     'HeadGap': (0.4, 'reference proxy'),
-    # optional wall screws: countersunk through the bed on the centreline, hidden under the module
-    'ScrewLowY': (40.0, 'design: above the lower cup head (Y 34)'),
-    'ScrewHighY': (59.0, 'design: below the lever root ramp (Y 66)'),
+    # optional wall bracket in place of the cups: screwed or stuck to the wall, the plate hangs on its studs
+    'BracketT': (5.0, 'design: plate rear to wall; at the stop the tab end moves 3.3 mm toward the wall'),
+    'BracketInset': (1.0, 'design: bracket outline inside the plate outline'),
+    'BracketNotchClear': (1.0, 'design: notch around the lever and its slots, so the lever is free of the bracket'),
+    'BracketNotchR': (2.0, 'design: notch corners'),
+    'BracketEdgeR': (1.0, 'design: front outer edge'),
+    'BracketBedChamfer': (0.6, 'design: wall-side outer edge, against elephant foot'),
+    'StudNeckD': (8.4, 'design: in the 9 mm keyhole slot'),
+    'StudGap': (0.3, 'design: plate front to the start of the head'),
+    'StudHeadD': (11.0, 'design: passes the 14 mm keyhole entry; 45 deg underside prints without support'),
+    'StudChamfer': (0.3, 'design: stud top edge'),
+    'ScrewY': (46.0, 'design: between the lower keyhole (top Y 32.5) and the lever notch (Y 63.75)'),
+    'ScrewDX': (12.0, 'design: screws at X 21 +/- 12, behind the plate'),
     'ScrewClearD': (4.5, 'design: clears #6 (3.5 mm) and #8 (4.2 mm) drywall screws'),
     'ScrewCskD': (9.0, 'design: 90 deg countersink diameter'),
-    'ScrewSink': (0.4, 'design: counterbore above the countersink, so the head sits below the bed'),
+    'ScrewSink': (0.4, 'design: counterbore above the countersink, so the head sits below the bracket face'),
     'ScrewHeadD': (8.3, 'reference: #6 drywall screw bugle head (estimate)'),
     'ScrewShankD': (3.5, 'reference: #6 drywall screw'),
     'ScrewLen': (32.0, 'reference: 1-1/4 in drywall screw'),
-    'SpacerT': (4.0, 'design: wall spacer for screw mounting; at the stop the tab end moves 3.3 mm toward the wall'),
-    'SpacerTopY': (62.0, 'design: the spacer ends below the lever root (Y 66), so the lever is free of the wall'),
-    'SpacerCornerR': (3.0, 'design: top corners of the spacer'),
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
 
@@ -386,38 +395,52 @@ def keyholes():
 
 
 def screw_centres():
-    return [(P['DeviceCx'], P['ScrewLowY']), (P['DeviceCx'], P['ScrewHighY'])]
+    return [(P['DeviceCx'] - P['ScrewDX'], P['ScrewY']), (P['DeviceCx'] + P['ScrewDX'], P['ScrewY'])]
 
 
-def screw_holes():
-    """Clearance hole, 90 deg countersink and a short counterbore, cut from the front of the bed."""
-    zf, zr = z_front(), z_rear()
+def stud(x, y):
+    """Keyhole stud: a neck through the slot and a head with a 45 deg underside, so the bracket prints
+    upright without support. The top is level with the cup heads, so the lower one clears the PCB."""
+    zr, zf = z_rear(), z_front()
+    rn, rh, c = P['StudNeckD'] / 2, P['StudHeadD'] / 2, P['StudChamfer']
+    z0 = zf + P['StudGap']; zt = zf + P['HeadGap'] + P['HeadT']
+    pts = [(0, zr - 0.5), (rn, zr - 0.5), (rn, z0), (rh, z0 + rh - rn), (rh, zt - c), (rh - c, zt), (0, zt)]
+    face = Part.Face(Part.makePolygon([V(x + r, y, z) for r, z in pts + pts[:1]]))
+    return Part.Solid(face.revolve(V(x, y, 0), V(0, 0, 1), 360))
+
+
+def wall_bracket():
+    """One-piece bracket in place of the cups, so the three studs are aligned for you. It follows the
+    plate outline with a notch that leaves the lever free to move toward the wall, and has two
+    countersunk screw holes behind the plate. The flat rear also takes adhesive strips."""
+    zr = z_rear(); t = P['BracketT']; c = P['BracketNotchClear']
+    notch = box(P['LatchX0'] - P['LatchSlot'] - c, P['LatchX1'] + P['LatchSlot'] + c,
+                P['LatchRootY'] - P['LatchReliefD'] / 2 - c, FAR, zr - 1, zr + 1)
+    face = plan_face().makeOffset2D(-P['BracketInset'], join=0).cut(notch).Faces[0]
+    face = round_face(face, P['BracketNotchR'], P['BracketNotchR'])
+    body = face.extrude(V(0, 0, -t))
+    front = [e for e in body.Edges if abs(e.BoundBox.ZMin - zr) < 1e-6 and abs(e.BoundBox.ZMax - zr) < 1e-6]
+    body = try_fillet(body, front, (P['BracketEdgeR'], 0.6), 'bracket front edge')
+    back = [e for e in body.Edges if abs(e.BoundBox.ZMax - (zr - t)) < 1e-6]
+    try:
+        body = body.makeChamfer(P['BracketBedChamfer'], back)
+    except Exception as ex:
+        print('WARN bracket bed chamfer failed: %s' % ex)
     rc, rk, sink = P['ScrewClearD'] / 2, P['ScrewCskD'] / 2, P['ScrewSink']
-    zc = zf - sink - (rk - rc)                            # countersink meets the clearance hole
+    zc = zr - sink - (rk - rc)                            # countersink meets the clearance hole
     cuts = []
     for x, y in screw_centres():
-        cuts += [cyl(rc, x, y, zr - 1, zf + 1), Part.makeCone(rc, rk, rk - rc, V(x, y, zc)),
-                 cyl(rk, x, y, zf - sink, zf + 1)]
-    return cuts
-
-
-def wall_spacer():
-    """Flat spacer between the plate and the wall for screw mounting: the plate outline below the lever
-    root, with clearance holes for the screws. Without it the lever has no room to move toward the wall."""
-    zr = z_rear(); t = P['SpacerT']
-    clip = box(-FAR / 2, FAR / 2, -FAR / 2, P['SpacerTopY'], zr - 1, zr + 1)
-    face = [f for f in plan_face().common(clip).Faces][0]
-    face = round_face(face, 0, P['SpacerCornerR'])
-    spacer = face.extrude(V(0, 0, -t))
-    holes = [cyl(P['ScrewClearD'] / 2, x, y, zr - t - 1, zr + 1) for x, y in screw_centres()]
-    return spacer.cut(holes).removeSplitter()
+        cuts += [cyl(rc, x, y, zr - t - 1, zr + 1), Part.makeCone(rc, rk, rk - rc, V(x, y, zc)),
+                 cyl(rk, x, y, zr - sink, zr + 1)]
+    body = body.cut(cuts).removeSplitter()
+    return body.fuse([stud(x, y) for x, y in cup_centres().values()]).removeSplitter()
 
 
 def screw_shape(x, y):
-    """Seated drywall screw: 90 deg head (lifted 0.05 off the seat) and a plain shank into the wall."""
-    zf = z_front(); rc, rk, rh = P['ScrewClearD'] / 2, P['ScrewCskD'] / 2, P['ScrewHeadD'] / 2
+    """Seated drywall screw in the bracket: 90 deg head (lifted 0.05 off the seat), plain shank."""
+    zr = z_rear(); rk, rh = P['ScrewCskD'] / 2, P['ScrewHeadD'] / 2
     rs = P['ScrewShankD'] / 2
-    ztop = zf - P['ScrewSink'] - (rk - rh) + 0.05         # head top, where the countersink is head-sized
+    ztop = zr - P['ScrewSink'] - (rk - rh) + 0.05         # head top, where the countersink is head-sized
     head = Part.makeCone(rs, rh, rh - rs, V(x, y, ztop - (rh - rs)))
     shank = cyl(rs, x, y, ztop - P['ScrewLen'], ztop - (rh - rs) + 0.01)
     return head.fuse(shank).removeSplitter()
@@ -648,7 +671,6 @@ def printed_part():
         ex, ey = entry_centre(key)
         kboxes.append((sx - w, sx + w, ey - w, sy + P['KeySlotW'] / 2 + 0.1))
     body = fillet_edges_in(body, kboxes, P['KeyEdgeR'], zf, 'keyholes')
-    body = body.cut(screw_holes()).removeSplitter()
     body = body.cut(latch_cut()).removeSplitter()
     g = P['LatchSlot'] + 0.1
     body = fillet_edges_in(body, [(P['LatchX0'] - g - 2, P['LatchX1'] + g + 2, P['LatchRootY'] - 2,
@@ -673,8 +695,9 @@ def cup_shape(x, y):
     return outside.cut(inside).fuse([stem, head]).removeSplitter()
 
 
-def design_checks(printed, black, blue):
-    """Numbers worth reading after a change: keyhole webs, latch strain, overall size, colour split."""
+def design_checks(printed, black, blue, bracket):
+    """Numbers worth reading after a change: keyhole webs, latch strain, overall size, colour split,
+    wall bracket fit."""
     outline = plan_face()
     for key in cup_centres():
         sx, sy = cup_centres()[key]; ex, ey = entry_centre(key)
@@ -684,12 +707,21 @@ def design_checks(printed, black, blue):
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
     zf = z_front()
+    bb = bracket.BoundBox
+    print('CHECK bracket valid %s, solids %d, %.1f x %.1f x %.1f mm, volume %.1f cm3' % (
+        bracket.isValid(), len(bracket.Solids), bb.XLength, bb.YLength, bb.ZLength, bracket.Volume / 1000))
+    print('CHECK bracket overlap with the plate %.4f mm3' % bracket.common(printed).Volume)
+    for key, (x, y) in cup_centres().items():
+        print('CHECK stud %s gap to the plate %.2f mm' % (key, stud(x, y).distToShape(printed)[0]))
+    print('CHECK stud top to PCB rear %.2f mm' % (P['PCBRearZ'] - (zf + P['HeadGap'] + P['HeadT'])))
+    yc = P['StopY0'] + P['StopW'] / 2
+    tab = P['StopGap'] * lever_shape(plate_top()) / lever_shape(yc)
+    print('CHECK lever room: tab end moves %.2f mm toward the wall at the stop, bracket gives %.1f' % (tab, P['BracketT']))
     for x, y in screw_centres():
-        near = {'lower keyhole and cup head': y - P['ScrewCskD'] / 2 - (P['LowCupY'] + P['HeadD'] / 2),
-                'lever root': P['LatchRootY'] - (y + P['ScrewCskD'] / 2),
-                'skids': min(abs(x - a) for s in SKIDS for a in s) - P['ScrewCskD'] / 2}
-        print('CHECK screw (%.1f, %.1f): rim to %s' % (x, y, ', '.join('%s %.2f' % kv for kv in near.items())))
-    print('CHECK screw head top %.2f mm below the bed' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
+        print('CHECK screw (%.1f, %.1f): rim to lower keyhole %.2f, to lever notch %.2f' % (
+            x, y, y - P['ScrewCskD'] / 2 - (P['LowCupY'] + P['KeySlotW'] / 2),
+            P['LatchRootY'] - P['LatchReliefD'] / 2 - P['BracketNotchClear'] - (y + P['ScrewCskD'] / 2)))
+    print('CHECK screw head top %.2f mm below the bracket face' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
     d_teeth, s_stop, sigma = stop_checks()
@@ -738,7 +770,8 @@ def main():
             o.Visibility = False
     printed = printed_part()
     black, blue = split_colours(printed)
-    design_checks(printed, black, blue)
+    bracket = wall_bracket()
+    design_checks(printed, black, blue, bracket)
     group = doc.addObject('App::Part', 'SnapBackplate'); group.Label = 'Snap backplate'
     parameter_sheet(doc)
     bodies = [tagged(doc, 'SnapBackplatePrinted', 'Snap backplate - printed, black', black, PLATE_COLOUR),
@@ -747,13 +780,15 @@ def main():
         group.addObject(o)
     for key, (x, y) in cup_centres().items():
         group.addObject(tagged(doc, 'SnapCup' + key, 'Suction cup %s (proxy)' % key, cup_shape(x, y), CUP_COLOUR, 35))
-    for key, (x, y) in zip(('L', 'U'), screw_centres()):
-        group.addObject(tagged(doc, 'SnapScrew' + key, 'Wall screw %s (optional, proxy)' % key, screw_shape(x, y),
-                               SCREW_COLOUR))
-    spacer = wall_spacer()
-    sp = tagged(doc, 'SnapWallSpacer', 'Wall spacer (screw mounting, replaces the cups)', spacer, PLATE_COLOUR)
-    sp.Visibility = False                                  # it takes the place of the cups
-    group.addObject(sp)
+    # the bracket and its screws take the place of the cups, so they start hidden
+    br = tagged(doc, 'SnapWallBracket', 'Wall bracket (in place of the cups; screws or adhesive strips)', bracket,
+                PLATE_COLOUR)
+    br.Visibility = False
+    group.addObject(br)
+    for key, (x, y) in zip(('L', 'R'), screw_centres()):
+        o = tagged(doc, 'SnapScrew' + key, 'Wall screw %s (bracket, proxy)' % key, screw_shape(x, y), SCREW_COLOUR)
+        o.Visibility = False
+        group.addObject(o)
     doc.recompute()
     os.makedirs(HERE, exist_ok=True); os.makedirs(OUT, exist_ok=True)
     if App.GuiUp:
@@ -761,9 +796,9 @@ def main():
         ImportGui.export(bodies, os.path.join(OUT, 'DTT-Snap-Backplate.step'))
     else:
         Part.makeCompound([black, blue]).exportStep(os.path.join(OUT, 'DTT-Snap-Backplate.step'))
-    spacer.exportStep(os.path.join(OUT, 'DTT-Snap-Backplate-Wall-Spacer.step'))
+    bracket.exportStep(os.path.join(OUT, 'DTT-Snap-Backplate-Wall-Bracket.step'))
     import MeshPart
-    for shape, suffix in ((printed, ''), (black, '-Black'), (blue, '-Blue'), (spacer, '-Wall-Spacer')):
+    for shape, suffix in ((printed, ''), (black, '-Black'), (blue, '-Blue'), (bracket, '-Wall-Bracket')):
         MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.02, AngularDeflection=0.2, Relative=False).write(
             os.path.join(OUT, 'DTT-Snap-Backplate%s.stl' % suffix))
     if App.GuiUp:
@@ -786,9 +821,6 @@ def render(doc):
     housing.Visibility = True
     tops = [o for o in doc.RootObjects if o.TypeId == 'App::Part']
     saved = {o.Name: o.Visibility for o in tops}
-    screws = [o for o in doc.Objects if o.Name.startswith('SnapScrew')]
-    for o in screws:                                      # optional; the previews show the cups
-        o.Visibility = False
     # standard previews (same set as the baseline concept)
     shell.ViewObject.Transparency = 55
     view.viewIsometric(); view.fitAll()
@@ -830,8 +862,6 @@ def render(doc):
     for n, v in saved.items():
         doc.getObject(n).Visibility = v
     housing.Visibility = True
-    for o in screws:
-        o.Visibility = True
 
 
 if __name__ == '__main__' or True:

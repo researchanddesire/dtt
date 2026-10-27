@@ -2,8 +2,8 @@
 
 A printed backplate with a track that the unmodified DTT module slides into,
 held by a sprung printed release lever. The plate holds three suction cups, two
-upper and one lower, or screws to the wall with two optional countersunk
-drywall screws. The module needs no changes beyond removing the
+upper and one lower, or hangs on an optional printed wall bracket that is
+screwed or stuck to the wall. The module needs no changes beyond removing the
 hook-and-loop backing. The toy's own suction base sticks straight to the
 mounting surface and does not touch the plate.
 
@@ -18,7 +18,8 @@ CAD previews: [assembled](Snap-Backplate-Assembled.png), [front](Snap-Backplate-
 ## Files
 
 - [DTT-Snap-Backplate-Concept.FCStd](DTT-Snap-Backplate-Concept.FCStd): the DTT
-  assembly with the `Snap backplate` part, cup and wall screw proxies and a
+  assembly with the `Snap backplate` part, cup proxies, the wall bracket with
+  its screw proxies (hidden, since it replaces the cups) and a
   `Snap backplate parameters` sheet listing every value and its basis.
 - [build_snap_backplate.py](build_snap_backplate.py): builds the concept from
   `hardware/cad/DTT.FCStd`, which it does not modify, and renders the previews.
@@ -31,8 +32,8 @@ CAD previews: [assembled](Snap-Backplate-Assembled.png), [front](Snap-Backplate-
   - `DTT-Snap-Backplate-Black.stl` and `DTT-Snap-Backplate-Blue.stl`: the two
     colours, for a two-colour print.
   - `DTT-Snap-Backplate.stl`: the whole part, for a one-colour print.
-  - `DTT-Snap-Backplate-Wall-Spacer` (STEP and STL): the spacer for screw
-    mounting.
+  - `DTT-Snap-Backplate-Wall-Bracket` (STEP and STL): the wall bracket, for
+    mounting without the cups.
 
 ## Form
 
@@ -93,7 +94,7 @@ side elevation, with the module cavity cut out of it.
   out toward the USB-C end.
 - The jack, USB-C, side switch and buttons stay open.
 
-## Plate, cups and wall screws
+## Plate, cups and wall bracket
 
 - Plate 4 mm thick, about 79 x 112 mm overall.
 - Upper cup stems at X 21 ± 28, Y 97, in the wings beside the module's USB-C
@@ -103,16 +104,27 @@ side elevation, with the module cavity cut out of it.
   at the closed ends. Keyhole web to the plate edge is 3.5 mm for the upper
   keyholes.
 - Fit the cups before sliding the module in.
-- Optional wall screws: two countersunk holes on the centreline of the bed, at
-  Y 40 and Y 59, between the skids. They take #6 (3.5 mm) or #8 (4.2 mm)
-  drywall screws: 4.5 mm clearance hole, 90° countersink Ø9, with a 0.4 mm
-  counterbore above it so a #6 head sits 0.7 mm below the bed. Screw the
-  plate on before sliding the module in. The module then covers the screws.
-- Use either the cups or the screws. For screws, fit the 4 mm wall spacer
-  behind the plate instead of the cups. It follows the plate outline below the
-  lever root (Y 62), so the lever stays clear of the wall. The tab end moves up
-  to 3.3 mm toward the wall before the stop lands. Use screws of at least 32 mm
-  (1-1/4 in).
+- Wall bracket, in place of the cups: one 5 mm printed piece that carries a
+  stud for each of the three keyholes, so their spacing is fixed for you.
+  - It follows the plate outline 1 mm inside it, so it hides behind the plate.
+    A notch leaves the lever and its slots free (X 6.5-35.5, from Y 63.75), so
+    the lever can move toward the wall. The tab end moves up to 3.3 mm before
+    the stop lands, and the bracket gives it 5 mm.
+  - Each stud has a Ø8.4 neck in the 9 mm keyhole slot and a Ø11 head. The
+    head's underside is a 45° cone that starts 0.3 mm in front of the plate.
+    The stud tops are level with the cup heads, so the lower one is 0.4 mm
+    under the PCB.
+  - Fix it with two #6 or #8 drywall screws at X 21 ± 12, Y 46: Ø4.5 holes
+    with a 90° countersink Ø9 and a 0.4 mm counterbore, so a #6 head sits
+    0.7 mm below the bracket face. Use screws of at least 25 mm (1 in). The
+    plate covers the screws.
+  - Or stick it up with adhesive picture-hanging strips (such as Command
+    strips) on the flat rear instead of the screws. The body below the notch
+    is about 46 x 63 mm. Run the strips up from the bottom edge, with the pull
+    tabs hanging below it, so they can be pulled once the plate is lifted off.
+  - Fit the bracket level, hang the plate on the studs (heads through the
+    entries, then down 12 mm), and slide the module in. Lift the plate 12 mm to
+    take it off.
 
 | Parameter | Value | Basis |
 | --- | --- | --- |
@@ -129,9 +141,10 @@ side elevation, with the module cavity cut out of it.
 | Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
 | Blue touch point | X 9-33, Y 99.5 to the top edge, 0.6 deep from the front | design |
 | Grip grooves | 4 at 2.0 pitch, 1.0 wide, 0.9 deep | design |
-| Wall screws | X 21, Y 40 and 59; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
+| Wall bracket | 5.0 thick, plate outline inset 1.0, lever notch with 1.0 clearance | design |
+| Studs | neck Ø8.4, 0.3 to the head, head Ø11 with a 45° underside, top level with the cup heads | design |
+| Bracket screws | X 21 ± 12, Y 46; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
 | Screw | #6 drywall, head Ø8.3, shank Ø3.5 | reference (estimate) |
-| Wall spacer | 4.0 thick, plate outline to Y 62, Ø4.5 screw holes | design |
 
 Every value and its basis is in `PARAMS` in the builder.
 
@@ -139,15 +152,17 @@ Every value and its basis is in `PARAMS` in the builder.
 
 - The printed part is one valid solid. The black and blue bodies are one valid
   solid each and add up to it exactly.
-- At rest there are no intersections with the housing, PCB, PCB screws, cups
-  or wall screws. The lower wall screw passes through the lower cup's place,
-  since the two are alternatives. Smallest gaps: track to housing 0.2 mm,
-  lower cup head to PCB 0.4 mm, cup heads to plate 0.4 mm. The skids touch the
-  PCB rear by design. Seated wall screw heads sit 0.7 mm below the bed.
+- At rest there are no intersections with the housing, PCB or PCB screws,
+  with either the cups or the wall bracket and its screws in place. Smallest
+  gaps: track to housing 0.2 mm, lower cup head or lower stud to PCB 0.4 mm,
+  cup heads to plate 0.4 mm, studs to plate 0.3 mm. The skids touch the PCB
+  rear by design, and the bracket face touches the plate rear. Seated bracket
+  screw heads sit 0.7 mm below the bracket face.
+- The wall bracket is one valid solid.
 - Sweep check: the module was stepped out along the track in 3 mm steps over
   its full travel (0-96 mm). Nothing it carries below the housing collides with
-  the plate, track, cups or seated wall screws. The only contact is with the
-  release lever, which is meant to deflect.
+  the plate, track, cups or wall bracket. The only contact is with the release
+  lever, which is meant to deflect.
 
 ## Needs physical checks
 
@@ -162,8 +177,10 @@ Every value and its basis is in `PARAMS` in the builder.
 - The USB-C plug overmold fits in the 13 mm gap between the teeth.
 - Plate thickness and cup stem and head sizes against the real cups, and
   suction hold on a wall.
-- Wall screw heads seat below the bed. Drywall bugle heads are not exactly 90°;
-  tune `ScrewCskD` and `ScrewSink`.
+- The plate hangs on the bracket studs without rattling (tune `StudGap`), and
+  the stud heads print cleanly. Bracket screw heads seat below the face.
+  Drywall bugle heads are not exactly 90°; tune `ScrewCskD` and `ScrewSink`.
+- Adhesive strips hold the bracket, plate and module on the intended walls.
 
 ## Printing
 
@@ -172,7 +189,8 @@ lever's rear stays on the bed. The overhangs are the 0.6 mm lips (45°/55°), th
 hood lip, which runs parallel to the housing slope at 54°, and the 0.6 mm bed
 chamfer. The lever pockets over the stop fingers are 5 mm bridges.
 
-Print the wall spacer flat, in black.
+Print the wall bracket flat, wall side down, in black. The studs print
+upright with no supports.
 
 For two colours, load `DTT-Snap-Backplate-Black.stl` and
 `DTT-Snap-Backplate-Blue.stl` together as one object with two parts, and give
