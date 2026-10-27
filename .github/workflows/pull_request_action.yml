@@ -28,7 +28,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install PlatformIO Core
-        run: pip install --upgrade platformio
+        run: pip install platformio==6.2.0
 
       - name: Check PlatformIO Project
         run: |
@@ -50,6 +50,7 @@ jobs:
         run: |
           python test/security_dashboard_transport/test_source_behaviour.py --prepare-reply-dependency
           python test/security_dashboard_transport/test_source_behaviour.py
+          python test/security_firmware_provenance/test_response.py
 
       - name: Test captive portal isolation and deadlines
         run: python test/native_wifi_portal/test_portal_safety.py

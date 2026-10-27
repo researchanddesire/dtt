@@ -7,6 +7,7 @@
 #include <esp_ota_ops.h>
 
 #include "FirmwareProvenance.h"
+#include "FirmwareProvenanceResponse.h"
 #include "constants/Version.h"
 #include "input.h"
 #include "services/board.hpp"
@@ -335,6 +336,13 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
     }
 
     if (operation == "sensor.read" || operation == "setting.read") {
+        if (path == "device.firmwareProvenance") {
+            const auto snapshot = firmware::provenance::runningSnapshot(
+                FIRMWARE_TRACK, "dtt", VERSION, FIRMWARE_BUILD_SHA);
+            const auto reply = firmware::provenance::response(snapshot, args);
+            return reply.ok ? radble::Result::success(reply.json.c_str())
+                            : radble::Result::failure(reply.code, reply.message);
+        }
 #ifndef PROVISION
         if (path == "connectivity.settings")
             return settingsFetchDiagnostic(args);
@@ -436,15 +444,6 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             document["value"] = serialNumber;
         else if (path == "device.alphaChannel")
             document["value"] = isAlphaVersion;
-        else if (path == "device.firmwareProvenance") {
-            const auto snapshot = firmware::provenance::runningSnapshot(
-                FIRMWARE_TRACK, "dtt", VERSION, FIRMWARE_BUILD_SHA);
-            document["origin"] = snapshot.origin;
-            document["keyId"] = snapshot.keyId;
-            document["provenanceId"] = snapshot.provenanceId;
-            document["imageSha256"] = snapshot.imageSha256;
-            document["compactJws"] = snapshot.token;
-        }
         else return radble::Result::failure("unknown_path", "Unknown resource path");
         String output;
         serializeJson(document, output);
