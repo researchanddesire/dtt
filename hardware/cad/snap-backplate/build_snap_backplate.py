@@ -965,7 +965,14 @@ def tagged(doc, name, label, shape, colour=None, transparency=0):
     o.addProperty('App::PropertyString', 'Concept', TAG, 'Created by build_snap_backplate.py'); o.Concept = TAG
     if colour and App.GuiUp:
         o.ViewObject.ShapeColor = colour; o.ViewObject.Transparency = transparency
+        fine_mesh(o)
     return o
+
+
+def fine_mesh(o):
+    """Display tessellation fine enough for small rounds on a long part: the default, relative to the
+    part's size, draws R1 rounds and the thread as jagged spikes."""
+    o.ViewObject.Deviation = 0.05; o.ViewObject.AngularDeflection = 5
 
 
 def parameter_sheet(doc):
@@ -1013,7 +1020,7 @@ def build(dd):
         group.addObject(tagged(doc, 'SnapDDScrew', 'Double Double screw - printed, black', dd_placed(screw),
                                PLATE_COLOUR))
         group.addObject(tagged(doc, 'SnapDoubleDouble', 'OSSM Double Double 24mm Threaded (proxy)',
-                               double_double_proxy(), CUP_COLOUR, 35))
+                               double_double_proxy(), CUP_COLOUR))
     else:
         # the bracket and its screws take the place of the cups, so they start hidden
         br = tagged(doc, 'SnapWallBracket', 'Wall bracket (in place of the cups; screws or adhesive strips)',
@@ -1138,11 +1145,12 @@ def preview(doc, fname, names, cam, moves=None, turned=False, colours=None):
         if colours and n in colours:
             o.ViewObject.ShapeColor = colours[n]
         o.ViewObject.Transparency = src.ViewObject.Transparency
-        o.ViewObject.DisplayMode = 'Shaded'
+        o.ViewObject.DisplayMode = 'Shaded'; fine_mesh(o)
     tmp.recompute()
     Gui.ActiveDocument = Gui.getDocument(tmp.Name)
     view = Gui.getDocument(tmp.Name).ActiveView
-    view.setCameraOrientation(cam); view.fitAll(); Gui.updateGui()
+    # fit again once the new view is up, or it can keep the clipping planes of the last scene
+    view.setCameraOrientation(cam); view.fitAll(); Gui.updateGui(); view.fitAll(); Gui.updateGui()
     view.saveImage(os.path.join(HERE, fname), 1600, 1600, 'Current')
     App.closeDocument(tmp.Name)
 
@@ -1170,7 +1178,7 @@ def render_double_double(doc, pic):
     preview(doc, pic + '-Screw.png', ['SnapDDScrew'],
             App.Rotation(V(0, 1, 0), 70).multiply(App.Rotation(V(1, 0, 0), -18)), colours=grey)
     preview(doc, pic + '-Exploded.png', names,
-            App.Rotation(V(0, 1, 0), 62).multiply(App.Rotation(V(1, 0, 0), -12)), moves=apart, colours=grey)
+            App.Rotation(V(0, 1, 0), 50).multiply(App.Rotation(V(1, 0, 0), -15)), moves=apart, colours=grey)
     preview(doc, pic + '-Exploded-Rear.png', names[:3],
             App.Rotation(V(0, 1, 0), -35).multiply(App.Rotation(V(1, 0, 0), -20)),
             moves={'SnapDDScrew': V(0, 0, -40)}, turned=True, colours=grey)
