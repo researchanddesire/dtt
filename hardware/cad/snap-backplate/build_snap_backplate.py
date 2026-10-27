@@ -20,6 +20,11 @@ separate body for two-colour printing. The grip grooves cut through it, so their
 Instead of the cups, an optional one-piece wall bracket carries the three keyhole studs. It screws or
 sticks to the wall, and the plate hangs on it.
 
+The same run builds a Double Double version for the OSSM Double Double toy mount. Its plate runs on
+past the jack end to a boss. A printed hex flange screw with the OSSM 24 mm thread sits in a hex pocket
+from the rear, so it cannot turn, and the Double Double threads onto it from the front. A fourth cup
+sits below the screw.
+
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
 PCB rear face is Z -5.1. The wall is at -Z; the part prints rear face down.
 """
@@ -147,8 +152,29 @@ PARAMS = {
     'ScrewHeadD': (8.3, 'reference: #6 drywall screw bugle head (estimate)'),
     'ScrewShankD': (3.5, 'reference: #6 drywall screw'),
     'ScrewLen': (32.0, 'reference: 1-1/4 in drywall screw'),
+    # Double Double version: a printed screw with the OSSM 24 mm thread, in a hex pocket from the rear
+    'DDGap': (25.0, 'design (Lucy): holder bottom to the Double Double base, room for the 3.5 mm plug'),
+    'DDBaseD': (33.0, 'reference (measured): OSSM Double Double 24mm Threaded base'),
+    'DDThreadDepth': (21.0, 'reference (measured): Double Double internal thread depth'),
+    'ThreadMajorD': (23.5, 'reference (measured): OSSM 24 mm clamping thread crest'),
+    'ThreadRootD': (19.74, 'reference (measured)'),
+    'ThreadPitch': (3.0, 'reference (measured): 60 deg flanks'),
+    'ThreadCrest': (0.45, 'reference (measured): crest flat'),
+    'ThreadFlat': (11.0, 'reference (measured): print flat 11 mm off the axis, as on the OSSM part, so the screw prints on its side'),
+    'ThreadOut': (15.0, 'design (Lucy): thread standing out of the boss'),
+    'DDScrewHexAF': (26.0, 'design: hex in the pocket, wide enough for the thread to pass through'),
+    'DDScrewSeatD': (36.0, 'design: flange, a 45 deg cone seat flush with the plate rear'),
+    'DDScrewSeatH': (3.0, 'design'),
+    'DDScrewHexH': (7.0, 'design: plate rear to the hex chamfer'),
+    'DDScrewChamferH': (3.0, 'design: 45 deg from the hex down to the thread, so the pocket roof needs no bridge'),
+    'DDPocketClear': (0.1, 'design: tight, so the screw cannot turn; tune on a test print'),
+    'DDHoleClear': (0.35, 'design: thread hole in the boss top, radial'),
+    'DDBossD': (38.0, 'design: boss on the plate front under the Double Double base'),
+    'DDBossT': (6.0, 'design: boss height; with the 4 mm plate the screw sits in 10 mm'),
+    'DDCupDrop': (30.0, 'design: fourth cup stem below the screw axis; its head recess clears the boss'),
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
+DD = False   # True while main() builds the Double Double version
 
 # Housing side profile: (y0, y1, outer x left, outer x right, chamfer start z, chamfer inset)
 SECTIONS = {'bottom': (4.0, 24.0, 2.0, 40.0, 13.18, 0.99),
@@ -226,13 +252,20 @@ def flat_face(solids, z):
 
 def cup_centres():
     cx, yt = P['DeviceCx'], plate_top() - P['TopCupDrop']
-    return {'UL': (cx - P['TopCupX'], yt), 'UR': (cx + P['TopCupX'], yt),
-            'L': (cx, P['LowCupY'])}
+    cups = {'UL': (cx - P['TopCupX'], yt), 'UR': (cx + P['TopCupX'], yt), 'L': (cx, P['LowCupY'])}
+    if DD:
+        cups['D'] = (cx, dd_axis()[1] - P['DDCupDrop'])
+    return cups
 
 
 def entry_centre(key):
     sx, sy = cup_centres()[key]
-    return sx, sy - (P['LowSlot'] if key == 'L' else P['TopSlot'])
+    return sx, sy - (P['TopSlot'] if key in ('UL', 'UR') else P['LowSlot'])
+
+
+def dd_axis():
+    """Double Double screw axis (X, Y): on the centreline, with the base DDGap below the hood."""
+    return P['DeviceCx'], y_end() - P['DDGap'] - P['DDBaseD'] / 2
 
 
 def outer_x(side):
@@ -256,6 +289,10 @@ def plan_face():
     t = 1.0
     parts = [box(xl, xr, y_end(), top, zr, zr + t), box(wx0, wx1, uly, top, zr, zr + t),
              cyl(re, ulx, uly, zr, zr + t), cyl(re, urx, uly, zr, zr + t)]
+    if DD:   # the body runs on to a round end around the screw, then a lobe around the fourth keyhole
+        ay = dd_axis()[1]; dx, dy = entry_centre('D'); rl = P['KeyEntryD'] / 2 + P['WingWeb']
+        parts += [box(xl, xr, ay, y_end() + 1, zr, zr + t), cyl((xr - xl) / 2, (xl + xr) / 2, ay, zr, zr + t),
+                  box(dx - rl, dx + rl, dy, ay, zr, zr + t), cyl(rl, dx, dy, zr, zr + t)]
     return round_face(flat_face(parts, zr), P['FlareR'], P['CornerR'])
 
 
@@ -297,7 +334,11 @@ def elevation_solid():
              Part.LineSegment(P3(e['s1']), P3(e['far'])), Part.LineSegment(P3(e['far']), P3(e['far_low'])),
              Part.LineSegment(P3(e['far_low']), P3(e['start']))]
     wire = Part.Wire([g.toShape() for g in edges])
-    return Part.Face(wire).extrude(V(xb - xa, 0, 0))
+    s = Part.Face(wire).extrude(V(xb - xa, 0, 0))
+    if DD:   # the hood ends in a step at its outer face and the plate runs on past it
+        ye, zr, zf = y_end(), z_rear(), z_front()
+        s = s.cut(box(xa, xb, -FAR, ye, -FAR, FAR)).fuse(box(xa, xb, -FAR, ye, zr - 1, zf)).removeSplitter()
+    return s
 
 
 def _vertical(face):
@@ -312,11 +353,18 @@ def sleeve_blank():
     """Plan outline x side elevation, with the outer top edge filleted and the bed edge chamfered."""
     zr = z_rear()
     blank = plan_face().extrude(V(0, 0, z_wall_top() + 2 - zr)).common(elevation_solid()).removeSplitter()
+    if DD:
+        ax, ay = dd_axis()
+        blank = blank.fuse(cyl(P['DDBossD'] / 2, ax, ay, z_front() - 1, z_front() + P['DDBossT'])).removeSplitter()
     top_edges, bed_edges = [], []
+    ye, zf = y_end(), z_front()
     for e in blank.Edges:
         faces = blank.ancestorsOfType(e, Part.Face)
         if len(faces) != 2:
             continue
+        b = e.BoundBox
+        if DD and max(abs(b.YMin - ye), abs(b.YMax - ye), abs(b.ZMin - zf), abs(b.ZMax - zf)) < 1e-6:
+            continue   # the hood step's foot stays sharp: a round there is tangent to the plug opening's floor
         vert = [_vertical(f) for f in faces]
         if vert.count(True) != 1:
             continue
@@ -398,7 +446,8 @@ def jack_opening():
     zf = z_front(); x0, x1 = P['JackOpenX0'], P['JackOpenX1']
     pts = [V(x0, -6.0, zf), V(x1, -6.0, zf), V(x1, -6.0, z_wall_top() + 6), V(x0, -6.0, z_wall_top() + 6)]
     face = Part.Face(Part.makePolygon(pts + [pts[0]]))
-    face = face.makeOffset2D(-P['JackOpenR'], join=0).makeOffset2D(P['JackOpenR'], join=0)
+    if not DD:   # where the plate runs on, round corners would meet it at a tangent and spoil the mesh
+        face = face.makeOffset2D(-P['JackOpenR'], join=0).makeOffset2D(P['JackOpenR'], join=0)
     # the convex rounding also rounds the top corners, which are outside the part; keep the bottom flat
     return face.extrude(V(0, P['DeviceBottomY'] + P['HookEngage'] + 1.0 + 6.0, 0))
 
@@ -754,6 +803,8 @@ def printed_part():
         ex, ey = entry_centre(key)
         kboxes.append((sx - w, sx + w, ey - w, sy + w))
     body = fillet_edges_in(body, kboxes, P['KeyEdgeR'], zf, 'keyholes')
+    if DD:
+        body = body.cut(dd_pocket()).removeSplitter()
     body = body.cut(latch_cut()).removeSplitter()
     g = P['LatchSlot'] + 0.1
     body = fillet_edges_in(body, [(P['LatchX0'] - g - 2, P['LatchX1'] + g + 2, P['LatchRootY'] - 2,
@@ -780,6 +831,89 @@ def cup_shape(x, y):
     return outside.cut(inside).fuse([stem, groove, head]).removeSplitter()
 
 
+def revolved(rz):
+    """Solid of revolution about Z from a closed (r, z) profile."""
+    pts = [V(r, 0, z) for r, z in rz]
+    return Part.Face(Part.makePolygon(pts + [pts[0]])).revolve(V(0, 0, 0), V(0, 0, 1), 360)
+
+
+def hex_prism(af, z0, z1):
+    """Hex about Z with flats facing +-Y."""
+    rc = af / 2 / math.cos(math.radians(30))
+    pts = [V(rc * math.cos(math.radians(a)), rc * math.sin(math.radians(a)), z0) for a in range(0, 360, 60)]
+    return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(V(0, 0, z1 - z0))
+
+
+def thread_solid(z0, z1):
+    """OSSM 24 mm thread about Z from z0 to z1, with a 45 deg lead-in at z1. Rebuilt from the measured
+    profile: the OSSM STEP self-intersects, so it can't be cut. The ridge is trimmed by one solid of
+    revolution before the core goes in; trimming the fused thread leaves it invalid."""
+    rc, rr, p = P['ThreadMajorD'] / 2, P['ThreadRootD'] / 2, P['ThreadPitch']
+    a = P['ThreadCrest'] / 2; b = a + (rc - rr) * math.tan(math.radians(30)); ri = rr - 0.4
+    h0, h1 = z0 - 2 * p, z1 + 2 * p
+    helix = Part.makeHelix(p, h1 - h0, rr); helix.translate(V(0, 0, h0))
+    prof = Part.makePolygon([V(ri, 0, h0 - b), V(rr, 0, h0 - b), V(rc, 0, h0 - a), V(rc, 0, h0 + a),
+                             V(rr, 0, h0 + b), V(ri, 0, h0 + b), V(ri, 0, h0 - b)])
+    pipe = Part.BRepOffsetAPI.MakePipeShell(Part.Wire(helix))
+    pipe.setBiNormalMode(V(0, 0, 1)); pipe.add(prof, False, False); pipe.build(); pipe.makeSolid()
+    li = rc - rr + 0.3
+    env = revolved([(0, z0), (rc + 1, z0), (rc + 1, z1 - li - 1), (rr - 0.3, z1), (0, z1)])
+    core = revolved([(0, z0), (rr + 0.01, z0), (rr + 0.01, z1 - 0.31), (rr - 0.3, z1), (0, z1)])
+    return pipe.shape().Solids[0].common(env).fuse(core).removeSplitter()
+
+
+def dd_screw_head(c=0.0):
+    """Screw head about its own axis Z, z 0 at the plate rear: a 45 deg cone flange flush with the rear,
+    the hex, then a 45 deg chamfer from the hex down to the thread. c grows it into the pocket."""
+    af = P['DDScrewHexAF'] + 2 * c; rh = af / 2 / math.cos(math.radians(30)); rs = P['DDScrewSeatD'] / 2 + c
+    hs, hh, hc = P['DDScrewSeatH'], P['DDScrewHexH'], P['DDScrewChamferH']
+    z0 = -1.0 if c else 0.0                               # the pocket runs out through the rear face
+    seat = revolved([(0, z0), (rs - z0, z0), (rs - hs, hs), (0, hs)])
+    cham = hex_prism(af, hh, hh + hc).common(revolved([(0, hh), (rh, hh), (rh - hc, hh + hc), (0, hh + hc)]))
+    return seat.fuse([hex_prism(af, z0, hh), cham]).removeSplitter()
+
+
+def dd_screw():
+    """The printed screw about its own axis Z, z 0 at the plate rear, with the print flat on -Y."""
+    tip = P['PlateT'] + P['DDBossT'] + P['ThreadOut']
+    s = dd_screw_head().fuse(thread_solid(P['DDScrewHexH'] - 1.0, tip)).removeSplitter()
+    return s.common(box(-50, 50, -P['ThreadFlat'], 50, -10, tip + 10)).removeSplitter()
+
+
+def dd_placed(shape):
+    ax, ay = dd_axis()
+    return shape.translated(V(ax, ay, z_rear()))
+
+
+def dd_pocket():
+    """Hex pocket from the rear for the screw head, with the screw's print flat, and the thread hole out
+    through the boss top."""
+    ax, ay = dd_axis(); c = P['DDPocketClear']
+    hole = cyl(P['ThreadMajorD'] / 2 + P['DDHoleClear'], ax, ay, z_rear() + P['DDScrewHexH'], z_front() + P['DDBossT'] + 1)
+    head = dd_screw_head(c).common(box(-50, 50, -P['ThreadFlat'] - c, 50, -10, 50))
+    return dd_placed(head).fuse(hole)
+
+
+def double_double_proxy():
+    """OSSM Double Double 24mm Threaded (proxy of its STL): base on the boss, thread bore, neck, shaft."""
+    r, rb = P['DDBaseD'] / 2, P['ThreadMajorD'] / 2 + 0.42
+    body = revolved([(0, 0), (r, 0), (r, 22.0), (11.0, 33.0), (11.0, 116.75), (0, 116.75)])
+    body = body.cut(Part.makeCylinder(rb, P['DDThreadDepth'] + 1, V(0, 0, -1)))
+    ax, ay = dd_axis()
+    return body.translated(V(ax, ay, z_front() + P['DDBossT']))
+
+
+def dd_checks(printed, screw):
+    ax, ay = dd_axis(); dd = double_double_proxy()
+    print('CHECK screw valid %s, solids %d, %.1f cm3; thread out of the boss %.1f mm, Double Double takes %.0f' % (
+        screw.isValid(), len(screw.Solids), screw.Volume / 1000, P['ThreadOut'], P['DDThreadDepth']))
+    print('CHECK screw in its pocket: overlap %.4f mm3 (it seats on the pocket shoulder, %.2f mm clear at the sides)' % (
+        screw.common(printed).Volume, P['DDPocketClear']))
+    print('CHECK Double Double on the boss: overlap %.4f mm3, gap %.2f mm; base edge %.1f mm below the hood' % (
+        dd.common(printed).Volume, dd.distToShape(printed)[0], y_end() - (ay + P['DDBaseD'] / 2)))
+    print('CHECK Double Double to the screw: overlap %.4f mm3' % dd.common(screw).Volume)
+
+
 def design_checks(printed, black, blue, bracket):
     """Numbers worth reading after a change: keyhole webs, latch strain, overall size, colour split,
     wall bracket fit."""
@@ -792,22 +926,23 @@ def design_checks(printed, black, blue, bracket):
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
     zf = z_front()
-    bb = bracket.BoundBox
-    print('CHECK bracket valid %s, solids %d, %.1f x %.1f x %.1f mm, volume %.1f cm3' % (
-        bracket.isValid(), len(bracket.Solids), bb.XLength, bb.YLength, bb.ZLength, bracket.Volume / 1000))
-    print('CHECK bracket overlap with the plate %.4f mm3' % bracket.common(printed).Volume)
-    for key, (x, y) in cup_centres().items():
-        print('CHECK stud %s gap to the plate %.2f mm' % (key, stud(x, y).distToShape(printed)[0]))
     print('CHECK cup head and stud top to PCB rear %.2f mm, %.2f above the plate front' % (
         P['PCBRearZ'] - cup_head_top(), cup_head_top() - zf))
-    yc = P['StopY0'] + P['StopW'] / 2
-    tab = P['StopGap'] * lever_shape(plate_top()) / lever_shape(yc)
-    print('CHECK lever room: tab end moves %.2f mm toward the wall at the stop, bracket gives %.1f' % (tab, P['BracketT']))
-    for x, y in screw_centres():
-        print('CHECK screw (%.1f, %.1f): rim to lower keyhole %.2f, to lever notch %.2f' % (
-            x, y, y - P['ScrewCskD'] / 2 - (P['LowCupY'] + P['KeySlotW'] / 2),
-            P['LatchRootY'] - P['LatchReliefD'] / 2 - P['BracketNotchClear'] - (y + P['ScrewCskD'] / 2)))
-    print('CHECK screw head top %.2f mm below the bracket face' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
+    if bracket is not None:
+        bb = bracket.BoundBox
+        print('CHECK bracket valid %s, solids %d, %.1f x %.1f x %.1f mm, volume %.1f cm3' % (
+            bracket.isValid(), len(bracket.Solids), bb.XLength, bb.YLength, bb.ZLength, bracket.Volume / 1000))
+        print('CHECK bracket overlap with the plate %.4f mm3' % bracket.common(printed).Volume)
+        for key, (x, y) in cup_centres().items():
+            print('CHECK stud %s gap to the plate %.2f mm' % (key, stud(x, y).distToShape(printed)[0]))
+        yc = P['StopY0'] + P['StopW'] / 2
+        tab = P['StopGap'] * lever_shape(plate_top()) / lever_shape(yc)
+        print('CHECK lever room: tab end moves %.2f mm toward the wall at the stop, bracket gives %.1f' % (tab, P['BracketT']))
+        for x, y in screw_centres():
+            print('CHECK screw (%.1f, %.1f): rim to lower keyhole %.2f, to lever notch %.2f' % (
+                x, y, y - P['ScrewCskD'] / 2 - (P['LowCupY'] + P['KeySlotW'] / 2),
+                P['LatchRootY'] - P['LatchReliefD'] / 2 - P['BracketNotchClear'] - (y + P['ScrewCskD'] / 2)))
+        print('CHECK screw head top %.2f mm below the bracket face' % (P['ScrewSink'] + (P['ScrewCskD'] - P['ScrewHeadD']) / 2 - 0.05))
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
     d_teeth, s_stop, sigma = stop_checks()
@@ -849,7 +984,11 @@ SCREW_COLOUR = (0.25, 0.25, 0.27)
 BRACKET_PREVIEW_COLOUR = (0.30, 0.30, 0.32)    # a touch lighter than the plate, so the two read apart
 
 
-def main():
+def build(dd):
+    """Build one version into its own copy of the DTT assembly, export it and save it beside this script."""
+    global DD
+    DD = dd
+    stem = 'DTT-Snap-Backplate' + ('-Double-Double' if dd else '')
     doc = App.openDocument(os.path.join(CAD, 'DTT.FCStd'))
     # The backplate replaces the hook-and-loop backing; hide it and the exploded copies.
     for n in ('LoopBacking', 'ExplodedView'):
@@ -858,7 +997,7 @@ def main():
             o.Visibility = False
     printed = printed_part()
     black, blue = split_colours(printed)
-    bracket = wall_bracket()
+    bracket = None if dd else wall_bracket()
     design_checks(printed, black, blue, bracket)
     group = doc.addObject('App::Part', 'SnapBackplate'); group.Label = 'Snap backplate'
     parameter_sheet(doc)
@@ -868,127 +1007,173 @@ def main():
         group.addObject(o)
     for key, (x, y) in cup_centres().items():
         group.addObject(tagged(doc, 'SnapCup' + key, 'Suction cup %s (proxy)' % key, cup_shape(x, y), CUP_COLOUR, 35))
-    # the bracket and its screws take the place of the cups, so they start hidden
-    br = tagged(doc, 'SnapWallBracket', 'Wall bracket (in place of the cups; screws or adhesive strips)', bracket,
-                PLATE_COLOUR)
-    br.Visibility = False
-    group.addObject(br)
-    for key, (x, y) in zip(('L', 'R'), screw_centres()):
-        o = tagged(doc, 'SnapScrew' + key, 'Wall screw %s (bracket, proxy)' % key, screw_shape(x, y), SCREW_COLOUR)
-        o.Visibility = False
-        group.addObject(o)
+    if dd:
+        screw = dd_screw()
+        dd_checks(printed, dd_placed(screw))
+        group.addObject(tagged(doc, 'SnapDDScrew', 'Double Double screw - printed, black', dd_placed(screw),
+                               PLATE_COLOUR))
+        group.addObject(tagged(doc, 'SnapDoubleDouble', 'OSSM Double Double 24mm Threaded (proxy)',
+                               double_double_proxy(), CUP_COLOUR, 35))
+    else:
+        # the bracket and its screws take the place of the cups, so they start hidden
+        br = tagged(doc, 'SnapWallBracket', 'Wall bracket (in place of the cups; screws or adhesive strips)',
+                    bracket, PLATE_COLOUR)
+        br.Visibility = False
+        group.addObject(br)
+        for key, (x, y) in zip(('L', 'R'), screw_centres()):
+            o = tagged(doc, 'SnapScrew' + key, 'Wall screw %s (bracket, proxy)' % key, screw_shape(x, y), SCREW_COLOUR)
+            o.Visibility = False
+            group.addObject(o)
     doc.recompute()
     os.makedirs(HERE, exist_ok=True); os.makedirs(OUT, exist_ok=True)
     if App.GuiUp:
         import ImportGui                                  # keeps the two bodies and their colours
-        ImportGui.export(bodies, os.path.join(OUT, 'DTT-Snap-Backplate.step'))
+        ImportGui.export(bodies, os.path.join(OUT, stem + '.step'))
     else:
-        Part.makeCompound([black, blue]).exportStep(os.path.join(OUT, 'DTT-Snap-Backplate.step'))
-    bracket.exportStep(os.path.join(OUT, 'DTT-Snap-Backplate-Wall-Bracket.step'))
+        Part.makeCompound([black, blue]).exportStep(os.path.join(OUT, stem + '.step'))
+    meshes = [(printed, ''), (black, '-Black'), (blue, '-Blue')]
+    if bracket is not None:
+        bracket.exportStep(os.path.join(OUT, stem + '-Wall-Bracket.step'))
+        meshes.append((bracket, '-Wall-Bracket'))
+    if dd:   # the screw prints on its side, on its flat
+        lying = screw.rotated(V(0, 0, 0), V(1, 0, 0), 90).translated(V(0, 0, P['ThreadFlat']))
+        lying.exportStep(os.path.join(OUT, stem + '-Screw.step'))
+        meshes.append((lying, '-Screw'))
     import MeshPart
-    for shape, suffix in ((printed, ''), (black, '-Black'), (blue, '-Blue'), (bracket, '-Wall-Bracket')):
+    for shape, suffix in meshes:
         MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.02, AngularDeflection=0.2, Relative=False).write(
-            os.path.join(OUT, 'DTT-Snap-Backplate%s.stl' % suffix))
+            os.path.join(OUT, stem + suffix + '.stl'))
     if App.GuiUp:
-        render(doc)
-        render_bracket(doc)
-    doc.saveAs(os.path.join(HERE, 'DTT-Snap-Backplate-Concept.FCStd'))
+        pic = stem.replace('DTT-', '')
+        render(doc, pic)
+        if dd:
+            render_double_double(doc, pic)
+        else:
+            render_bracket(doc)
+    doc.saveAs(os.path.join(HERE, stem + '-Concept.FCStd'))
     return doc
+
+
+def main():
+    variants = os.environ.get('SNAP_VARIANTS', 'standard,double-double').split(',')
+    return [build(v.strip() == 'double-double') for v in variants]
 
 
 def _rgb_uint(r, g, b):
     return (int(r * 255) << 24) | (int(g * 255) << 16) | (int(b * 255) << 8)
 
 
-def render(doc):
+def render(doc, pic):
     import FreeCADGui as Gui
     pv = App.ParamGet('User parameter:BaseApp/Preferences/View')
     pv.SetBool('ShowNaviCube', False); pv.SetBool('ShowAxisCross', False)
     view = Gui.getDocument(doc.Name).ActiveView
     printed = doc.getObject('SnapBackplatePrinted')
     housing = doc.getObject('Cover___V3_v5'); shell = doc.getObject('Part__Feature001')
+    cups = [doc.getObject('SnapCup' + k) for k in cup_centres()]
+    extras = [o for o in (doc.getObject('SnapDDScrew'), doc.getObject('SnapDoubleDouble')) if o is not None]
+    proxy = doc.getObject('SnapDoubleDouble')
+    out = lambda name: os.path.join(HERE, '%s-%s.png' % (pic, name))
     housing.Visibility = True
     tops = [o for o in doc.RootObjects if o.TypeId == 'App::Part']
     saved = {o.Name: o.Visibility for o in tops}
     # standard previews (same set as the baseline concept)
     shell.ViewObject.Transparency = 55
     view.viewIsometric(); view.fitAll()
-    view.saveImage(os.path.join(HERE, 'Snap-Backplate-Assembled.png'), 1400, 1400, 'White')
+    view.saveImage(out('Assembled'), 1400, 1400, 'White')
     for o in tops:
         o.Visibility = o.Name == 'SnapBackplate'
     housing.Visibility = False
     view.viewIsometric(); view.fitAll()
-    view.saveImage(os.path.join(HERE, 'Snap-Backplate-Front.png'), 1400, 1400, 'White')
+    view.saveImage(out('Front'), 1400, 1400, 'White')
     view.setCameraOrientation(App.Rotation(V(0, 1, 0), 180)); view.fitAll()
-    view.saveImage(os.path.join(HERE, 'Snap-Backplate-Rear.png'), 1400, 1400, 'White')
+    view.saveImage(out('Rear'), 1400, 1400, 'White')
     for n, v in saved.items():
         doc.getObject(n).Visibility = v
     housing.Visibility = True
     view.viewRight(); view.fitAll()
-    view.saveImage(os.path.join(HERE, 'Snap-Backplate-Side.png'), 1400, 1400, 'White')
+    view.saveImage(out('Side'), 1400, 1400, 'White')
     # hero renders: wall-mounted orientation (USB-C end up), front three-quarter from above right,
     # shaded without edge lines, soft gradient backdrop
     pv.SetBool('Gradient', True); pv.SetBool('Simple', False)
     pv.SetUnsigned('BackgroundColor2', _rgb_uint(0.93, 0.93, 0.95))
     pv.SetUnsigned('BackgroundColor3', _rgb_uint(0.70, 0.71, 0.75))
-    for o in (printed, doc.getObject('SnapBackplateTouch')):
+    for o in [printed, doc.getObject('SnapBackplateTouch')] + cups + extras:
         o.ViewObject.DisplayMode = 'Shaded'
-    for k in ('UL', 'UR', 'L'):
-        doc.getObject('SnapCup' + k).ViewObject.DisplayMode = 'Shaded'
     shell.ViewObject.Transparency = 40
     cam = App.Rotation(V(0, 1, 0), 36).multiply(App.Rotation(V(1, 0, 0), -20))
     view.setCameraOrientation(cam); view.fitAll()
-    view.saveImage(os.path.join(HERE, 'Snap-Backplate-Hero.png'), 1600, 1600, 'Current')
+    view.saveImage(out('Hero'), 1600, 1600, 'Current')
     for o in tops:
         o.Visibility = o.Name == 'SnapBackplate'
     housing.Visibility = False
-    for k in ('UL', 'UR', 'L'):
-        doc.getObject('SnapCup' + k).Visibility = False
+    hidden = cups + ([proxy] if proxy else [])
+    for o in hidden:
+        o.Visibility = False
     view.setCameraOrientation(cam); view.fitAll()
-    view.saveImage(os.path.join(HERE, 'Snap-Backplate-Hero-Part.png'), 1600, 1600, 'Current')
-    for k in ('UL', 'UR', 'L'):
-        doc.getObject('SnapCup' + k).Visibility = True
+    view.saveImage(out('Hero-Part'), 1600, 1600, 'Current')
+    for o in hidden:
+        o.Visibility = True
     for n, v in saved.items():
         doc.getObject(n).Visibility = v
     housing.Visibility = True
 
 
-def render_bracket(doc):
-    # wall bracket previews, on the hero backdrop set up by render(). Each scene is a copy in its own
-    # document, and the rear view turns the shapes there, since a camera turned to the rear renders dim.
+def preview(doc, fname, names, cam, moves=None, turned=False, colours=None):
+    """Shaded preview of copies of some objects, in a document of their own, on the hero backdrop set up
+    by render(). moves offsets named objects; turned turns the scene to the rear, since a camera turned
+    to the rear renders dim."""
     import FreeCADGui as Gui
     turn = App.Placement(V(0, 0, 0), App.Rotation(V(0, 1, 0), 180),
                          doc.getObject('SnapBackplatePrinted').Shape.BoundBox.Center).toMatrix()
+    tmp = App.newDocument('SnapPreview')
+    for n in names:
+        src = doc.getObject(n); s = src.Shape.copy()
+        if moves and n in moves:
+            s.translate(moves[n])
+        if turned:
+            s.transformShape(turn)
+        o = tmp.addObject('Part::Feature', n); o.Shape = s
+        o.ViewObject.ShapeAppearance = src.ViewObject.ShapeAppearance
+        if colours and n in colours:
+            o.ViewObject.ShapeColor = colours[n]
+        o.ViewObject.Transparency = src.ViewObject.Transparency
+        o.ViewObject.DisplayMode = 'Shaded'
+    tmp.recompute()
+    Gui.ActiveDocument = Gui.getDocument(tmp.Name)
+    view = Gui.getDocument(tmp.Name).ActiveView
+    view.setCameraOrientation(cam); view.fitAll(); Gui.updateGui()
+    view.saveImage(os.path.join(HERE, fname), 1600, 1600, 'Current')
+    App.closeDocument(tmp.Name)
+
+
+def render_bracket(doc):
     plate = ['SnapBackplatePrinted', 'SnapBackplateTouch']
     bracket = ['SnapWallBracket', 'SnapScrewL', 'SnapScrewR']
     lift = V(0, P['TopSlot'], 30)    # plate lifted to the keyhole entries and pulled off the studs
+    grey = {'SnapWallBracket': BRACKET_PREVIEW_COLOUR}
+    preview(doc, 'Snap-Backplate-Wall-Bracket.png', bracket,
+            App.Rotation(V(0, 1, 0), 36).multiply(App.Rotation(V(1, 0, 0), -20)), colours=grey)
+    preview(doc, 'Snap-Backplate-Bracket-Exploded.png', bracket + plate,
+            App.Rotation(V(0, 1, 0), 55).multiply(App.Rotation(V(1, 0, 0), -15)),
+            moves={n: lift for n in plate}, colours=grey)
+    preview(doc, 'Snap-Backplate-Bracket-Rear.png', bracket + plate,
+            App.Rotation(V(0, 1, 0), -30).multiply(App.Rotation(V(1, 0, 0), -20)), turned=True, colours=grey)
 
-    def shot(fname, names, cam, lifted=(), turned=False):
-        tmp = App.newDocument('SnapBracketPreview')
-        for n in names:
-            src = doc.getObject(n); s = src.Shape.copy()
-            if n in lifted:
-                s.translate(lift)
-            if turned:
-                s.transformShape(turn)
-            o = tmp.addObject('Part::Feature', n); o.Shape = s
-            o.ViewObject.ShapeAppearance = src.ViewObject.ShapeAppearance
-            if n == 'SnapWallBracket':
-                o.ViewObject.ShapeColor = BRACKET_PREVIEW_COLOUR
-            o.ViewObject.DisplayMode = 'Shaded'
-        tmp.recompute()
-        Gui.ActiveDocument = Gui.getDocument(tmp.Name)
-        view = Gui.getDocument(tmp.Name).ActiveView
-        view.setCameraOrientation(cam); view.fitAll(); Gui.updateGui()
-        view.saveImage(os.path.join(HERE, fname), 1600, 1600, 'Current')
-        App.closeDocument(tmp.Name)
 
-    shot('Snap-Backplate-Wall-Bracket.png', bracket,
-         App.Rotation(V(0, 1, 0), 36).multiply(App.Rotation(V(1, 0, 0), -20)))
-    shot('Snap-Backplate-Bracket-Exploded.png', bracket + plate,
-         App.Rotation(V(0, 1, 0), 55).multiply(App.Rotation(V(1, 0, 0), -15)), lifted=plate)
-    shot('Snap-Backplate-Bracket-Rear.png', bracket + plate,
-         App.Rotation(V(0, 1, 0), -30).multiply(App.Rotation(V(1, 0, 0), -20)), turned=True)
+def render_double_double(doc, pic):
+    """The screw from the side, lying on its print flat; the screw, plate and Double Double pulled apart
+    along the screw axis; and the screw going into its pocket from the wall side."""
+    grey = {'SnapDDScrew': BRACKET_PREVIEW_COLOUR}
+    names = ['SnapBackplatePrinted', 'SnapBackplateTouch', 'SnapDDScrew', 'SnapDoubleDouble']
+    apart = {'SnapDDScrew': V(0, 0, -45), 'SnapDoubleDouble': V(0, 0, 30)}
+    preview(doc, pic + '-Screw.png', ['SnapDDScrew'],
+            App.Rotation(V(0, 1, 0), 70).multiply(App.Rotation(V(1, 0, 0), -18)), colours=grey)
+    preview(doc, pic + '-Exploded.png', names,
+            App.Rotation(V(0, 1, 0), 62).multiply(App.Rotation(V(1, 0, 0), -12)), moves=apart, colours=grey)
+    preview(doc, pic + '-Exploded-Rear.png', names[:3],
+            App.Rotation(V(0, 1, 0), -35).multiply(App.Rotation(V(1, 0, 0), -20)),
+            moves={'SnapDDScrew': V(0, 0, -40)}, turned=True, colours=grey)
 
 
 if __name__ == '__main__' or True:

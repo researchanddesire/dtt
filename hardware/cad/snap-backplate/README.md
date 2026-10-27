@@ -37,12 +37,27 @@ it on the wall bracket.
 The files are in
 [production-exports/cad/snap-backplate](../../production-exports/cad/snap-backplate/).
 
+## Double Double version
+
+For the OSSM Double Double 24 mm threaded toy mount. A printed hex flange screw
+sits 25 mm below the jack end, leaving room for the vibrator plug, with a fourth
+cup below it.
+
+![Double Double](Snap-Backplate-Double-Double-Hero.png)
+
+| Backplate | Screw | Screw in from the back | Toy mount on from the front |
+| --- | --- | --- | --- |
+| ![Part](Snap-Backplate-Double-Double-Hero-Part.png) | ![Screw](Snap-Backplate-Double-Double-Screw.png) | ![Pocket](Snap-Backplate-Double-Double-Exploded-Rear.png) | ![Exploded](Snap-Backplate-Double-Double-Exploded.png) |
+
+- Push the screw into the hex pocket, flat toward the bottom cup.
+- Print the screw on its flat, black, no supports, at least 4 walls.
+
 ## Source
 
 `build_snap_backplate.py` builds everything from `hardware/cad/DTT.FCStd`
 without modifying it. Every dimension and its basis is in `PARAMS`. Run it from
 the repository root with `freecad hardware/cad/snap-backplate/build_snap_backplate.py`.
-It writes `DTT-Snap-Backplate-Concept.FCStd`, the exports and these images.
+It writes an `.FCStd` for each version, the exports and these images.
 
 ## Check on a test print
 
@@ -51,3 +66,4 @@ It writes `DTT-Snap-Backplate-Concept.FCStd`, the exports and these images.
 - Stop fingers print free of the lever (`StopClear`).
 - Cups and bracket studs seat without rattling (`KeyLandT`, `KeySlotW`, `StudGap`).
 - PCB through-hole leads stay under 1.2 mm over the lower cup.
+- Double Double: screw tight in its pocket (`DDPocketClear`), thread fit (`ThreadCrest`).
