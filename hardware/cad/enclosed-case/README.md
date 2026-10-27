@@ -5,13 +5,13 @@ and a rear cover tray that holds the PCB from its top face down. The original
 four PCB screws hold it together, flush in countersinks in the rear cover.
 It replaces the loop backing.
 
-![Front](images/Enclosed-Front.png)
-![Rear](images/Enclosed-Rear.png)
-![Exploded](images/Enclosed-Exploded.png)
-![Switch side](images/Enclosed-Switch-Side.png)
-![Sections](images/Enclosed-Sections.png)
-![Switch cover](images/Part-SwitchCover.png)
-![Rear cover](images/Part-RearCover.png)
+| | |
+| --- | --- |
+| <img src="images/Enclosed-Front.png" width="320"> | <img src="images/Enclosed-Rear.png" width="320"> |
+| <img src="images/Enclosed-Exploded.png" width="320"> | <img src="images/Enclosed-Switch-Side.png" width="320"> |
+| <img src="images/Part-SwitchCover.png" width="320"> | <img src="images/Part-RearCover.png" width="320"> |
+
+<img src="images/Enclosed-Sections.png" width="560">
 
 ## Print
 
