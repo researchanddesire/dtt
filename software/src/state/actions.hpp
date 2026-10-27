@@ -102,9 +102,10 @@ constexpr auto clear = []() {
     timeout = 0;
     showButton = false;
 
-    if (currentSegment != nullptr) {
-        delete currentSegment;
-        currentSegment = nullptr;
+    {
+        TrainingGuard guard(trainingMutex);
+        trainingLifecycle.stop();
+        currentSegment.reset();
     }
 
     if (xSemaphoreTake(displayMutex, 100) == pdTRUE) {
@@ -234,11 +235,19 @@ constexpr auto drawProvisionUpdateError = []() {
 #ifndef PROVISION
 
 constexpr auto next = []() { process_done(false); };
+constexpr auto startTrainingRun = []() {
+    startTrainingTasks(RUNTIME_TASK_STACK_MULTIPLIER * configMINIMAL_STACK_SIZE,
+                       SENSOR_TASK_STACK_MULTIPLIER * configMINIMAL_STACK_SIZE);
+};
+constexpr auto stopTraining = []() { stopTrainingRun(); };
+constexpr auto saveCompletedResult = []() { startSaveResultsTask(); };
+
 
 inline bool sessionLoadComplete = false;
 constexpr auto beginSessionLoad = []() { sessionLoadComplete = false; };
 constexpr auto failSessionLoad = []() { process_fail(); };
 constexpr auto applyLoadedSession = [](const session_load_ready &request) {
+    TrainingGuard guard(trainingMutex);
     request.applied = request.apply();
     sessionLoadComplete = request.applied;
     if (request.applied)
@@ -247,20 +256,23 @@ constexpr auto applyLoadedSession = [](const session_load_ready &request) {
         process_fail();
 };
 
-constexpr auto incrementSegmentIdx = []() { session.segmentIdx++; };
+constexpr auto incrementSegmentIdx = []() { TrainingGuard guard(trainingMutex); session.segmentIdx++; };
 
 constexpr auto clearSegmentIndex = []() {
+    TrainingGuard guard(trainingMutex);
     session.id = uuid();
     session.segmentIdx = 0;
     setLedOff();
 };
 
 constexpr auto captureMinPosition = []() {
+    TrainingGuard guard(trainingMutex);
     session.calibratedMinPosition = getDistance(100);
     process_done(false);
 };
 
 constexpr auto captureMaxPosition = []() {
+    TrainingGuard guard(trainingMutex);
     session.calibratedMaxPosition = getDistance(100);
 
     for (auto &segment : session.segments) {
@@ -319,6 +331,7 @@ constexpr auto drawToyDetails = []() {
 };
 
 constexpr auto drawSegmentDetails = []() {
+    TrainingGuard guard(trainingMutex);
     const Segment *segment = getSegmentByIdx(session.segmentIdx);
     if (segment == nullptr) {
         ESP_LOGD(ACTIONS_TAG, "Segment not found for idx %d", session.segmentIdx);
@@ -414,10 +427,14 @@ constexpr auto drawBegin = []() {
 
 constexpr auto applyRequestedSession =
     [](const session_replace_requested &request) {
-        request.applied = currentSegment == nullptr && request.apply();
+        TrainingGuard guard(trainingMutex);
+        if (trainingLifecycle.active()) return;
+        currentSegment.reset();
+        request.applied = request.apply();
     };
 
 constexpr auto recoverMissingSegment = []() {
+    TrainingGuard guard(trainingMutex);
     // Recovery must not reload the same corrupt cache into a countdown loop.
     // A later preflight can fetch validated dashboard settings normally.
     session = Session{};
@@ -425,6 +442,8 @@ constexpr auto recoverMissingSegment = []() {
 };
 
 constexpr auto drawGrade = []() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return;
     int grade = currentSegment->grade();
     int icon = 482;
     String content = EMPTY_STRING;
@@ -494,6 +513,8 @@ constexpr auto drawGrade = []() {
 };
 
 constexpr auto evaluateAndIncrementFailure = []() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return;
     const Segment* segment = getSegmentByIdx(session.segmentIdx);
     if (segment == nullptr) {
         ESP_LOGD(ACTIONS_TAG, "Segment not found for idx %d", session.segmentIdx);
@@ -522,6 +543,8 @@ constexpr auto evaluateAndIncrementFailure = []() {
 };
 
 constexpr auto evaluatePassFail = []() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return;
     const Segment* segment = getSegmentByIdx(session.segmentIdx);
     if (segment == nullptr) {
         ESP_LOGD(ACTIONS_TAG, "Segment not found for idx %d", session.segmentIdx);
@@ -551,6 +574,8 @@ constexpr auto evaluatePassFail = []() {
 };
 
 constexpr auto drawFailureScreen = []() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return;
     const Segment* segment = getSegmentByIdx(session.segmentIdx);
     if (segment == nullptr) {
         ESP_LOGD(ACTIONS_TAG, "Segment not found for idx %d", session.segmentIdx);
@@ -586,6 +611,8 @@ constexpr auto drawFailureScreen = []() {
 };
 
 constexpr auto drawGradeOrFailure = []() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return;
     evaluateAndIncrementFailure();
 
     const Segment* segment = getSegmentByIdx(session.segmentIdx);
@@ -640,6 +667,7 @@ constexpr auto drawThreeStrikesScreen = []() {
 };
 
 constexpr auto restartTraining = []() {
+    TrainingGuard guard(trainingMutex);
     session.id = uuid();
     session.segmentFailureCounts.clear();
     session.segmentIdx = 0;

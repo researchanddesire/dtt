@@ -264,8 +264,7 @@ static bool waitForState(IsInStateFn isInState, const char* stateName,
 }
 
 /// Advance the state machine past init.idle with an automated button event.
-/// This triggers the init.idle → init.preflight transition, which fires
-/// the notifyTrainingTask.
+/// This prepares settings through preflight without announcing training.
 /// Returns true if successfully advanced past init, false on timeout.
 static bool advancePastInit() {
     if (stateMachine->is("init.idle"_s)) {

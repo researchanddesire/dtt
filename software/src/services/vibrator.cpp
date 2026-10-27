@@ -19,14 +19,14 @@ void Vibrator::off() {
     ESP_LOGD(VIBRATOR_TAG, "Turning off Vibrator");
 }
 
-void Vibrator::tick() {
+void Vibrator::tick(const SegmentBase& segment) {
     unsigned long currentTime = millis();
 
     // Record the previous tick timestamp
     vibratorInstance.previousTickTime = currentTime;
 
     // Simple logic: 100% power when IN_WINDOW, gradual fade when out of window
-    if (currentSegment->positionState == TrainingPosition::IN_WINDOW) {
+    if (segment.positionState == TrainingPosition::IN_WINDOW) {
         // Immediately set target to 100% when in window
         vibratorInstance.targetPercentagePower = 100.0;
         vibratorInstance.currentPercentagePower = 100.0;

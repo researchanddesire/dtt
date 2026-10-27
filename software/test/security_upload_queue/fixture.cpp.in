@@ -1,0 +1,110 @@
+#include <ArduinoJson.h>
+#include <cassert>
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+#include "services/upload_queue_policy.h"
+using String = std::string;
+constexpr int WL_CONNECTED=1, pdTRUE=1, pdPASS=1, portMAX_DELAY=100;
+constexpr int configMINIMAL_STACK_SIZE=1024;
+constexpr unsigned kMinFreeHeapForFlush=24000;
+int mutexStorage;
+void* queueMutex=&mutexStorage;
+bool flushInProgress=false;
+bool taken=false;
+int xSemaphoreTake(void*, int) { if (taken) return 0; taken=true; return 1; }
+void xSemaphoreGive(void*) { assert(taken); taken=false; }
+struct { int connection=WL_CONNECTED; int status() { return connection; } } WiFi;
+struct { unsigned heap=48000; unsigned getFreeHeap() { return heap; } } ESP;
+std::string logs;
+void logLine(const char* format, ...) { char data[512]; va_list args; va_start(args,format); vsnprintf(data,sizeof(data),format,args); va_end(args); logs+=data; }
+#define UPQ_TAG "queue"
+#define ESP_LOGD(tag, ...) logLine(__VA_ARGS__)
+#define ESP_LOGI(tag, ...) logLine(__VA_ARGS__)
+#define ESP_LOGW(tag, ...) logLine(__VA_ARGS__)
+#define ESP_LOGE(tag, ...) logLine(__VA_ARGS__)
+struct File {
+ bool valid=false; std::string contents; size_t offset=0; std::string* target=nullptr;
+ explicit operator bool() const { return valid; }
+ size_t size() const { return contents.size(); }
+ void close() { valid=false; }
+ size_t write(uint8_t byte) { assert(target); target->push_back(static_cast<char>(byte)); return 1; }
+ size_t write(const uint8_t* data,size_t count) { assert(target); target->append(reinterpret_cast<const char*>(data),count); return count; }
+ int read() { return offset<contents.size() ? static_cast<unsigned char>(contents[offset++]) : -1; }
+ size_t readBytes(char* buffer,size_t count) { size_t n=0; while(n<count && offset<contents.size()) buffer[n++]=contents[offset++]; return n; }
+};
+struct {
+ std::map<String,std::string> files;
+ File open(const String& path,const char* mode) {
+  if(std::string(mode)=="w") { auto& body=files[path]; body.clear(); return File{true,"",0,&body}; }
+  auto it=files.find(path); return it==files.end()?File{}:File{true,it->second,0,nullptr};
+ }
+ bool remove(const String& path) { return files.erase(path)==1; }
+} SPIFFS;
+bool findOldest(String& path) { if(SPIFFS.files.empty()) return false; path=SPIFFS.files.begin()->first; return true; }
+uint32_t nextCounter=2;
+String makeFileName(uint32_t counter) { char value[32]; snprintf(value,sizeof(value),"/q_%010u.json",counter); return value; }
+void evictUntilRoom() {} // Port has ample space; production policy is unchanged.
+// ACTUAL_ENQUEUE
+int captured=0;
+std::unique_ptr<JsonDocument> captureCompletedResult() {
+ ++captured; auto doc=std::make_unique<JsonDocument>(); (*doc)["idx"]=2; return doc;
+}
+void saveResultsTask(void*) { assert(false); }
+const char* saveResultsTaskName="save";
+void* saveResultsTaskHandle=nullptr;
+int xTaskCreatePinnedToCore(void(*)(void*),const char*,int,void*,int,void**,int) { return 0; } // allocation failure
+// ACTUAL_FALLBACK
+int flushUploadQueue();
+bool contend=false;
+int responseCode=200;
+std::vector<int> sent;
+int postJson(const char* endpoint,const JsonDocument& document) {
+ assert(std::string(endpoint)=="/training-completed");
+ sent.push_back(document["idx"].as<int>());
+ assert(!taken); // The actual HTTP call must not hold the filesystem mutex.
+ if(contend) {
+  contend=false;
+  assert(flushUploadQueue()==0); // Single-flight survives releasing the mutex.
+  startSaveResultsTask(); // Actual task-create-failure durable fallback.
+  assert(captured==1 && SPIFFS.files.size()==3 && !taken);
+ }
+ return responseCode;
+}
+int countQueueFiles() { return static_cast<int>(SPIFFS.files.size()); }
+// ACTUAL_FLUSH
+void seed() {
+ SPIFFS.files={{"/q_0000000000.json",R"({"idx":0,"fixture":"private-fixture-not-loggable"})"},
+               {"/q_0000000001.json",R"({"idx":1,"fixture":"private-fixture-not-loggable"})"}};
+ sent.clear(); logs.clear(); taken=false; flushInProgress=false; nextCounter=2; captured=0; contend=false; queueMutex=&mutexStorage; WiFi.connection=WL_CONNECTED; ESP.heap=48000;
+}
+int main() {
+ for (int status : {401,403,408,429,500,503,-1}) {
+  seed(); const auto retained=SPIFFS.files; responseCode=status;
+  assert(flushUploadQueue()==0);
+  assert(SPIFFS.files==retained); assert(sent==std::vector<int>{0}); assert(!taken);
+  assert(logs.find("private-fixture-not-loggable")==std::string::npos);
+  responseCode=200;
+  assert(flushUploadQueue()==2); assert(SPIFFS.files.empty());
+  assert((sent==std::vector<int>{0,0,1})); assert(!taken);
+ }
+ for (int status : {400,422}) {
+  seed(); responseCode=status;
+  assert(flushUploadQueue()==0); assert(SPIFFS.files.empty()); assert(!taken);
+  assert((sent==std::vector<int>{0,1}));
+  assert(logs.find("private-fixture-not-loggable")==std::string::npos);
+ }
+ seed(); contend=true; responseCode=503;
+ assert(flushUploadQueue()==0); assert(captured==1 && SPIFFS.files.size()==3 && !taken && !flushInProgress);
+ responseCode=200; assert(flushUploadQueue()==3); assert(SPIFFS.files.empty() && !taken && !flushInProgress);
+ assert((sent==std::vector<int>{0,0,1,2}));
+ seed(); auto retained=SPIFFS.files;
+ WiFi.connection=0; assert(flushUploadQueue()==0); assert(SPIFFS.files==retained && sent.empty());
+ WiFi.connection=WL_CONNECTED; ESP.heap=23999; assert(flushUploadQueue()==0); assert(SPIFFS.files==retained && sent.empty());
+ ESP.heap=48000; taken=true; assert(flushUploadQueue()==0); assert(taken && SPIFFS.files==retained && sent.empty());
+ taken=false; queueMutex=nullptr; assert(flushUploadQueue()==0); assert(SPIFFS.files==retained && sent.empty());
+}

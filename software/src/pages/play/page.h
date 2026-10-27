@@ -13,5 +13,7 @@ extern CircularBuffer<float, SPEED_BUFFER_SIZE> speedBuffer;
 
 void drawPlayModeTask(void *pvParameters);
 void getDistanceTask(void *pvParameters);
+bool startTrainingTasks(uint32_t drawStackBytes, uint32_t sensorStackBytes);
+void stopTrainingRun();
 
 #endif

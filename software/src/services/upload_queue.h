@@ -10,8 +10,9 @@
 // finishes, BEFORE any network upload is attempted, so the data survives WiFi
 // loss, low heap, crashes and reboots. Queued payloads are re-sent on
 // boot/reconnect and after each completion, and deleted once the server
-// confirms (HTTP 200) or permanently rejects them (HTTP 4xx — in which case the
-// server has already logged the bad payload for us to diagnose).
+// confirms (HTTP 200) or permanently rejects them (validation-style HTTP 4xx).
+// HTTP 401/403/408/429 are retained for retry after recovery. Server response
+// bodies are never written to device logs.
 //
 // Re-sending is safe: /training-completed upserts on (sessionId, segmentId), so
 // a replay of an already-stored segment is idempotent (no duplicates).
@@ -29,7 +30,8 @@ void initUploadQueue();
 bool enqueuePayload(const JsonDocument &doc);
 
 // Attempt to upload every queued payload (oldest first), deleting each on HTTP
-// 200 or HTTP 4xx. No-ops quietly when offline or when free heap is too low for
+// 200 or validation-style HTTP 4xx. Auth/rate-limit/timeouts stay queued.
+// No-ops quietly when offline or when free heap is too low for
 // TLS (the next boot, with fresh heap, is the recovery moment). Stops at the
 // first transient failure (server/network down) and leaves the rest queued.
 // Returns the number of items successfully uploaded this pass.

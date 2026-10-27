@@ -128,7 +128,9 @@ const radble::Resource RESOURCES[] = {
     {"session_details", "target.sessionDetails", "target", "event", "", RW,
      ""},
     {"play", "target.play", "target", "event", "", RW, ""},
+#ifdef BYPASS_PLAY
     {"target_grade", "target.grade", "target", "event", "", RW, ""},
+#endif
     {"retry", "target.retry", "target", "event", "", RW, ""},
     {"final", "target.final", "target", "event", "", RW, ""},
 #endif
@@ -346,6 +348,9 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 #ifndef PROVISION
         if (path == "connectivity.settings")
             return settingsFetchDiagnostic(args);
+#endif
+#ifndef PROVISION
+        TrainingGuard guard(trainingMutex);
 #endif
         JsonDocument document;
         document["path"] = path;
@@ -619,9 +624,11 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         else if (path == "target.play")
             handled = stateName().startsWith("play.details") &&
                       stateMachine->process_event(button_long_pressed{});
+#ifdef BYPASS_PLAY
         else if (path == "target.grade")
             handled = stateName() == "play.idle" &&
-                      stateMachine->process_event(done{});
+                      stateMachine->process_event(button_long_pressed{});
+#endif
         else if (path == "target.retry")
             handled = stateName() == "play.failed" &&
                       stateMachine->process_event(done{});
@@ -696,26 +703,30 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 }
 
 String snapshot(radble::Surface surface, void*) {
+    const String currentState = stateName();
+#ifndef PROVISION
+    TrainingGuard guard(trainingMutex);
+#endif
     JsonDocument document;
     switch (surface) {
         case radble::Surface::State:
-            document["state"] = stateName();
+            document["state"] = currentState;
 #ifndef PROVISION
             document["sessionId"] = session.id;
             document["segment"] = session.segmentIdx;
             document["segmentCount"] = session.segmentCount;
-            document["training"] = currentSegment != nullptr;
+            document["training"] = trainingLifecycle.active();
 #endif
             break;
         case radble::Surface::Essential:
             refreshPowerTelemetry();
-            document["state"] = stateName();
+            document["state"] = currentState;
             document["powered"] = true;
             document["batteryPercent"] = powerTelemetry.percent;
             document["charging"] = powerTelemetry.charging;
 #ifndef PROVISION
-            document["gameMode"] = currentSegment != nullptr;
-            if (currentSegment != nullptr) {
+            document["gameMode"] = trainingLifecycle.active();
+            if (trainingLifecycle.active() && currentSegment) {
                 document["positionCm"] = currentSegment->currentPosition;
                 document["targetStartCm"] = currentSegment->startWindow;
                 document["targetEndCm"] = currentSegment->endWindow;

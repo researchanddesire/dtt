@@ -6,6 +6,7 @@
 #define VIBRATOR_TAG "Vibrator"
 
 #include "services/board.hpp"
+class SegmentBase;
 
 class Vibrator {
   private:
@@ -21,7 +22,7 @@ class Vibrator {
 
     static void off();
 
-    static void tick();
+    static void tick(const SegmentBase& segment);
 };
 
 extern Vibrator vibratorInstance;

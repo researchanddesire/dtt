@@ -9,6 +9,7 @@ extern void register_hardware_init_tests();
 extern void register_pairing_flow_tests();
 extern void register_preflight_flow_tests();
 extern void register_notifications_tests();
+extern void register_notifications_idle_tests();
 extern void register_settings_fetch_tests();
 extern void register_calibration_tests();
 extern void register_training_session_tests();
@@ -56,16 +57,15 @@ void setup() {
     UNITY_BEGIN();
 
     if (phase == 0) {
-        // Phase 0: Device PAIRED, test notification
-        // Ensure paired state before init (notification fires on state machine start)
+        // Phase 0: Paired preflight prepares settings without announcing play.
         initHardwareBeforeStateMachine();
         waitForWifi();
         triggerPairing();  // Guarantee paired state
-        initStateMachinePhase();  // Notification fires with valid user
+        initStateMachinePhase();
 
         register_hardware_init_tests();
-        advancePastInit();  // Trigger init.idle → init.preflight (fires notification)
-        register_notifications_tests();  // Should get 200
+        advancePastInit();
+        register_notifications_idle_tests();
 
         // NOTE: Do NOT call UNITY_END() here — PlatformIO exits on seeing the
         // summary line. Phase 1 will call UNITY_END() with the combined count.
@@ -74,8 +74,6 @@ void setup() {
         Serial.println("[TEST] Phase 0 complete. Unpairing and restarting...");
         triggerUnpairing();  // Set ownerId = NULL for phase 1
         setTestPhase(1);
-        // Wait for any in-flight HTTP tasks to complete before restart
-        waitForNotifyTrainingTaskComplete(5000);
         delay(500);
         ESP.restart();
 
@@ -91,6 +89,7 @@ void setup() {
         register_settings_fetch_tests();
         register_calibration_tests();
         register_training_session_tests();
+        register_notifications_tests(); // Actual play, not draft preparation
         register_error_path_tests();
 
         // Restore paired state for next run (self-resetting)

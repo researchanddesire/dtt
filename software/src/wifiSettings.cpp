@@ -51,7 +51,9 @@ namespace {
     }
 }  // namespace
 
-SegmentBase *currentSegment = nullptr;
+std::shared_ptr<SegmentBase> currentSegment;
+ESP32RecursiveMutex trainingMutex;
+TrainingLifecycle trainingLifecycle;
 
 Session session = {
     .id = uuid(),
@@ -344,39 +346,29 @@ void checkIfPairedTask(void *pvParameters) {
     vTaskDelete(nullptr);
 }
 
-void notifyTrainingTask(void *pvParameters) {
-    // Fire-and-forget: if WiFi isn't up, silently drop. Do NOT emit
-    // done{}/fail{} events — this task runs as a side effect of the
-    // init.idle -> init.preflight transition and the state machine does
-    // not expect or handle response events on that edge.
-    if (WiFiClass::status() != WL_CONNECTED) {
-        ESP_LOGD(WIFI_TAG, "no wifi, skipping notifyTrainingTask");
-        vTaskDelete(nullptr);
-        return;
-    }
-    if (trainerId.isEmpty()) {
-        ESP_LOGD(WIFI_TAG, "no trainer ID yet, skipping notifyTrainingTask");
-        vTaskDelete(nullptr);
-        return;
-    }
-
+namespace {
+void notifyActualTraining(const String& boundTrainer) {
+    // Best effort only: no retry after an ambiguous POST, and no SML events.
+    if (WiFiClass::status() != WL_CONNECTED || boundTrainer.isEmpty()) return;
     JsonDocument doc;
-    doc["trainerId"] = trainerId;
-
-    String payload;
-    int httpResponseCode = postJson("/training-started", doc, &payload);
-    ESP_LOGD(WIFI_TAG, "training-started HTTP %d", httpResponseCode);
-
+    doc["trainerId"] = boundTrainer;
+    const int code = postJson("/training-started", doc);
+    ESP_LOGD(WIFI_TAG, "training-started HTTP %d", code);
 #ifdef PIO_UNIT_TESTING
-    // Test observability hooks (see wifiSettings.h). Order matters:
-    // write the code before flipping the bool so a racing test reader
-    // never sees notified=true with a stale code.
-    trainingStartedHttpCode = httpResponseCode;
-    trainingStartedNotified = (httpResponseCode == 200);
+    trainingStartedHttpCode = code;
+    trainingStartedNotified = code == 200;
 #endif
+}
+}  // namespace
 
+void notifyTrainingTask(void* parameter) {
+    {
+        std::unique_ptr<String> boundTrainer(static_cast<String*>(parameter));
+        notifyActualTraining(boundTrainer ? *boundTrainer : trainerId);
+    }
     vTaskDelete(nullptr);
 }
+
 #endif  // PROVISION
 
 String provisionError = "";
@@ -515,6 +507,7 @@ SettingsFetchStatus getSettingsFetchStatus() {
 }
 
 static void sessionFromJson(JsonDocument &sessionJson) {
+    TrainingGuard guard(trainingMutex);
 
     // the session id is set on device boot.
     session.settingsId = sessionJson["settingsId"].as<String>();
@@ -1049,49 +1042,61 @@ void fetchSettingsTask(void *pvParameters) {
     vTaskDelete(nullptr);
 }
 
-void saveResultsTask(void *pvParameters) {
-    // Build the payload while currentSegment is still alive, then persist it to
-    // flash BEFORE attempting any upload. Persisting is cheap (no TLS heap) and
-    // survives WiFi loss, low heap, crashes and reboots — the result is never
-    // dropped. flushUploadQueue() retries it now and on every boot/reconnect.
-    auto toyId = session.toy.has_value() ? session.toy->id : "";
-    auto settingsId = session.settingsId;
-
-    // Calculate passed status for pass/fail feature
-    const Segment *segment = getSegmentByIdx(session.segmentIdx);
-    int passedStatus = -1;  // Default to null (-1)
-
-    if (segment != nullptr && segment->passFail.enabled) {
-        int grade = currentSegment->grade();
-        bool passed = (grade >= segment->passFail.threshold);
-        passedStatus = passed ? 1 : 0;  // 1=true, 0=false
-    }
-
-    JsonDocument doc =
-        currentSegment->createPayload(trainerId, session.id, session.segmentIdx,
-                                      session.settingsId, toyId, passedStatus);
-
-    // Persist first — this is the durability guarantee.
-    if (!enqueuePayload(doc)) {
-        ESP_LOGE(WIFI_TAG, "failed to persist segment result to upload queue");
-    }
-
-    // Best-effort send now; no-ops if offline or low on heap. Anything left
-    // queued is recovered on the next boot/reconnect (fresh heap).
-    const int uploaded = flushUploadQueue();
-    if (uploaded == 0) {
-        ESP_LOGW(WIFI_TAG,
-                 "result queued but not uploaded yet (offline / low heap / "
-                 "server error) — will retry on reconnect/boot");
-    }
-
-#ifdef PIO_UNIT_TESTING
-    resultsUploaded = (uploaded > 0);
-    resultsHttpCode = (uploaded > 0) ? 200 : -1;
+namespace {
+std::unique_ptr<JsonDocument> captureCompletedResult() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return {};
+#ifndef BYPASS_PLAY
+    if (currentSegment->state != TrainingState::END) return {};
 #endif
+    String toyId = session.toy.has_value() ? session.toy->id : "";
+    const Segment* definition = getSegmentByIdx(session.segmentIdx);
+    int passedStatus = -1;
+    if (definition && definition->passFail.enabled)
+        passedStatus = currentSegment->grade() >= definition->passFail.threshold ? 1 : 0;
+    auto result = std::make_unique<JsonDocument>(currentSegment->createPayload(
+        trainerId, session.id, session.segmentIdx, session.settingsId, toyId, passedStatus));
+    if (result->overflowed()) return {};
+    return result;
+}
 
+void persistAndUploadResult(const JsonDocument& document) {
+    if (!enqueuePayload(document)) {
+        ESP_LOGE(WIFI_TAG, "failed to persist segment result to upload queue");
+        return;
+    }
+    const int uploaded = flushUploadQueue();
+    ESP_LOGD(WIFI_TAG, "queued-result flush uploaded %d item(s)", uploaded);
+#ifdef PIO_UNIT_TESTING
+    resultsUploaded = uploaded > 0;
+    resultsHttpCode = uploaded > 0 ? 200 : -1;
+#endif
+}
+}  // namespace
+
+void startSaveResultsTask() {
+    // Called synchronously on entry to grade while SML still binds this exact
+    // session/index. Upload owns the snapshot even if the user advances at once.
+    auto document = captureCompletedResult();
+    if (!document) return;
+    auto* parameter = document.release();
+    if (xTaskCreatePinnedToCore(saveResultsTask, saveResultsTaskName,
+            8 * configMINIMAL_STACK_SIZE, parameter, 1, &saveResultsTaskHandle, 1) != pdPASS) {
+        std::unique_ptr<JsonDocument> retained(parameter);
+        if (!enqueuePayload(*retained))
+            ESP_LOGE(WIFI_TAG, "failed to queue result after task creation failure");
+    }
+}
+
+void saveResultsTask(void* parameter) {
+    {
+        std::unique_ptr<JsonDocument> document(static_cast<JsonDocument*>(parameter));
+        if (!document) document = captureCompletedResult(); // synchronous test callers
+        if (document) persistAndUploadResult(*document);
+    }
     vTaskDelete(nullptr);
 }
+
 #endif  // PROVISION (sessionFromJson through saveResultsTask)
 
 void getIsPaired() {

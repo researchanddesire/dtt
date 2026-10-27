@@ -1,4 +1,5 @@
 #include "upload_queue.h"
+#include "upload_queue_policy.h"
 
 #include <SPIFFS.h>
 #include <WiFi.h>
@@ -30,6 +31,8 @@ constexpr uint32_t kMinFreeHeapForFlush = 24000;
 constexpr uint32_t kMinFreeBytes = 24 * 1024;
 
 SemaphoreHandle_t queueMutex = nullptr;
+// Protected by queueMutex; filesystem writers may run while HTTP is in flight.
+bool flushInProgress = false;
 uint32_t nextCounter = 0;
 
 String makeFileName(uint32_t counter) {
@@ -185,8 +188,15 @@ int flushUploadQueue() {
         return 0;
     }
 
-    // Single-in-flight: if a writer or another flush holds the lock, bail.
+    // Keep one flush in flight without holding the filesystem mutex over HTTP.
+    // In particular, durable enqueue after a task-create failure may be called
+    // under SML and must never wait behind a network operation.
     if (xSemaphoreTake(queueMutex, 0) != pdTRUE) return 0;
+    if (flushInProgress) {
+        xSemaphoreGive(queueMutex);
+        return 0;
+    }
+    flushInProgress = true;
 
     int uploaded = 0;
     while (true) {
@@ -215,22 +225,25 @@ int flushUploadQueue() {
             continue;
         }
 
-        String response;
-        const int code = postJson("/training-completed", doc, &response);
+        xSemaphoreGive(queueMutex);
+        const int code = postJson("/training-completed", doc);
+        xSemaphoreTake(queueMutex, portMAX_DELAY);
+        // Enqueue may have evicted this unique filename during HTTP. Removing
+        // an already absent entry is safe; a newer result uses a new counter.
 
         if (code == 200) {
             SPIFFS.remove(path);
             uploaded++;
             ESP_LOGI(UPQ_TAG, "flushed %s", path.c_str());
-        } else if (code >= 400 && code < 500) {
-            // Permanent rejection. The server has logged the bad payload for us
-            // to diagnose; the device must not hoard data it can never send.
+        } else if (uploadQueuePermanentRejection(code)) {
+            // Validation-style rejections retain the existing disposal policy.
+            // Never log a server body: it can contain personal session data.
             ESP_LOGE(UPQ_TAG,
-                     "server rejected %s (http=%d) — dropping; response: %s",
-                     path.c_str(), code, response.c_str());
+                     "server rejected queued result (http=%d); dropping",
+                     code);
             SPIFFS.remove(path);
         } else {
-            // Transient (5xx / timeout / connection error). Keep this and the
+            // Auth/rate limits, 5xx, timeouts and connection failures keep this
             // rest; retry on the next flush / boot.
             ESP_LOGW(UPQ_TAG,
                      "transient upload failure for %s (http=%d) — will retry",
@@ -239,6 +252,7 @@ int flushUploadQueue() {
         }
     }
 
+    flushInProgress = false;
     xSemaphoreGive(queueMutex);
     return uploaded;
 }
