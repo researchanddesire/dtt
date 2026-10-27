@@ -47,7 +47,7 @@ PARAMS = {
     # plate outline: a body flush with the track, flaring into two wings that carry the upper cups
     'PlateT': (4.0, 'reference proxy (estimate)'),
     'DeviceTopInset': (17.0, 'reference proxy: plate top to housing top end'),
-    'WingWeb': (3.5, 'design: plate web around the upper keyhole entries'),
+    'WingWeb': (6.0, 'design: plate web around the upper keyholes, wide enough not to snap when the plate is pushed onto the cups'),
     'FlareR': (14.0, 'design: concave blend from the body into each wing'),
     'CornerR': (8.0, 'design: convex plan corners, also the jack-end corners of the sleeve'),
     # sleeve: side elevation and edges

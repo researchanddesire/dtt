@@ -108,7 +108,7 @@ side elevation, with the module cavity cut out of it.
 
 ## Plate, cups and wall bracket
 
-- Plate 4 mm thick, about 81 x 112 mm overall.
+- Plate 4 mm thick, about 86 x 112 mm overall.
 - Upper cup stems at X 21 ± 28, Y 97, in the wings beside the module's USB-C
   end. The lower cup sits under the module, with its stem at X 21, Y 28 and its
   head 1.2 mm under the PCB.
@@ -119,8 +119,9 @@ side elevation, with the module cavity cut out of it.
   0.3 mm slack and the head sits in the recess, 1.4 mm proud of the plate
   front.
 - All keyholes run upward from the entry, so the hanging load seats the stems
-  at the closed ends. Keyhole web to the plate edge is 3.5 mm for the upper
-  keyholes.
+  at the closed ends. The plate web around the upper keyholes is 6 mm (5.2 mm
+  above them, at the top edge), so the wings don't snap where they join the
+  body when the plate is pushed onto the cups.
 - Fit the cups before sliding the module in.
 - Wall bracket, in place of the cups: one 5 mm printed piece that carries a
   stud for each of the three keyholes, so their spacing is fixed for you.
