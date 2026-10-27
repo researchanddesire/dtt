@@ -48,8 +48,8 @@ PARAMS = {
     "cover_pocket_depth": 1.3,  # clears USB shell legs and jack pegs
     "cover_relief": 0.2,  # floor stays clear of the PCB except at the pads
     "cover_pad_d": 7.5,
-    # Original short self-tapping PCB screws (0408LTFB, #4 x 1/2"), as flat
-    # heads sunk flush in 82 degree countersinks.
+    # Original short self-tapping PCB screws (0408LTFB, #4 x 1/2" Torx flat
+    # head), sunk flush in 82 degree countersinks.
     "screw_clear_d": 3.2,
     "csk_d": 5.9,  # #4 flat head is 5.7 max
     "csk_angle": 82.0,
@@ -266,7 +266,7 @@ def build_s1(model):
 
 
 def build_screw(x, y):
-    """Flat-head self-tapping screw, head flush with the rear cover."""
+    """Flat-head Torx self-tapping screw, head flush with the rear cover."""
     zb = P["pcb_bottom_z"] - P["cover_thickness"]
     dk = P["csk_d"] - 0.2
     k = (dk - P["screw_d"]) / 2 / math.tan(math.radians(P["csk_angle"] / 2))
@@ -274,9 +274,12 @@ def build_screw(x, y):
     shank = zcyl(x, y, P["screw_d"], zb + k - 0.01, zb + P["screw_len"] - 0.6)
     tip = Part.makeCone(P["screw_d"] / 2, 0.6, 0.6, V(x, y, zb + P["screw_len"] - 0.6))
     s = head.fuse([shank, tip])
-    slot = box(x - 0.3, y - 1.6, zb - 0.1, x + 0.3, y + 1.6, zb + 0.8)
-    cross = box(x - 1.6, y - 0.3, zb - 0.1, x + 1.6, y + 0.3, zb + 0.8)
-    return s.cut([slot, cross]).removeSplitter()  # Phillips, drawn as a cross
+    # T10 Torx recess (2.74 mm across the lobes), drawn as a core and six lobes.
+    zr0, zr1 = zb - 0.1, zb + 1.0
+    recess = zcyl(x, y, 1.9, zr0, zr1).fuse(
+        [zcyl(x + 1.03 * math.cos(math.pi * i / 3), y + 1.03 * math.sin(math.pi * i / 3), 0.68, zr0, zr1)
+         for i in range(6)])
+    return s.cut(recess).removeSplitter()
 
 
 def build_all(doc):

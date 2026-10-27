@@ -25,7 +25,7 @@ It replaces the loop backing.
 
 | Qty | Part |
 | --- | --- |
-| 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" flat head) |
+| 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" Torx flat head) |
 
 ## Assemble
 

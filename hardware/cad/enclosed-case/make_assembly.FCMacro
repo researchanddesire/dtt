@@ -90,7 +90,7 @@ def assemble():
         o = doc.getObject("PCBMountScrew%d" % i)
         o.Placement = App.Placement()
         o.Shape = g["screws"][i - 1]  # flat head, flush in the rear cover
-        o.Label = "PCB screw %d - 0408LTFB flat head self-tapping" % i
+        o.Label = "PCB screw %d - 0408LTFB Torx flat head self-tapping" % i
         screws.append(o)
     lb = doc.getObject("LoopBacking")
     lb.Label = "Rear cover"
