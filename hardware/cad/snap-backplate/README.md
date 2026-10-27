@@ -40,8 +40,8 @@ The files are in
 ## Double Double version
 
 For the OSSM Double Double 24 mm threaded toy mount. A printed hex flange screw
-sits 25 mm below the jack end, leaving room for the vibrator plug, with a fourth
-cup below it.
+holds it 12.5 mm below the jack end, with a fourth cup below. Use a right-angle
+vibrator plug, or a straight one under 13.7 mm long.
 
 ![Double Double](Snap-Backplate-Double-Double-Hero.png)
 

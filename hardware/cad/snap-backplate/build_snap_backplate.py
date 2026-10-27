@@ -153,7 +153,7 @@ PARAMS = {
     'ScrewShankD': (3.5, 'reference: #6 drywall screw'),
     'ScrewLen': (32.0, 'reference: 1-1/4 in drywall screw'),
     # Double Double version: a printed screw with the OSSM 24 mm thread, in a hex pocket from the rear
-    'DDGap': (25.0, 'design (Lucy): holder bottom to the Double Double base, room for the 3.5 mm plug'),
+    'DDGap': (12.5, 'design (Lucy): holder bottom to the Double Double base; 13.7 mm from the jack face, so a straight plug body must be shorter'),
     'DDBaseD': (33.0, 'reference (measured): OSSM Double Double 24mm Threaded base'),
     'DDThreadDepth': (21.0, 'reference (measured): Double Double internal thread depth'),
     'ThreadMajorD': (23.5, 'reference (measured): OSSM 24 mm clamping thread crest'),
@@ -289,10 +289,13 @@ def plan_face():
     t = 1.0
     parts = [box(xl, xr, y_end(), top, zr, zr + t), box(wx0, wx1, uly, top, zr, zr + t),
              cyl(re, ulx, uly, zr, zr + t), cyl(re, urx, uly, zr, zr + t)]
-    if DD:   # the body runs on to a round end around the screw, then a lobe around the fourth keyhole
-        ay = dd_axis()[1]; dx, dy = entry_centre('D'); rl = P['KeyEntryD'] / 2 + P['WingWeb']
-        parts += [box(xl, xr, ay, y_end() + 1, zr, zr + t), cyl((xr - xl) / 2, (xl + xr) / 2, ay, zr, zr + t),
-                  box(dx - rl, dx + rl, dy, ay, zr, zr + t), cyl(rl, dx, dy, zr, zr + t)]
+    if DD:   # the body runs on to a round end around the screw, then tapers into a lobe around the fourth keyhole
+        ay = dd_axis()[1]; dx, dy = entry_centre('D'); rl = re; cx, rb = (xl + xr) / 2, (xr - xl) / 2
+        a = math.asin((rb - rl) / (ay - dy)); c, s = math.cos(a), math.sin(a)     # common tangents of the two ends
+        taper = [V(cx + rb * c, ay + rb * s, zr), V(dx + rl * c, dy + rl * s, zr), V(dx - rl * c, dy + rl * s, zr),
+                 V(cx - rb * c, ay + rb * s, zr)]
+        parts += [box(xl, xr, ay, y_end() + 1, zr, zr + t), cyl(rb, cx, ay, zr, zr + t), cyl(rl, dx, dy, zr, zr + t),
+                  Part.Face(Part.makePolygon(taper + [taper[0]])).extrude(V(0, 0, t))]
     return round_face(flat_face(parts, zr), P['FlareR'], P['CornerR'])
 
 
