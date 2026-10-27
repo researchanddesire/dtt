@@ -846,6 +846,7 @@ PLATE_COLOUR = (0.13, 0.13, 0.14)    # black print
 TOUCH_COLOUR = (0.09, 0.42, 0.93)    # blue touch points (placeholder for the product blue)
 CUP_COLOUR = (0.80, 0.84, 0.88)
 SCREW_COLOUR = (0.25, 0.25, 0.27)
+BRACKET_PREVIEW_COLOUR = (0.30, 0.30, 0.32)    # a touch lighter than the plate, so the two read apart
 
 
 def main():
@@ -890,6 +891,7 @@ def main():
             os.path.join(OUT, 'DTT-Snap-Backplate%s.stl' % suffix))
     if App.GuiUp:
         render(doc)
+        render_bracket(doc)
     doc.saveAs(os.path.join(HERE, 'DTT-Snap-Backplate-Concept.FCStd'))
     return doc
 
@@ -949,6 +951,44 @@ def render(doc):
     for n, v in saved.items():
         doc.getObject(n).Visibility = v
     housing.Visibility = True
+
+
+def render_bracket(doc):
+    # wall bracket previews, on the hero backdrop set up by render(). Each scene is a copy in its own
+    # document, and the rear view turns the shapes there, since a camera turned to the rear renders dim.
+    import FreeCADGui as Gui
+    turn = App.Placement(V(0, 0, 0), App.Rotation(V(0, 1, 0), 180),
+                         doc.getObject('SnapBackplatePrinted').Shape.BoundBox.Center).toMatrix()
+    plate = ['SnapBackplatePrinted', 'SnapBackplateTouch']
+    bracket = ['SnapWallBracket', 'SnapScrewL', 'SnapScrewR']
+    lift = V(0, P['TopSlot'], 30)    # plate lifted to the keyhole entries and pulled off the studs
+
+    def shot(fname, names, cam, lifted=(), turned=False):
+        tmp = App.newDocument('SnapBracketPreview')
+        for n in names:
+            src = doc.getObject(n); s = src.Shape.copy()
+            if n in lifted:
+                s.translate(lift)
+            if turned:
+                s.transformShape(turn)
+            o = tmp.addObject('Part::Feature', n); o.Shape = s
+            o.ViewObject.ShapeAppearance = src.ViewObject.ShapeAppearance
+            if n == 'SnapWallBracket':
+                o.ViewObject.ShapeColor = BRACKET_PREVIEW_COLOUR
+            o.ViewObject.DisplayMode = 'Shaded'
+        tmp.recompute()
+        Gui.ActiveDocument = Gui.getDocument(tmp.Name)
+        view = Gui.getDocument(tmp.Name).ActiveView
+        view.setCameraOrientation(cam); view.fitAll(); Gui.updateGui()
+        view.saveImage(os.path.join(HERE, fname), 1600, 1600, 'Current')
+        App.closeDocument(tmp.Name)
+
+    shot('Snap-Backplate-Wall-Bracket.png', bracket,
+         App.Rotation(V(0, 1, 0), 36).multiply(App.Rotation(V(1, 0, 0), -20)))
+    shot('Snap-Backplate-Bracket-Exploded.png', bracket + plate,
+         App.Rotation(V(0, 1, 0), 55).multiply(App.Rotation(V(1, 0, 0), -15)), lifted=plate)
+    shot('Snap-Backplate-Bracket-Rear.png', bracket + plate,
+         App.Rotation(V(0, 1, 0), -30).multiply(App.Rotation(V(1, 0, 0), -20)), turned=True)
 
 
 if __name__ == '__main__' or True:
