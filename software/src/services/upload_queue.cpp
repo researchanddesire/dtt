@@ -1,5 +1,6 @@
 #include "upload_queue.h"
 #include "upload_queue_policy.h"
+#include "json_file_verifier.h"
 
 #include <SPIFFS.h>
 #include <WiFi.h>
@@ -146,35 +147,66 @@ bool enqueuePayload(const JsonDocument &doc) {
         ESP_LOGE(UPQ_TAG, "enqueue before init");
         return false;
     }
+    const size_t expected = measureJson(doc);
+    if (doc.overflowed() || expected == 0) {
+        ESP_LOGE(UPQ_TAG, "invalid queue document");
+        return false;
+    }
     xSemaphoreTake(queueMutex, portMAX_DELAY);
 
-    evictUntilRoom();
-
     const String path = makeFileName(nextCounter);
-    File file = SPIFFS.open(path, "w");
-    if (!file) {
-        ESP_LOGE(UPQ_TAG, "failed to open %s for write", path.c_str());
+    // Never truncate an existing committed result, even if the counter is stale.
+    if (SPIFFS.exists(path)) {
+        ESP_LOGE(UPQ_TAG, "queue filename conflict");
         xSemaphoreGive(queueMutex);
         return false;
     }
-
-    const size_t written = serializeJson(doc, file);
-    file.close();
-
-    bool ok = false;
-    if (written == 0) {
-        ESP_LOGE(UPQ_TAG, "failed to write payload to %s (disk full?)",
-                 path.c_str());
-        SPIFFS.remove(path);
-    } else {
-        nextCounter++;
-        ok = true;
-        ESP_LOGI(UPQ_TAG, "queued segment -> %s (%u bytes)", path.c_str(),
-                 (unsigned)written);
+    // The suffix is deliberately not .json: interrupted/unverified staging
+    // files must never be selected by the queue scanner or uploaded.
+    const String staging = path + ".tmp";
+    if (SPIFFS.exists(staging) && !SPIFFS.remove(staging)) {
+        ESP_LOGE(UPQ_TAG, "could not discard old queue staging file");
+        xSemaphoreGive(queueMutex);
+        return false;
     }
+    const auto discardStaging = [&]() {
+        if (SPIFFS.exists(staging) && !SPIFFS.remove(staging))
+            ESP_LOGE(UPQ_TAG, "could not discard uncommitted queue staging file");
+    };
 
+    evictUntilRoom();
+    File file = SPIFFS.open(staging, "w");
+    const bool opened = static_cast<bool>(file);
+    const size_t written = opened ? serializeJson(doc, file) : 0;
+    file.flush();
+    file.close();
+    bool complete = opened && written == expected;
+    if (complete) {
+        File reopened = SPIFFS.open(staging, "r");
+        complete = reopened && reopened.size() == expected;
+        if (complete) {
+            JsonFileVerifier<File> verifier(reopened);
+            complete = serializeJson(doc, verifier) == expected &&
+                       verifier.complete(expected);
+        }
+        reopened.close();
+    }
+    if (!complete) {
+        discardStaging();
+        ESP_LOGE(UPQ_TAG, "queue staging write or readback failed");
+        xSemaphoreGive(queueMutex);
+        return false;
+    }
+    if (!SPIFFS.rename(staging, path)) {
+        discardStaging();
+        ESP_LOGE(UPQ_TAG, "could not commit verified queue result");
+        xSemaphoreGive(queueMutex);
+        return false;
+    }
+    ++nextCounter;
+    ESP_LOGI(UPQ_TAG, "queued segment (%u bytes)", static_cast<unsigned>(written));
     xSemaphoreGive(queueMutex);
-    return ok;
+    return true;
 }
 
 int flushUploadQueue() {

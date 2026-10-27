@@ -10,7 +10,7 @@ HERE = Path(__file__).parent
 
 
 class UploadQueuePolicyTests(unittest.TestCase):
-    def test_recoverable_upload_rejections_keep_the_result(self):
+    def test_queue_durability_and_recoverable_response_policy(self):
         queue = (ROOT / "src/services/upload_queue.cpp").read_text(encoding="utf-8")
         fixture = (HERE / "fixture.cpp.in").read_text(encoding="utf-8")
         wifi = (ROOT / "src/wifiSettings.cpp").read_text(encoding="utf-8")

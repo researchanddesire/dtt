@@ -1,4 +1,5 @@
 #include <ArduinoJson.h>
+#include <algorithm>
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
@@ -8,6 +9,7 @@
 #include <string>
 #include <vector>
 #include "services/upload_queue_policy.h"
+#include "services/json_file_verifier.h"
 using String = std::string;
 constexpr int WL_CONNECTED=1, pdTRUE=1, pdPASS=1, portMAX_DELAY=100;
 constexpr int configMINIMAL_STACK_SIZE=1024;
@@ -27,25 +29,57 @@ void logLine(const char* format, ...) { char data[512]; va_list args; va_start(a
 #define ESP_LOGI(tag, ...) logLine(__VA_ARGS__)
 #define ESP_LOGW(tag, ...) logLine(__VA_ARGS__)
 #define ESP_LOGE(tag, ...) logLine(__VA_ARGS__)
+enum class Fault { None, Open, ShortWrite, Reopen, TruncatedRead, Corrupt, ExtraByte, WrongSize, Rename, Cleanup };
+Fault fault=Fault::None;
+bool writerOpen=false;
+int flushes=0, openSizeReads=0;
 struct File {
- bool valid=false; std::string contents; size_t offset=0; std::string* target=nullptr;
+ bool valid=false; std::string contents; size_t offset=0; std::string* target=nullptr; size_t reportedSize=0;
  explicit operator bool() const { return valid; }
- size_t size() const { return contents.size(); }
- void close() { valid=false; }
- size_t write(uint8_t byte) { assert(target); target->push_back(static_cast<char>(byte)); return 1; }
- size_t write(const uint8_t* data,size_t count) { assert(target); target->append(reinterpret_cast<const char*>(data),count); return count; }
+ size_t size() const { if(target) { ++openSizeReads; return 0; } return reportedSize; } // stale writable stat
+ void flush() { if(valid && target) ++flushes; }
+ void close() { if(target) writerOpen=false; valid=false; }
+ size_t write(uint8_t byte) { return write(&byte,1); }
+ size_t write(const uint8_t* data,size_t count) {
+  assert(valid && target);
+  size_t written=count;
+  if(fault==Fault::ShortWrite || fault==Fault::Cleanup) written=target->size()>=4?0:std::min(count,4-target->size());
+  target->append(reinterpret_cast<const char*>(data),written); return written;
+ }
  int read() { return offset<contents.size() ? static_cast<unsigned char>(contents[offset++]) : -1; }
  size_t readBytes(char* buffer,size_t count) { size_t n=0; while(n<count && offset<contents.size()) buffer[n++]=contents[offset++]; return n; }
 };
+bool stagingPath(const String& path) { return path.size()>=4 && path.substr(path.size()-4)==".tmp"; }
 struct {
  std::map<String,std::string> files;
  File open(const String& path,const char* mode) {
-  if(std::string(mode)=="w") { auto& body=files[path]; body.clear(); return File{true,"",0,&body}; }
-  auto it=files.find(path); return it==files.end()?File{}:File{true,it->second,0,nullptr};
+  if(std::string(mode)=="w") {
+   if(fault==Fault::Open) return {};
+   auto& body=files[path]; body.clear(); writerOpen=true; return File{true,"",0,&body,0};
+  }
+  if(stagingPath(path)) { assert(!writerOpen && flushes>0); if(fault==Fault::Reopen) return {}; }
+  auto it=files.find(path); if(it==files.end()) return {};
+  auto body=it->second; const auto originalSize=body.size();
+  if(stagingPath(path)) {
+   if(fault==Fault::TruncatedRead) body.pop_back();
+   if(fault==Fault::Corrupt) { auto pos=body.find('2'); assert(pos!=std::string::npos); body[pos]='9'; }
+   if(fault==Fault::ExtraByte) body.push_back('x'); // metadata lies; EOF must reject it
+  }
+  return File{true,body,0,nullptr,originalSize+(fault==Fault::WrongSize && stagingPath(path)?1:0)};
  }
- bool remove(const String& path) { return files.erase(path)==1; }
+ bool exists(const String& path) { return files.count(path)>0; }
+ bool remove(const String& path) { if(fault==Fault::Cleanup && stagingPath(path)) return false; return files.erase(path)==1; }
+ bool rename(const String& from,const String& to) {
+  if(fault==Fault::Rename || exists(to) || !exists(from)) return false;
+  files[to]=files[from]; files.erase(from); return true;
+ }
 } SPIFFS;
-bool findOldest(String& path) { if(SPIFFS.files.empty()) return false; path=SPIFFS.files.begin()->first; return true; }
+bool queuePath(const String& path) { return path.rfind("/q_",0)==0 && path.size()>=5 && path.substr(path.size()-5)==".json"; }
+bool findOldest(String& path) {
+ for(const auto& item:SPIFFS.files) if(queuePath(item.first)) { path=item.first; return true; }
+ return false;
+}
+
 uint32_t nextCounter=2;
 String makeFileName(uint32_t counter) { char value[32]; snprintf(value,sizeof(value),"/q_%010u.json",counter); return value; }
 void evictUntilRoom() {} // Port has ample space; production policy is unchanged.
@@ -75,14 +109,40 @@ int postJson(const char* endpoint,const JsonDocument& document) {
  }
  return responseCode;
 }
-int countQueueFiles() { return static_cast<int>(SPIFFS.files.size()); }
+int countQueueFiles() { int count=0; for(const auto& item:SPIFFS.files) if(queuePath(item.first)) ++count; return count; }
 // ACTUAL_FLUSH
 void seed() {
  SPIFFS.files={{"/q_0000000000.json",R"({"idx":0,"fixture":"private-fixture-not-loggable"})"},
                {"/q_0000000001.json",R"({"idx":1,"fixture":"private-fixture-not-loggable"})"}};
+ fault=Fault::None; writerOpen=false; flushes=0; openSizeReads=0;
  sent.clear(); logs.clear(); taken=false; flushInProgress=false; nextCounter=2; captured=0; contend=false; queueMutex=&mutexStorage; WiFi.connection=WL_CONNECTED; ESP.heap=48000;
 }
+void storageFaults() {
+ JsonDocument doc; doc["idx"]=2;
+ for(auto problem:{Fault::Open,Fault::ShortWrite,Fault::Reopen,Fault::TruncatedRead,Fault::Corrupt,Fault::ExtraByte,Fault::WrongSize,Fault::Rename}) {
+  seed(); auto old=SPIFFS.files; fault=problem;
+  assert(!enqueuePayload(doc)); assert(SPIFFS.files==old);
+  assert(nextCounter==2 && !taken && !writerOpen);
+ }
+ seed(); auto old=SPIFFS.files;
+ assert(enqueuePayload(doc)); assert(nextCounter==3 && !taken && !writerOpen);
+ assert(flushes==1 && openSizeReads==0); // close/reopen ignores stale writable stat
+ assert(SPIFFS.files.at("/q_0000000000.json")==old.at("/q_0000000000.json"));
+ assert(SPIFFS.files.at("/q_0000000001.json")==old.at("/q_0000000001.json"));
+ assert(SPIFFS.files.at("/q_0000000002.json")=="{\"idx\":2}");
+ seed(); old=SPIFFS.files; fault=Fault::Cleanup;
+ assert(!enqueuePayload(doc)); assert(nextCounter==2 && !taken);
+ assert(SPIFFS.files.at("/q_0000000000.json")==old.at("/q_0000000000.json"));
+ assert(SPIFFS.files.at("/q_0000000001.json")==old.at("/q_0000000001.json"));
+ assert(SPIFFS.files.count("/q_0000000002.json")==0);
+ assert(!enqueuePayload(doc)); // cleanup failure cannot silently truncate staging
+ responseCode=200; assert(flushUploadQueue()==2); // bad staging is never uploaded
+ assert((sent==std::vector<int>{0,1}) && SPIFFS.files.size()==1 && uploadQueueDepth()==0);
+ seed(); nextCounter=1; old=SPIFFS.files;
+ assert(!enqueuePayload(doc)); assert(SPIFFS.files==old && nextCounter==1 && !taken);
+}
 int main() {
+ storageFaults();
  for (int status : {401,403,408,429,500,503,-1}) {
   seed(); const auto retained=SPIFFS.files; responseCode=status;
   assert(flushUploadQueue()==0);
