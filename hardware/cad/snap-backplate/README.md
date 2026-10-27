@@ -71,8 +71,8 @@ side elevation, with the module cavity cut out of it.
 - **Support:** the PCB back rides on two skids (X 11-13 and 29-31, Y 5-64,
   45° end ramps), 2.6 mm above the plate. They sit between the tracks swept by
   the PCB screw heads and clear of the jack and the connectors with through-hole
-  leads. The screw heads (1.5 mm proud) and the lower cup head pass under the
-  board.
+  leads. The screw heads (1.5 mm proud) pass under the board, and the lower
+  cup head sits in a recess under it.
 - **Release lever:** two 1.5 mm slots run from Ø2.5 relief holes under the
   module (Y 66) out through the plate's top edge. They free a 24 mm wide lever.
   The flex zone (Y 66-86) is thinned to 2 mm from the front through 6 mm ramps,
@@ -108,10 +108,16 @@ side elevation, with the module cavity cut out of it.
 
 ## Plate, cups and wall bracket
 
-- Plate 4 mm thick, about 79 x 112 mm overall.
+- Plate 4 mm thick, about 81 x 112 mm overall.
 - Upper cup stems at X 21 ± 28, Y 97, in the wings beside the module's USB-C
   end. The lower cup sits under the module, with its stem at X 21, Y 28 and its
-  head 0.4 mm under the PCB.
+  head 1.2 mm under the PCB.
+- Keyholes fit the measured cup stem: a Ø15 head flange 3 mm thick, then a
+  Ø8.5 groove 2.5 mm long. Each keyhole has a Ø15.6 entry for the head and an
+  8.9 mm slot for the groove. A Ø15.6 recess from the front runs over the whole
+  slide, leaving 2.2 mm of plate under it, so the plate sits in the groove with
+  0.3 mm slack and the head sits in the recess, 1.4 mm proud of the plate
+  front.
 - All keyholes run upward from the entry, so the hanging load seats the stems
   at the closed ends. Keyhole web to the plate edge is 3.5 mm for the upper
   keyholes.
@@ -122,10 +128,10 @@ side elevation, with the module cavity cut out of it.
     A notch leaves the lever and its slots free (X 6.5-35.5, from Y 63.75), so
     the lever can move toward the wall. The tab end moves up to 3.3 mm before
     the stop lands, and the bracket gives it 5 mm.
-  - Each stud has a Ø8.4 neck in the 9 mm keyhole slot and a Ø11 head. The
-    head's underside is a 45° cone that starts 0.3 mm in front of the plate.
-    The stud tops are level with the cup heads, so the lower one is 0.4 mm
-    under the PCB.
+  - Each stud has a Ø8.4 neck in the 8.9 mm keyhole slot and a Ø13 head that
+    sits in the head recess. The head's underside is a 45° cone that starts
+    0.3 mm in front of the keyhole land. The stud tops are level with the cup
+    heads, so the lower one is 1.2 mm under the PCB.
   - Fix it with two #6 or #8 drywall screws at X 21 ± 12, Y 46: Ø4.5 holes
     with a 90° countersink Ø9 and a 0.4 mm counterbore, so a #6 head sits
     0.7 mm below the bracket face. Use screws of at least 25 mm (1 in). The
@@ -150,12 +156,13 @@ side elevation, with the module cavity cut out of it.
 | Over-travel stop | fingers 4.0 wide, 0.9 into the lever, 45° roof and finger top with 0.5 land, 1.8 travel, 0.5 clearance | design |
 | Pull-out stop | rails Y 98 to the top edge, 0.9 over the lever edge, 0.4 tip, 45° faces, 1.0 travel, 0.5 clearance | design |
 | Plate | 4.0 thick | reference (estimate) |
-| Cup | Ø35, stem Ø7.5, head Ø12 x 1.8 | reference (estimate) |
-| Keyhole | entry Ø14, slot 9, 12 travel upward | reference / design |
+| Cup | stem and head Ø15, head 3.0 thick, groove Ø8.5 x 2.5 | reference (measured) |
+| Cup body | Ø35, rim 14 behind the plate | reference (estimate) |
+| Keyhole | entry Ø15.6, slot 8.9, head recess Ø15.6 to a 2.2 land, 12 travel upward | design |
 | Blue touch point | X 9-33, Y 99.5 to the top edge, 0.6 deep from the front | design |
 | Grip grooves | 4 at 2.0 pitch, 1.0 wide, 0.9 deep | design |
 | Wall bracket | 5.0 thick, plate outline inset 1.0, lever notch with 1.0 clearance | design |
-| Studs | neck Ø8.4, 0.3 to the head, head Ø11 with a 45° underside, top level with the cup heads | design |
+| Studs | neck Ø8.4, 0.3 from the land to the head, head Ø13 with a 45° underside, top level with the cup heads | design |
 | Bracket screws | X 21 ± 12, Y 46; Ø4.5 hole, 90° countersink Ø9, 0.4 counterbore | design |
 | Screw | #6 drywall, head Ø8.3, shank Ø3.5 | reference (estimate) |
 
@@ -167,8 +174,9 @@ Every value and its basis is in `PARAMS` in the builder.
   solid each and add up to it exactly.
 - At rest there are no intersections with the housing, PCB or PCB screws,
   with either the cups or the wall bracket and its screws in place. Smallest
-  gaps: track to housing 0.2 mm, lower cup head or lower stud to PCB 0.4 mm,
-  cup heads to plate 0.4 mm, studs to plate 0.3 mm. The skids touch the PCB
+  gaps: track to housing 0.2 mm, lower cup head or lower stud to PCB 1.2 mm,
+  cup stems to plate 0.1 mm (the 0.3 mm groove slack split either side),
+  studs to plate 0.25 mm. The skids touch the PCB
   rear by design, and the bracket face touches the plate rear. Seated bracket
   screw heads sit 0.7 mm below the bracket face.
 - The wall bracket is one valid solid.
@@ -186,11 +194,12 @@ Every value and its basis is in `PARAMS` in the builder.
   each other (tune `StopGap` and `PullGap`).
 - Slide fit of the track on the printer used; tune `WallClear`.
 - THT lead protrusion on the PCB back under 2 mm along the skid tracks, and
-  under 0.4 mm over the lower cup head (X 15-27, Y 22-34). The J5 jack's leads
-  are in that track; trim them flush or recess the head.
+  under 1.2 mm over the lower cup head (X 13.5-28.5, Y 20.5-35.5). The J5
+  jack's leads are in that track; trim them if they stand proud further.
 - The USB-C plug overmold fits in the 13 mm gap between the teeth.
-- Plate thickness and cup stem and head sizes against the real cups, and
-  suction hold on a wall.
+- The cup stems snap into the keyholes and hold without rattling; tune
+  `KeyLandT` (2.4 for a snug fit, 11 or 12 layers at 0.2 mm) and `KeySlotW`.
+  Suction hold on a wall.
 - The plate hangs on the bracket studs without rattling (tune `StudGap`), and
   the stud heads print cleanly. Bracket screw heads seat below the face.
   Drywall bugle heads are not exactly 90°; tune `ScrewCskD` and `ScrewSink`.

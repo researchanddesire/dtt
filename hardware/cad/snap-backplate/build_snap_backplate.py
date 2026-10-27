@@ -116,17 +116,18 @@ PARAMS = {
     'TopSlot': (12.0, 'design: upper slots run upward from the entry, so the load seats the stems'),
     'LowCupY': (28.0, 'design: stem under the module, head clear of the skids'),
     'LowSlot': (12.0, 'design: lower slot runs upward from the entry'),
-    'KeyEntryD': (14.0, 'reference proxy'),
-    'KeySlotW': (9.0, 'reference proxy'),
+    'KeyEntryD': (15.6, 'design: passes the 15 mm stem head, 0.3 mm a side; also the recess the head slides in'),
+    'KeySlotW': (8.9, 'design: takes the 8.5 mm stem groove, 0.2 mm a side'),
+    'KeyLandT': (2.2, 'design: plate left under the head recess, in the 2.5 mm groove with 0.3 mm slack (11 layers at 0.2)'),
     'CupD': (35.0, 'reference proxy (estimate)'),
-    'CupDepth': (14.0, 'reference proxy (estimate)'),
-    'CupShoulderR': (5.5, 'reference proxy'),
+    'CupDepth': (14.0, 'reference proxy (estimate): cup rim to plate rear'),
     'CupWall': (1.2, 'reference proxy'),
-    'CupRearGap': (0.6, 'reference proxy'),
-    'StemD': (7.5, 'reference proxy (estimate)'),
-    'HeadD': (12.0, 'reference proxy (estimate)'),
-    'HeadT': (1.8, 'reference proxy (estimate)'),
-    'HeadGap': (0.4, 'reference proxy'),
+    'StemD': (15.0, 'reference (measured): stem and head flange outside diameter'),
+    'StemLen': (3.0, 'reference proxy (estimate): stem from the cup body to the groove'),
+    'GrooveD': (8.5, 'reference (measured)'),
+    'GrooveH': (2.5, 'reference (measured): stem shoulder to head flange'),
+    'HeadT': (3.0, 'reference (measured): head flange, opposite the cup face'),
+    'StemSeat': (0.1, 'reference proxy: stem shoulder to plate rear as modelled, inside the groove slack'),
     # optional wall bracket in place of the cups: screwed or stuck to the wall, the plate hangs on its studs
     'BracketT': (5.0, 'design: plate rear to wall; at the stop the tab end moves 3.3 mm toward the wall'),
     'BracketInset': (1.0, 'design: bracket outline inside the plate outline'),
@@ -134,9 +135,9 @@ PARAMS = {
     'BracketNotchR': (2.0, 'design: notch corners'),
     'BracketEdgeR': (1.0, 'design: front outer edge'),
     'BracketBedChamfer': (0.6, 'design: wall-side outer edge, against elephant foot'),
-    'StudNeckD': (8.4, 'design: in the 9 mm keyhole slot'),
-    'StudGap': (0.3, 'design: plate front to the start of the head'),
-    'StudHeadD': (11.0, 'design: passes the 14 mm keyhole entry; 45 deg underside prints without support'),
+    'StudNeckD': (8.4, 'design: in the 8.9 mm keyhole slot'),
+    'StudGap': (0.3, 'design: keyhole land to the start of the head'),
+    'StudHeadD': (13.0, 'design: passes the 15.6 mm keyhole entry; 45 deg underside prints without support'),
     'StudChamfer': (0.3, 'design: stud top edge'),
     'ScrewY': (46.0, 'design: between the lower keyhole (top Y 32.5) and the lever notch (Y 63.75)'),
     'ScrewDX': (12.0, 'design: screws at X 21 +/- 12, behind the plate'),
@@ -403,14 +404,21 @@ def jack_opening():
 
 
 def keyholes():
-    zf = z_front(); zr = z_rear()
+    """Entry hole for the stem head, slot for its groove, and a recess from the front over the whole
+    slide so the plate left under the head (KeyLandT) fits the groove. The head sits in the recess."""
+    zf = z_front(); zr = z_rear(); zl = zr + P['KeyLandT']
     cut = []
-    w = P['KeySlotW'] / 2
+    w, re = P['KeySlotW'] / 2, P['KeyEntryD'] / 2
     for key, (sx, sy) in cup_centres().items():
         ex, ey = entry_centre(key)
-        cut += [cyl(P['KeyEntryD'] / 2, sx, ey, zr - 1, zf + 1), cyl(w, sx, sy, zr - 1, zf + 1),
-                box(sx - w, sx + w, ey, sy, zr - 1, zf + 1)]
+        cut += [cyl(re, sx, ey, zr - 1, zf + 1), cyl(w, sx, sy, zr - 1, zf + 1),
+                box(sx - w, sx + w, ey, sy, zr - 1, zf + 1),
+                cyl(re, sx, sy, zl, zf + 1), box(sx - re, sx + re, ey, sy, zl, zf + 1)]
     return cut
+
+
+def cup_head_top():
+    return z_rear() - P['StemSeat'] + P['GrooveH'] + P['HeadT']
 
 
 def screw_centres():
@@ -420,9 +428,9 @@ def screw_centres():
 def stud(x, y):
     """Keyhole stud: a neck through the slot and a head with a 45 deg underside, so the bracket prints
     upright without support. The top is level with the cup heads, so the lower one clears the PCB."""
-    zr, zf = z_rear(), z_front()
+    zr = z_rear()
     rn, rh, c = P['StudNeckD'] / 2, P['StudHeadD'] / 2, P['StudChamfer']
-    z0 = zf + P['StudGap']; zt = zf + P['HeadGap'] + P['HeadT']
+    z0 = zr + P['KeyLandT'] + P['StudGap']; zt = cup_head_top()
     pts = [(0, zr - 0.5), (rn, zr - 0.5), (rn, z0), (rh, z0 + rh - rn), (rh, zt - c), (rh - c, zt), (0, zt)]
     face = Part.Face(Part.makePolygon([V(x + r, y, z) for r, z in pts + pts[:1]]))
     return Part.Solid(face.revolve(V(x, y, 0), V(0, 0, 1), 360))
@@ -744,7 +752,7 @@ def printed_part():
     kboxes = []
     for key, (sx, sy) in cup_centres().items():
         ex, ey = entry_centre(key)
-        kboxes.append((sx - w, sx + w, ey - w, sy + P['KeySlotW'] / 2 + 0.1))
+        kboxes.append((sx - w, sx + w, ey - w, sy + w))
     body = fillet_edges_in(body, kboxes, P['KeyEdgeR'], zf, 'keyholes')
     body = body.cut(latch_cut()).removeSplitter()
     g = P['LatchSlot'] + 0.1
@@ -760,15 +768,16 @@ def printed_part():
 
 
 def cup_shape(x, y):
-    zf = z_front(); zr = z_rear()
-    rim = zr - P['CupDepth']
-    hgt = P['CupDepth'] - P['CupRearGap']
-    outside = Part.makeCone(P['CupD'] / 2, P['CupShoulderR'], hgt, V(x, y, rim))
-    inside = Part.makeCone(P['CupD'] / 2 - P['CupWall'], P['CupShoulderR'] - P['CupWall'], hgt - 1.5,
-                           V(x, y, rim - 0.1))
-    stem = cyl(P['StemD'] / 2, x, y, zr - P['CupRearGap'] - 0.5, zf + P['HeadGap'])
-    head = cyl(P['HeadD'] / 2, x, y, zf + P['HeadGap'], zf + P['HeadGap'] + P['HeadT'])
-    return outside.cut(inside).fuse([stem, head]).removeSplitter()
+    """Suction cup in its keyhole: cup body, stem, groove through the keyhole land, head flange."""
+    zr = z_rear(); rs = P['StemD'] / 2
+    zs = zr - P['StemSeat']                               # stem shoulder, just behind the plate
+    rim = zr - P['CupDepth']; zb = zs - P['StemLen']
+    outside = Part.makeCone(P['CupD'] / 2, rs, zb - rim, V(x, y, rim))
+    inside = Part.makeCone(P['CupD'] / 2 - P['CupWall'], rs - P['CupWall'], zb - rim - 1.5, V(x, y, rim - 0.1))
+    stem = cyl(rs, x, y, zb - 0.5, zs)
+    groove = cyl(P['GrooveD'] / 2, x, y, zs - 0.01, zs + P['GrooveH'] + 0.01)
+    head = cyl(rs, x, y, zs + P['GrooveH'], cup_head_top())
+    return outside.cut(inside).fuse([stem, groove, head]).removeSplitter()
 
 
 def design_checks(printed, black, blue, bracket):
@@ -777,8 +786,8 @@ def design_checks(printed, black, blue, bracket):
     outline = plan_face()
     for key in cup_centres():
         sx, sy = cup_centres()[key]; ex, ey = entry_centre(key)
-        w = P['KeySlotW'] / 2; zr = z_rear()
-        kf = flat_face([cyl(P['KeyEntryD'] / 2, ex, ey, zr, zr + 1), cyl(w, sx, sy, zr, zr + 1),
+        w = P['KeyEntryD'] / 2; zr = z_rear()              # the head recess is the widest outline
+        kf = flat_face([cyl(w, ex, ey, zr, zr + 1), cyl(w, sx, sy, zr, zr + 1),
                         box(sx - w, sx + w, ey, sy, zr, zr + 1)], zr)
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
@@ -789,7 +798,8 @@ def design_checks(printed, black, blue, bracket):
     print('CHECK bracket overlap with the plate %.4f mm3' % bracket.common(printed).Volume)
     for key, (x, y) in cup_centres().items():
         print('CHECK stud %s gap to the plate %.2f mm' % (key, stud(x, y).distToShape(printed)[0]))
-    print('CHECK stud top to PCB rear %.2f mm' % (P['PCBRearZ'] - (zf + P['HeadGap'] + P['HeadT'])))
+    print('CHECK cup head and stud top to PCB rear %.2f mm, %.2f above the plate front' % (
+        P['PCBRearZ'] - cup_head_top(), cup_head_top() - zf))
     yc = P['StopY0'] + P['StopW'] / 2
     tab = P['StopGap'] * lever_shape(plate_top()) / lever_shape(yc)
     print('CHECK lever room: tab end moves %.2f mm toward the wall at the stop, bracket gives %.1f' % (tab, P['BracketT']))
