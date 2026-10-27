@@ -1,9 +1,9 @@
 # Enclosed case
 
-The DTT case with a wall around the PCB edge, a blue switch cover that slides
-S1, and a rear cover over the back of the PCB. Four countersunk M3 screws sit
-flush in the rear cover and clamp the PCB to heat-set inserts in the housing.
-It replaces the loop backing and the four 0408LTFB screws.
+The DTT case at one constant width, with a blue switch cover that slides S1
+and a rear cover tray that holds the PCB from its top face down. The original
+four PCB screws hold it together, with their heads flush in the rear cover.
+It replaces the loop backing.
 
 ![Front](images/Enclosed-Front.png)
 ![Rear](images/Enclosed-Rear.png)
@@ -17,7 +17,7 @@ It replaces the loop backing and the four 0408LTFB screws.
 
 | Part | File | Colour | Orientation |
 | --- | --- | --- | --- |
-| Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl`, `Housing-Logo-Inlay.stl`) | black | top face down |
+| Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl` in white, `Housing-Logo-Blue.stl` in blue) | black | top face down |
 | Rear cover | `parts/Rear-Cover-Black.stl` | black | outer face down |
 | Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flange face down |
 
@@ -25,18 +25,17 @@ It replaces the loop backing and the four 0408LTFB screws.
 
 | Qty | Part |
 | --- | --- |
-| 4 | M3 × 8 countersunk hex socket screw (ISO 10642 / DIN 7991) |
-| 4 | M3 × 4 heat-set insert for a 4.0 mm hole |
+| 4 | The original PCB screws, 0408LTFB (#4 × 1/2" pan head, self-tapping) |
 
 ## Assemble
 
-1. Press the four inserts into the housing bosses with a soldering iron.
-2. With the housing upside down, drop the switch cover into its slot from
+1. With the housing upside down, drop the switch cover into its slot from
    inside, grip outwards.
-3. Fit the PCB so the S1 actuator enters the pocket in the switch cover.
-4. Fit the rear cover and the four screws. Snug them; do not crush the PCB.
+2. Fit the PCB so the S1 actuator enters the pocket in the switch cover.
+3. Fit the rear cover and drive the four screws into the original bosses.
+   Snug them; do not strip the bosses.
 
-Size: 48.8 × 95.2 × 22.9 mm.
+Size: 50.0 × 95.2 × 22.3 mm.
 
 ## Source
 
@@ -52,8 +51,9 @@ Size: 48.8 × 95.2 × 22.9 mm.
   (actuator at Y 82.4, 1.5 mm wide) and allows 3.2 mm of travel. The old CAD
   switch model put the actuator 5 mm further along, so check the real part.
 - The switch cover slides freely (0.15 mm clearance) and stays in the window.
-- Inserts hold in the 6.4 mm bosses, and the screw heads sit flush.
-- USB-C and 3.5 mm plugs seat fully through the thicker end walls.
+- The screw heads sit flush in their 5.4 mm counterbores. They reach 9.6 mm
+  into the bosses; a #4 × 5/8" also fits if that feels short.
+- USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
 
-The CAD checks are geometric only. Clamp force, insert pull-out and drop
+The CAD checks are geometric only. Clamp force, thread hold and drop
 strength need a physical test.

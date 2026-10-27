@@ -23,10 +23,9 @@ import build_enclosed_case as B  # noqa: E402
 V = App.Vector
 BLACK = (0.16, 0.16, 0.17)
 BLUE = (0.09, 0.42, 0.93)
-STEEL = (0.25, 0.25, 0.27)
-BRASS = (0.78, 0.62, 0.30)
+CYAN = BLUE  # logo fill, printed in the same blue filament as the touch points
 IMAGES = os.path.join(HERE, "images")
-EXPLODE = {"housing": 45.0, "inserts": 32.0, "cover": -14.0, "screws": -26.0, "slider": 14.0}
+EXPLODE = {"housing": 45.0, "cover": -14.0, "screws": -28.0, "slider": 14.0}
 
 
 def paint(o, colour):
@@ -70,6 +69,14 @@ def assemble():
         s = g[k]
         print(k, s.isValid(), len(s.Solids), round(s.Volume, 1))
 
+    # The logo body is bound to the housing and would re-pad against the new
+    # shape, so keep its original solid as a plain part.
+    body = doc.getObject("Body")
+    logo_shape = body.Shape.copy()
+    body.removeObjectsFromDocument()
+    doc.removeObject("Body")
+    logo = feature(doc, "LogoInlay", "R+D logo inlay - print blue", logo_shape, CYAN, doc.getObject("Part"))
+
     housing = doc.getObject("Part__Feature001")
     housing.Shape = g["housing"]
     housing.Label = "Outer Body - enclosed"
@@ -77,8 +84,12 @@ def assemble():
     s1 = doc.getObject("Part__Feature002")
     s1.Shape = g["s1"]
 
-    for n in ["LoopVelcro"] + ["PCBMountScrew%d" % i for i in range(1, 5)]:
-        remove(doc, n)
+    remove(doc, "LoopVelcro")
+    screws = []
+    for i in range(1, 5):
+        o = doc.getObject("PCBMountScrew%d" % i)
+        o.Placement.move(V(0, 0, -B.P["screw_drop"]))  # head flush in the rear cover
+        screws.append(o)
     lb = doc.getObject("LoopBacking")
     lb.Label = "Rear cover"
     lb.Visibility = True
@@ -86,30 +97,26 @@ def assemble():
     cover = feature(doc, "RearCover", "Rear cover - print black", g["cover"], BLACK, lb)
     slider = feature(doc, "SwitchCover", "Switch cover - print blue", g["slider"], BLUE,
                      doc.getObject("Cover___V3_v5"))
-    screws = [feature(doc, "CoverScrew%d" % (i + 1), "Cover screw %d - M3x8 countersunk" % (i + 1), s, STEEL, fasteners)
-              for i, s in enumerate(g["screws"])]
-    inserts = [feature(doc, "Insert%d" % (i + 1), "Heat-set insert %d - M3x4" % (i + 1), s, BRASS, fasteners)
-               for i, s in enumerate(g["inserts"])]
 
     exploded(doc, housing, V(0, 0, EXPLODE["housing"]))
     exploded(doc, s1, V(0, 0, 0))
+    exploded(doc, logo, V(0, 0, EXPLODE["housing"]))
     exploded(doc, cover, V(0, 0, EXPLODE["cover"]))
     exploded(doc, slider, V(EXPLODE["slider"], 0, EXPLODE["housing"]))
     for o in screws:
         exploded(doc, o, V(0, 0, EXPLODE["screws"]))
-    for o in inserts:
-        exploded(doc, o, V(0, 0, EXPLODE["inserts"]))
 
     doc.getObject("Cover___V3_v5").Label = "Housing - black shell, white diffuser, blue switch cover"
-    fasteners.Label = "Fasteners - 4 cover screws, 4 inserts, 2 sensor screws"
+    fasteners.Label = "Fasteners - 4 PCB screws, 2 sensor screws"
     for n in ("Cover___V3_v5", "Part", "LoopBacking", "Fasteners"):
         doc.getObject(n).Visibility = True
     p = doc.getObject("AssemblyParameters")
-    for k, label in [("cover_thickness", "RearCoverThickness"), ("wall", "EdgeWallThickness"),
-                     ("travel", "SwitchCoverTravel")]:
+    x0, y0, x1, y1 = B.P["outer"]
+    for label, v in [("RearCoverThickness", B.P["cover_thickness"]), ("CaseWidth", x1 - x0),
+                     ("SwitchCoverTravel", B.P["travel"])]:
         if not hasattr(p, label):
             p.addProperty("App::PropertyLength", label, "Enclosed case")
-        setattr(p, label, B.P[k])
+        setattr(p, label, v)
     doc.recompute()
     doc.saveAs(B.OUT_FCSTD)
     return doc
@@ -127,7 +134,7 @@ def export(doc):
     parts = [
         ("Housing-Black", doc.getObject("Part__Feature001").Shape),
         ("Housing-Diffuser-White", doc.getObject("IntegratedDiffuser").Shape),
-        ("Housing-Logo-Inlay", doc.getObject("Body").Shape),
+        ("Housing-Logo-Blue", doc.getObject("LogoInlay").Shape),
         ("Switch-Cover-Blue", doc.getObject("SwitchCover").Shape),
         ("Rear-Cover-Black", doc.getObject("RearCover").Shape),
     ]
@@ -186,7 +193,7 @@ def render(doc):
         for o in grp.OutListRecursive:
             if o.Name in shapes:
                 assembled.append(o.Name)
-    always = ("Part__Feature001", "Diffuser", "Body", "RearCover", "SwitchCover")
+    always = ("Part__Feature001", "Diffuser", "LogoInlay", "RearCover", "SwitchCover")
     assembled = [n for n in assembled if saved.get(n) or n in always]
     # Assembled views.
     show_only(doc, assembled)
@@ -216,8 +223,7 @@ def sections(doc):
     import matplotlib.pyplot as plt
     parts = [("Part__Feature001", "#2a2a2c"), ("RearCover", "#55555a"), ("SwitchCover", "#176bee"),
              ("BoardRev4", "#1f6b3a"), ("Part__Feature002", "#9a9a9a"), ("Part__Feature003", "#9a9a9a"),
-             ("Part__Feature006", "#9a9a9a"), ("Insert1", "#c79e4c"), ("Insert2", "#c79e4c"),
-             ("CoverScrew1", "#777"), ("CoverScrew2", "#777")]
+             ("Part__Feature006", "#9a9a9a"), ("PCBMountScrew1", "#777"), ("PCBMountScrew2", "#777")]
     cuts = [("Switch cover, Y = %.1f" % B.P["act_y"], V(0, 1, 0), B.P["act_y"], (30, 49), 0),
             ("Screw, Y = 76", V(0, 1, 0), 76.0, (-4, 8), 0),
             ("Jack and USB-C, X = 20.9", V(1, 0, 0), 20.9, None, 1)]

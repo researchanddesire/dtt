@@ -1,12 +1,12 @@
 """Build the enclosed DTT case from ../DTT.FCStd.
 
-The housing grows a wall around the PCB edge, a sliding switch cover drives S1,
-and a rear cover closes the back of the PCB. Four countersunk M3 screws pass
-through the rear cover and PCB into heat-set inserts in the housing bosses.
+The housing is filled out to one rounded rectangle, a sliding switch cover
+drives S1, and a rear cover tray holds the PCB from its top face down. The
+original four PCB screws pass up through the tray and PCB into the housing
+bosses, with their heads sunk flush in the tray.
 
 Run with FreeCAD 1.1+ (GUI under xvfb keeps the colours in the saved file):
-    xvfb-run freecad build_enclosed_case.py
-    freecadcmd build_enclosed_case.py      # geometry only
+    xvfb-run -a freecad make_assembly.FCMacro
 Coordinates follow DTT.FCStd: X = pcb_x - 127.583333, Y = 151.9861 - pcb_y,
 PCB top at Z = -3.5, PCB bottom at Z = -5.1.
 """
@@ -27,27 +27,29 @@ V = App.Vector
 
 PARAMS = {
     # Stack (verified from DTT.FCStd and the KiCad board).
-    "pcb_top_z": -3.5,
+    "pcb_top_z": -3.5,  # also the seam between housing and rear cover
     "pcb_bottom_z": -5.1,
-    "housing_bottom_z": -3.632,
     "screw_axes": [(3.0, 76.0), (39.0, 76.0), (3.3, 27.5), (38.7, 27.5)],
-    # Walls around the PCB edge.
-    "wall": 1.6,  # added outside the original housing outline
-    "wall_overlap": 0.6,  # bond depth into the original 1.5 mm wall
-    "pcb_edge_gap": 0.3,  # PCB edge to skirt
-    # Rear cover.
-    "cover_thickness": 3.0,
+    # Outer shape: one rounded rectangle, the same width all the way along.
+    "outer": (-4.0, -0.6, 46.0, 94.6),
+    "outer_r": 4.0,
+    "top_z": 14.17,
+    "top_fillet": 1.2,
+    "bottom_chamfer": 0.8,
+    # Sloped sensor end of the original housing: z = z0 + k * (y - y0).
+    "slope": (9.774, 1.2, 1.368),
+    "wall_overlap": 0.6,  # bond depth into the original wall
+    "pcb_edge_gap": 0.3,  # PCB edge to rear cover wall
+    # Rear cover (a tray that holds the PCB).
+    "cover_thickness": 3.0,  # floor under the PCB
     "cover_pocket_inset": 0.9,  # pocket edge inside the PCB outline
     "cover_pocket_depth": 1.3,  # clears USB shell legs and jack pegs
-    "cover_relief": 0.2,  # cover stays clear of the PCB except at the pads
+    "cover_relief": 0.2,  # floor stays clear of the PCB except at the pads
     "cover_pad_d": 7.5,
-    "screw_clear_d": 3.4,
-    "csk_d": 6.4,  # ISO 10642 / DIN 7991 M3 head, 90 degrees
-    # Heat-set inserts (M3 x 4, 4.0 mm hole).
-    "insert_hole_d": 4.0,
-    "insert_hole_depth": 5.0,
-    "boss_d": 6.4,
-    "boss_top_z": 2.5,
+    # Original PCB screws (0408LTFB, #4 x 1/2", 4.8 mm pan head) sunk flush.
+    "screw_clear_d": 3.2,
+    "cbore_d": 5.4,
+    "screw_drop": 1.5,  # screws sit this much lower than in DTT.FCStd
     # S1 (JS102011JAQN). Actuator position from the KiCad F.Fab drawing.
     "sw_body": ((36.7, 79.1, -3.5), (43.3, 88.9, 0.6)),  # clearance box
     "act_y": 82.39,  # actuator centre, drawn position (pcb y 69.59)
@@ -55,28 +57,20 @@ PARAMS = {
     "act_tip_x": 45.06,
     "act_z": (-2.4, 0.2),
     "travel": 3.2,  # generous; S1's own detents set the end positions
-    # Switch cover (slider) and its pod on the housing wall.
+    # Switch cover (slider). The window opens down to the seam.
     "pcb_edge_x": 42.92,
     "slider_clear": 0.15,
     "flange_t": 1.0,
     "grip_len": 5.0,
     "flange_margin": 1.0,
     "grip_proud": 0.4,
-    "window_z": (-2.9, 0.7),
-    "pod_outer_x": 46.2,
-    "pod_y": (76.9, 91.0),
-    "pod_top_z": 2.6,
-    "pod_r": 2.0,
+    "window_z": (-3.35, 0.7),  # grip, bottom 0.15 above the seam
     # Connector openings.
     "jack_axis": (20.9, -0.7),
     "jack_d": 6.2,
     "usb_center": (20.95, -2.155),
     "usb_size": (12.6, 6.8),
     "usb_r": 3.0,
-    # Fasteners shown in the assembly.
-    "screw_len": 8.0,
-    "insert_od": 4.0,  # drawn at hole size; the knurl melts into the boss
-    "insert_len": 4.0,
 }
 P = PARAMS
 
@@ -126,75 +120,61 @@ def outline(board):
     return w
 
 
+def envelope(z0, z1):
+    x0, y0, x1, y1 = P["outer"]
+    s = rounded_rect(x0, y0, x1, y1, P["outer_r"]).extrude(V(0, 0, z1 - z0))
+    s.translate(V(0, 0, z0))
+    return s
+
+
+def above_slope(shift):
+    """Everything above the sensor-end slope, moved shift outwards along -Y."""
+    z0, y0, k = P["slope"]
+    y0 -= shift
+    pts = [(y0 + (-20 - z0) / k, -20), (y0 + (40 - z0) / k, 40), (-40, 40), (-40, -20)]
+    w = Part.makePolygon([V(-20, y, z) for (y, z) in pts] + [V(-20, pts[0][0], pts[0][1])])
+    return Part.Face(w).extrude(V(80, 0, 0))
+
+
+def outer_upper():
+    y0 = P["outer"][1]
+    zs, zt = P["pcb_top_z"], P["top_z"]
+    r = P["top_fillet"]
+    e = envelope(zs, zt)
+    e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
+    e = e.cut(above_slope(1.0 - y0))  # original end wall at y = 1
+    try:
+        slope = [f for f in e.Faces if 0.5 < f.normalAt(0, 0).z < 0.99]
+        e = e.makeFillet(r, slope[0].Edges)
+    except Exception as ex:
+        print("slope fillet skipped:", ex)
+    return e
+
+
+def connector_cuts():
+    jx, jz = P["jack_axis"]
+    ux, uz = P["usb_center"]
+    return [Part.makeCylinder(P["jack_d"] / 2, 6.0, V(jx, -3.5, jz), V(0, 1, 0)),
+            stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], 91.0, 97.0)]
+
+
 def build_housing(H, board):
     pcb = outline(board)
     p0 = pcb.copy()
     p0.translate(V(0.08, 0.02, 0))  # original housing outline
-    W = P["wall"]
-    zt = H.BoundBox.ZMax + 1
-    zb = P["pcb_bottom_z"]
-    zh = P["housing_bottom_z"]
+    zs, zt = P["pcb_top_z"], P["top_z"] + 1
 
-    # Upper wall: copies of the housing scaled in plan so the outer wall
-    # moves out by W (and W / 2 to bridge the joint). The top edge, chamfers
-    # and corner shapes come from the housing itself.
-    bb = p0.BoundBox
-    cx, cy = bb.Center.x, bb.Center.y
-    inner = p0.makeOffset2D(-P["wall_overlap"])
-    band = ext(p0.makeOffset2D(W + 2), P["pcb_top_z"], zt).cut(ext(inner, P["pcb_top_z"] - 1, zt))
+    # Fill between the original housing and the outer rectangle. Inside the
+    # original wall keep the housing as it is, except above its sloped end,
+    # where the fill thickens the slope so it meets the larger outline.
+    keep = ext(p0.makeOffset2D(-P["wall_overlap"]), zs - 1, zt).cut(above_slope(0.0))
+    fill = outer_upper().cut(keep)
+    h = H.fuse(fill).common(box(-20, -20, zs, 70, 120, zt)).removeSplitter()
 
-    def plan_scale(w):
-        m = App.Matrix()
-        m.move(V(-cx, -cy, 0))
-        m.scale(1 + w / (bb.XLength / 2), 1 + w / (bb.YLength / 2), 1)
-        m.move(V(cx, cy, 0))
-        return m
-
-    upper = [H.transformGeometry(plan_scale(w)).common(band) for w in (W, W / 2)]
-    p1 = p0.transformGeometry(plan_scale(W))
-    # Skirt and cover sit 0.05 inside the wall above: coincident faces leave
-    # cracks in the STL.
-    p1s = p0.transformGeometry(plan_scale(W - 0.05))
-
-    # Skirt around the PCB edge, down to the rear cover.
-    skirt = ext(p1s, zb, P["pcb_top_z"] + 0.2).cut(ext(pcb.makeOffset2D(P["pcb_edge_gap"]), zb - 1, P["pcb_top_z"] + 0.3))
-
-    # Pod that carries the switch cover.
-    x0 = P["pcb_edge_x"] - 2.5
-    pz = P["pod_top_z"]
-    y0, y1 = P["pod_y"]
-    pod = rounded_rect(x0, y0, P["pod_outer_x"], y1, P["pod_r"]).extrude(V(0, 0, pz - zb))
-    pod.translate(V(0, 0, zb))
-    try:
-        top = [e for e in pod.Edges if abs(e.BoundBox.ZMin - pz) < 1e-6 and abs(e.BoundBox.ZMax - pz) < 1e-6]
-        pod = pod.makeChamfer(1.2, top)
-    except Exception as e:
-        print("pod chamfer skipped:", e)
-    pod = pod.cut(ext(inner, zb - 1, zt))
-
-    # Larger bosses for heat-set inserts.
-    bosses = []
-    for (x, y) in P["screw_axes"]:
-        b = zcyl(x, y, P["boss_d"], P["pcb_top_z"], P["boss_top_z"])
-        cone = Part.makeCone(P["boss_d"] / 2, 2.5, 1.5, V(x, y, P["boss_top_z"]))
-        bosses.append(b.fuse(cone))
-
-    h = H.fuse(upper + [skirt, pod] + bosses).removeSplitter()
-
-    # Cuts.
-    cuts = []
-    cuts.append(ext(pcb.makeOffset2D(P["pcb_edge_gap"]), zb - 2, P["pcb_top_z"]))  # PCB pocket
     (a0, a1) = P["sw_body"]
-    cuts.append(box(a0[0], a0[1], a0[2], a1[0], a1[1], a1[2]))
-    cuts += slider_cuts()
-    jx, jz = P["jack_axis"]
-    cuts.append(Part.makeCylinder(P["jack_d"] / 2, 5.0, V(jx, -3.5, jz), V(0, 1, 0)))
-    ux, uz = P["usb_center"]
-    cuts.append(stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], 91.0, 97.0))
-    for (x, y) in P["screw_axes"]:
-        cuts.append(zcyl(x, y, P["insert_hole_d"], P["pcb_top_z"] - 0.5, P["pcb_top_z"] + P["insert_hole_depth"]))
+    cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])] + slider_cuts() + connector_cuts()
     h = h.cut(cuts).removeSplitter()
-    return h, p1s, pcb
+    return h, pcb
 
 
 def slider_geom():
@@ -209,18 +189,19 @@ def slider_geom():
 
 
 def slider_cuts():
+    """Channel for the flange (housing and rear cover) and the grip window."""
     g = slider_geom()
     ya, t, c = P["act_y"], P["travel"], g["c"]
-    zb = P["pcb_bottom_z"]
-    chan = box(g["xi"] - 0.2, ya - g["fl"] / 2 - c, zb - 0.5, g["xw"], ya + t + g["fl"] / 2 + c, g["fz1"] + c)
-    win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, g["wz0"] - c, P["pod_outer_x"] + 1, ya + t + g["gl"] / 2 + c, g["wz1"] + c)
+    chan = box(g["xi"] - 0.2, ya - g["fl"] / 2 - c, g["fz0"] - c, g["xw"], ya + t + g["fl"] / 2 + c, g["fz1"] + c)
+    win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, P["pcb_top_z"] - 0.01, P["outer"][2] + 1,
+              ya + t + g["gl"] / 2 + c, g["wz1"] + c)
     return [chan, win]
 
 
 def build_slider():
     g = slider_geom()
     ya = P["act_y"]
-    xo = P["pod_outer_x"] + P["grip_proud"]
+    xo = P["outer"][2] + P["grip_proud"]
     flange = box(g["xi"], ya - g["fl"] / 2, g["fz0"], g["xf"], ya + g["fl"] / 2, g["fz1"])
     grip = box(g["xf"] - 0.01, ya - g["gl"] / 2, g["wz0"], xo, ya + g["gl"] / 2, g["wz1"])
     try:
@@ -239,27 +220,28 @@ def build_slider():
     return s.removeSplitter()
 
 
-def build_cover(p1, pcb):
+def build_cover(pcb):
+    """Rear cover: a tray from the seam at the PCB top down past the PCB back."""
+    zs = P["pcb_top_z"]
     zt = P["pcb_bottom_z"]
     zb = zt - P["cover_thickness"]
-    cover = ext(p1, zb, zt)
-    # Pod footprint closes the bottom of the slider channel.
-    y0, y1 = P["pod_y"]
-    pod = rounded_rect(P["pcb_edge_x"] - 2.5, y0, P["pod_outer_x"], y1, P["pod_r"]).extrude(V(0, 0, zt - zb))
-    pod.translate(V(0, 0, zb))
-    cover = cover.fuse(pod)
-    # Relief under the PCB and the central pocket.
-    cover = cover.cut(ext(pcb.makeOffset2D(P["pcb_edge_gap"]), zt - P["cover_relief"], zt + 1))
-    cover = cover.cut(ext(pcb.makeOffset2D(-P["cover_pocket_inset"]), zt - P["cover_pocket_depth"], zt + 1))
+    cover = envelope(zb, zs)
+    try:
+        bottom = [e for e in cover.Edges if e.BoundBox.ZMax < zb + 1e-6]
+        cover = cover.makeChamfer(P["bottom_chamfer"], bottom)
+    except Exception as e:
+        print("cover chamfer skipped:", e)
+    shell = cover.copy()
+    # PCB pocket, relief under the PCB and the central pocket.
+    cover = cover.cut(ext(pcb.makeOffset2D(P["pcb_edge_gap"]), zt - P["cover_relief"], zs + 1))
+    cover = cover.cut(ext(pcb.makeOffset2D(-P["cover_pocket_inset"]), zt - P["cover_pocket_depth"], zs + 1))
     pads = [zcyl(x, y, P["cover_pad_d"], zt - P["cover_pocket_depth"] - 0.1, zt) for (x, y) in P["screw_axes"]]
-    cover = cover.fuse(pads).common(ext(p1, zb, zt).fuse(pod))
-    ux, uz = P["usb_center"]
-    cover = cover.cut(stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], 91.0, 97.0))
+    cover = cover.fuse(pads).common(shell)
+    cover = cover.cut(slider_cuts()[:1] + connector_cuts())
     holes = []
     for (x, y) in P["screw_axes"]:
         holes.append(zcyl(x, y, P["screw_clear_d"], zb - 1, zt + 1))
-        d = P["csk_d"]
-        holes.append(Part.makeCone(d / 2 + 0.5, P["screw_clear_d"] / 2, d / 2 + 0.5 - P["screw_clear_d"] / 2, V(x, y, zb - 0.5)))
+        holes.append(zcyl(x, y, P["cbore_d"], zb - 1, zb + P["screw_drop"]))
     cover = cover.cut(holes)
     return cover.removeSplitter()
 
@@ -272,30 +254,13 @@ def build_s1(model):
     return body.fuse(act).removeSplitter()
 
 
-def build_screw(x, y):
-    zb = P["pcb_bottom_z"] - P["cover_thickness"]
-    dk, k = 6.0, 1.5
-    head = Part.makeCone(dk / 2, 1.5, k, V(x, y, zb + 0.2))
-    shank = zcyl(x, y, 3.0, zb + 0.2 + k - 0.01, zb + 0.2 + P["screw_len"])
-    s = head.fuse(shank)
-    hexagon = Part.makePolygon([V(x + 1.155 * math.cos(math.pi * i / 3), y + 1.155 * math.sin(math.pi * i / 3), zb)
-                                for i in range(7)])
-    return s.cut(Part.Face(hexagon).extrude(V(0, 0, 1.4)))  # 2 mm hex socket
-
-
-def build_insert(x, y):
-    z0 = P["pcb_top_z"]
-    o = zcyl(x, y, P["insert_od"], z0, z0 + P["insert_len"])
-    return o.cut(zcyl(x, y, 3.0, z0 - 1, z0 + P["insert_len"] + 1))
-
-
 def build_all(doc):
     H = doc.getObject("Part__Feature001").Shape
     board = doc.getObject("BoardRev4").Shape
 
-    housing, p1, pcb = build_housing(H, board)
+    housing, pcb = build_housing(H, board)
     slider = build_slider()
-    cover = build_cover(p1, pcb)
+    cover = build_cover(pcb)
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
     print("cover", cover.isValid(), len(cover.Solids), round(cover.Volume, 1))
@@ -305,6 +270,4 @@ def build_all(doc):
         slider=slider,
         cover=cover,
         s1=build_s1(doc.getObject("Part__Feature002").Shape),
-        screws=[build_screw(x, y) for (x, y) in P["screw_axes"]],
-        inserts=[build_insert(x, y) for (x, y) in P["screw_axes"]],
     )
