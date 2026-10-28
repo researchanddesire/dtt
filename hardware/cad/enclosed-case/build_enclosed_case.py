@@ -95,10 +95,9 @@ PARAMS = {
     "button_ball2": (12.55, 63.7, 3.5),  # second ball, on the case behind the first
     "button_shaft_x0": 14.6,  # centre of the shaft's round end
     "button_blend": 4.5,  # fillet from the shaft end into the second ball
-    # Head: a soft rim at the back, a dome and a slit at the tip.
+    # Head: a soft rim at the back and a dome to the tip.
     "head_rim": (30.1, 64.2, 72.6, 2.5),  # back x, bottom y, top y, corner radius
     "head_dome": (32.6, 6.0),  # dome start x and length; the tip is on the shaft axis
-    "head_slit": (0.8, 1.0),  # width, length
     # Under the button, walls round the slot hold a floor that stops its travel.
     "button_tray": (13.35, 29.8, 0.8, 9.57, 10.57),  # fences from x, to x, wall thickness, floor z
     "plate_z": 12.57,  # top plate underside
@@ -452,15 +451,13 @@ def button_inlay(grow=0.05):
     """Button icon: head, shaft and two balls. The first ball, the shaft bottom
     and the head follow the slot, grown a hair into it so the cut never lands on
     its walls. The second ball sits on the case behind the first, so the slot arc
-    between them reads as the crease, and a fillet runs the shaft end into it.
-    The case shows through a slit at the tip."""
+    between them reads as the crease, and a fillet runs the shaft end into it."""
     lx, ly, lr = P["button_left"]
     bx, by, br = P["button_ball2"]
     b0, b1 = P["button_bar_y"]
     xs, ys, hs = P["button_shaft_x0"], (b0 + b1) / 2, (b1 - b0) / 2 + grow
     rf = P["button_blend"]
     xc = P["head_rim"][0]
-    sw, sl = P["head_slit"]
     z0, z1 = P["inlay_z"]
 
     def tri(*pts):
@@ -481,9 +478,7 @@ def button_inlay(grow=0.05):
         tri((xs, ys), (bx, by), (lx, ly)),  # closes the pinhole between the three
         tri((xs, ys), (bx, by), (fx, fy)).cut(disc(fx, fy, rf, z0)),
     ]))
-    tip = sum(P["head_dome"])
-    slit = rect(tip - sl, ys - sw / 2, tip + 1, ys + sw / 2, z0).fuse(disc(tip - sl, ys, sw / 2, z0))
-    return icon.cut(slit).extrude(V(0, 0, z1 + 1 - z0))
+    return icon.extrude(V(0, 0, z1 + 1 - z0))
 
 
 def build_all(doc):
