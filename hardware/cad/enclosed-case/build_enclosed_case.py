@@ -67,7 +67,8 @@ PARAMS = {
     "slider_clear": 0.15,
     "flange_t": 1.0,
     "grip_len": 5.0,
-    "flange_margin": 1.0,
+    "flange_margin": 1.0,  # flange past the window above and below
+    "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
     "grip_proud": 0.4,
     "window_z": (-3.35, 0.7),  # grip, bottom 0.15 above the seam
     # Connector openings.
@@ -82,9 +83,9 @@ PARAMS = {
     "jack_tab_y1": 0.6,  # inner face, short of the PCB pocket
     "tab_clear": 0.1,
     # Tongue on the rear cover rim, in a groove in the housing.
-    "tongue": (0.9, 0.8, 1.0),  # inset from the outer face, width, height
-    "tongue_y": (6.0, 89.0),
-    "tongue_clear": 0.1,
+    "groove": (0.8, 1.0, 1.1),  # inset from the outer face, width, depth
+    "groove_y": (5.9, 89.1),
+    "tongue": (0.6, 0.6, 0.2),  # width, height, end clearance; centred in the groove (0.8 x 1.0 was too tight)
     # Blue inlay on the flexure button (a touch point). The button is cut free
     # of the top plate by a slot round a ball, a shaft and a head, and bends at
     # the plate between the start of the top channel and the end of the arc.
@@ -267,8 +268,9 @@ def slider_geom():
     xw = xf + c  # window wall inner face
     wz0, wz1 = P["window_z"]
     m = P["flange_margin"]
-    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0 - m, fz1=wz1 + m,
-                gl=P["grip_len"], fl=P["grip_len"] + 2 * m, c=c)
+    gl, t = P["grip_len"], P["travel"]
+    fl = gl + 2 * c + 2 * t + 2 * P["flange_cover"]  # covers the whole window at either end of the travel
+    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0 - m, fz1=wz1 + m, gl=gl, fl=fl, c=c)
 
 
 def slider_cuts():
@@ -357,18 +359,22 @@ def build_screw(x, y):
     return s.cut(recess).removeSplitter()
 
 
-def tongue(grow=0.0):
-    """Tongues on the rear cover rim along the two long sides, in grooves in the
-    housing. The end walls are too thin beside the PCB for one."""
+def tongue(groove=False):
+    """Tongues on the rear cover rim along the two long sides, centred in grooves
+    in the housing. The end walls are too thin beside the PCB for one."""
     x0, y0, x1, y1 = P["outer"]
-    a, w, h = P["tongue"]
-    ya, yb = P["tongue_y"]
+    a, w, h = P["groove"]
+    e = 0.0
+    if not groove:
+        w, h, e = P["tongue"]
+        a += (P["groove"][1] - w) / 2
+    ya, yb = P["groove_y"]
     zs = P["pcb_top_z"]
-    t = [box(x0 + a - grow, ya - grow, zs - 0.01, x0 + a + w + grow, yb + grow, zs + h + grow),
-         box(x1 - a - w - grow, ya - grow, zs - 0.01, x1 - a + grow, yb + grow, zs + h + grow)]
+    t = [box(x0 + a, ya + e, zs - 0.01, x0 + a + w, yb - e, zs + h),
+         box(x1 - a - w, ya + e, zs - 0.01, x1 - a, yb - e, zs + h)]
     gaps = [g.BoundBox for g in slider_cuts()]
     return Part.makeCompound(t).fuse([]).cut(
-        [box(g.XMin, g.YMin - 0.6, zs - 1, g.XMax + 2, g.YMax + 0.6, zs + 3) for g in gaps])
+        [box(g.XMin, g.YMin - 0.6 - e, zs - 1, g.XMax + 2, g.YMax + 0.6 + e, zs + 3) for g in gaps])
 
 
 def button_head(z, grow=0.0):
@@ -494,7 +500,7 @@ def build_all(doc):
     cover = cover.fuse(tongue()).removeSplitter()
     button = housing.common(button_inlay()).removeSplitter()
     housing = housing.cut(button_inlay()).removeSplitter()
-    housing = housing.cut(tongue(P["tongue_clear"])).removeSplitter()
+    housing = housing.cut(tongue(groove=True)).removeSplitter()
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
     print("cover", cover.isValid(), len(cover.Solids), round(cover.Volume, 1))
