@@ -49,6 +49,21 @@ def run_guard(environment):
 
 
 class PrivateBuildSecurityTests(unittest.TestCase):
+    def test_variant_development_uses_explicit_local_server_only(self):
+        for profile in ("development-v1", "development-v2"):
+            env = Environment(PIOENV=profile, defines=["VERSIONDEV"])
+            with mock.patch("development_server.development_server", return_value="http://192.168.2.59:3000") as load:
+                self.assertEqual(run_guard(env), "")
+            load.assert_called_once_with(ROOT)
+            self.assertIn(("RAD_SERVER", '"http://192.168.2.59:3000"'), env["defines"])
+            with self.assertRaises(ValueError):
+                run_guard(Environment(PIOENV=profile, defines=["VERSIONDEV", "RAD_SERVER"]))
+
+    def test_release_does_not_read_local_development_settings(self):
+        for profile in ("staging-v1", "staging-v2", "production-v1", "production-v2"):
+            with mock.patch("development_server.development_server", side_effect=AssertionError("Release read local settings")):
+                self.assertEqual(run_guard(Environment(PIOENV=profile, defines=[])), "")
+
     def test_development_flags_are_neither_logged_nor_rewritten(self):
         env = Environment(PIOENV="development", defines=[
             ("WIFI_PASSWORD", "synthetic-do-not-log"),

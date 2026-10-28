@@ -7,6 +7,7 @@
 #include <esp_ota_ops.h>
 
 #include "FirmwareProvenance.h"
+#include "FirmwareProvenanceResponse.h"
 #include "constants/Version.h"
 #include "input.h"
 #include "services/board.hpp"
@@ -61,6 +62,8 @@ const radble::Resource RESOURCES[] = {
     {"voltage_offset", "setting.voltageCalibrationOffset", "setting",
      "float", "V", RWP, "{\"min\":-1,\"max\":1}"},
 #ifndef PROVISION
+    {"settings_fetch", "connectivity.settings", "connectivity", "object", "", R,
+     "{\"diagnosticOnly\":true,\"schema\":2}"},
     {"position", "motion.position", "motion", "float", "cm", RS, ""},
     {"speed", "motion.speed", "motion", "float", "cm/s", RS, ""},
     {"rpm", "motion.rpm", "motion", "float", "rpm", RS, ""},
@@ -125,7 +128,9 @@ const radble::Resource RESOURCES[] = {
     {"session_details", "target.sessionDetails", "target", "event", "", RW,
      ""},
     {"play", "target.play", "target", "event", "", RW, ""},
+#ifdef BYPASS_PLAY
     {"target_grade", "target.grade", "target", "event", "", RW, ""},
+#endif
     {"retry", "target.retry", "target", "event", "", RW, ""},
     {"final", "target.final", "target", "event", "", RW, ""},
 #endif
@@ -207,6 +212,22 @@ radble::Result calibrationValue(const String &path) {
 }
 
 #ifndef PROVISION
+radble::Result settingsFetchDiagnostic(JsonObjectConst args) {
+    const auto requested = args["view"];
+    SettingsFetchView view;
+    if ((!requested.isNull() &&
+         (!requested.is<const char *>() ||
+          requested.as<JsonString>().size() != std::strlen(requested.as<const char *>()))) ||
+        !parseSettingsFetchView(requested | "summary", view))
+        return radble::Result::failure("invalid_value", "Unknown settings diagnostic view");
+    JsonDocument document;
+    document["path"] = "connectivity.settings";
+    writeSettingsFetchStatus(document.as<JsonObject>(), getSettingsFetchStatus(), view);
+    String output;
+    serializeJson(document, output);
+    return radble::Result::success(output);
+}
+
 radble::Result sessionDefinition(size_t index) {
     if (index >= session.segments.size())
         return radble::Result::failure("invalid_value", "Segment index is out of range");
@@ -317,6 +338,20 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
     }
 
     if (operation == "sensor.read" || operation == "setting.read") {
+        if (path == "device.firmwareProvenance") {
+            const auto snapshot = firmware::provenance::runningSnapshot(
+                FIRMWARE_TRACK, "dtt", VERSION, FIRMWARE_BUILD_SHA);
+            const auto reply = firmware::provenance::response(snapshot, args);
+            return reply.ok ? radble::Result::success(reply.json.c_str())
+                            : radble::Result::failure(reply.code, reply.message);
+        }
+#ifndef PROVISION
+        if (path == "connectivity.settings")
+            return settingsFetchDiagnostic(args);
+#endif
+#ifndef PROVISION
+        TrainingGuard guard(trainingMutex);
+#endif
         JsonDocument document;
         document["path"] = path;
         if (path == "button.main")
@@ -414,15 +449,6 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             document["value"] = serialNumber;
         else if (path == "device.alphaChannel")
             document["value"] = isAlphaVersion;
-        else if (path == "device.firmwareProvenance") {
-            const auto snapshot = firmware::provenance::runningSnapshot(
-                FIRMWARE_TRACK, "dtt", VERSION, FIRMWARE_BUILD_SHA);
-            document["origin"] = snapshot.origin;
-            document["keyId"] = snapshot.keyId;
-            document["provenanceId"] = snapshot.provenanceId;
-            document["imageSha256"] = snapshot.imageSha256;
-            document["compactJws"] = snapshot.token;
-        }
         else return radble::Result::failure("unknown_path", "Unknown resource path");
         String output;
         serializeJson(document, output);
@@ -598,9 +624,11 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         else if (path == "target.play")
             handled = stateName().startsWith("play.details") &&
                       stateMachine->process_event(button_long_pressed{});
+#ifdef BYPASS_PLAY
         else if (path == "target.grade")
             handled = stateName() == "play.idle" &&
-                      stateMachine->process_event(done{});
+                      stateMachine->process_event(button_long_pressed{});
+#endif
         else if (path == "target.retry")
             handled = stateName() == "play.failed" &&
                       stateMachine->process_event(done{});
@@ -675,26 +703,30 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 }
 
 String snapshot(radble::Surface surface, void*) {
+    const String currentState = stateName();
+#ifndef PROVISION
+    TrainingGuard guard(trainingMutex);
+#endif
     JsonDocument document;
     switch (surface) {
         case radble::Surface::State:
-            document["state"] = stateName();
+            document["state"] = currentState;
 #ifndef PROVISION
             document["sessionId"] = session.id;
             document["segment"] = session.segmentIdx;
             document["segmentCount"] = session.segmentCount;
-            document["training"] = currentSegment != nullptr;
+            document["training"] = trainingLifecycle.active();
 #endif
             break;
         case radble::Surface::Essential:
             refreshPowerTelemetry();
-            document["state"] = stateName();
+            document["state"] = currentState;
             document["powered"] = true;
             document["batteryPercent"] = powerTelemetry.percent;
             document["charging"] = powerTelemetry.charging;
 #ifndef PROVISION
-            document["gameMode"] = currentSegment != nullptr;
-            if (currentSegment != nullptr) {
+            document["gameMode"] = trainingLifecycle.active();
+            if (trainingLifecycle.active() && currentSegment) {
                 document["positionCm"] = currentSegment->currentPosition;
                 document["targetStartCm"] = currentSegment->startWindow;
                 document["targetEndCm"] = currentSegment->endWindow;

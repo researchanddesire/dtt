@@ -28,7 +28,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install PlatformIO Core
-        run: pip install --upgrade platformio
+        run: pip install platformio==6.2.0
 
       - name: Check PlatformIO Project
         run: |
@@ -47,7 +47,12 @@ jobs:
 
       # Native tests above install ArduinoJson and Unity for these host checks.
       - name: Test dashboard transport and session cache boundaries
-        run: python test/security_dashboard_transport/test_source_behaviour.py
+        run: |
+          python test/security_dashboard_transport/test_source_behaviour.py --prepare-reply-dependency
+          python test/security_dashboard_transport/test_source_behaviour.py
+          python test/security_firmware_provenance/test_response.py
+          python test/security_training_lifecycle/test_lifecycle.py
+          python test/security_upload_queue/test_response_policy.py
 
       - name: Test captive portal isolation and deadlines
         run: python test/native_wifi_portal/test_portal_safety.py

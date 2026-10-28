@@ -57,8 +57,8 @@ struct dtt_state_machine {
             "init.idle"_s + event<request_pairing>[isOnline<request_pairing>] = "pairing"_s,
             "init.idle"_s + event<request_pairing> = "wifiSettings"_s,
             "init.idle"_s + event<force_update> = "update"_s,
-            "init.idle"_s + event<button_pressed> / startTask(notifyTrainingTask, notifyTrainingTaskName, &notifyTrainingTaskHandle, RUNTIME_TASK_STACK_MULTIPLIER) = "init.preflight"_s,
-            "init.idle"_s + event<timeout_expired> / startTask(notifyTrainingTask, notifyTrainingTaskName, &notifyTrainingTaskHandle, RUNTIME_TASK_STACK_MULTIPLIER) = "init.preflight"_s,
+            "init.idle"_s + event<button_pressed> = "init.preflight"_s,
+            "init.idle"_s + event<timeout_expired> = "init.preflight"_s,
             "init.idle"_s + sml::on_exit<_> / (clear),
 
             "init.preflight"_s + on_entry<_> / (drawPage(&preflightPage), preflightCheck),
@@ -176,16 +176,16 @@ struct dtt_state_machine {
             "play.begin"_s + event<done> = "play.idle"_s,
             "play.begin"_s + event<fail> / recoverMissingSegment = "play.details.session"_s,
 
-            "play.idle"_s + on_entry<_> / (clear,
-                startTask(getDistanceTask, distanceTaskName, &getDistanceTaskHandle, SENSOR_TASK_STACK_MULTIPLIER, 0),
-                startTask(drawPlayModeTask, drawPlayModeTaskName, &drawPlayModeTaskHandle, RUNTIME_TASK_STACK_MULTIPLIER, 1)),
-            "play.idle"_s + event<done> = "play.grade"_s,
+            "play.idle"_s + on_entry<_> / (clear, startTrainingRun),
+            "play.idle"_s + sml::on_exit<_> / stopTraining,
+            "play.idle"_s + event<training_worker_finished>[completedTrainingWorker] = "play.grade"_s,
+            "play.idle"_s + event<training_worker_failed>[currentTrainingWorker] / recoverMissingSegment = "play.details.session"_s,
             "play.idle"_s + event<recalibrate> = "play.calibration.min"_s,
             #ifdef BYPASS_PLAY
             "play.idle"_s + event<button_long_pressed> = "play.grade"_s,
             #endif
 
-            "play.grade"_s + on_entry<_> / (drawGradeOrFailure, startTask(saveResultsTask, saveResultsTaskName, &saveResultsTaskHandle, RUNTIME_TASK_STACK_MULTIPLIER)),
+            "play.grade"_s + on_entry<_> / (drawGradeOrFailure, saveCompletedResult),
             "play.grade"_s + event<button_pressed> / evaluatePassFail,
             "play.grade"_s + event<timeout_expired> / evaluatePassFail,
             "play.grade"_s + event<segment_failed> = "play.failed"_s,

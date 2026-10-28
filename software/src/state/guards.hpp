@@ -34,6 +34,16 @@ constexpr auto preflightPending =
 
 #ifndef PROVISION
 
+constexpr auto completedTrainingWorker = [](const training_worker_finished& event) {
+    TrainingGuard guard(trainingMutex);
+    return currentSegment && trainingLifecycle.mayComplete(
+        event.generation, currentSegment->state == TrainingState::END);
+};
+constexpr auto currentTrainingWorker = [](const training_worker_failed& event) {
+    TrainingGuard guard(trainingMutex);
+    return trainingLifecycle.current(event.generation);
+};
+
 template <typename Event = done>
 constexpr auto isSessionLoadComplete =
     [](const Event &) { return sessionLoadComplete; };

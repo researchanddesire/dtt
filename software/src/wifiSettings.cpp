@@ -51,7 +51,9 @@ namespace {
     }
 }  // namespace
 
-SegmentBase *currentSegment = nullptr;
+std::shared_ptr<SegmentBase> currentSegment;
+ESP32RecursiveMutex trainingMutex;
+TrainingLifecycle trainingLifecycle;
 
 Session session = {
     .id = uuid(),
@@ -162,6 +164,7 @@ class DashboardResponseSink final : public Stream {
     int peek() override { return -1; }
     void flush() override {}
     bool failed() const { return failed_; }
+    size_t receivedBytes() const { return received_; }
 
    private:
     String *output_;
@@ -172,8 +175,10 @@ class DashboardResponseSink final : public Stream {
 
 // All dashboard credentials remain scoped to the configured API origin.
 int postJson(const String &endpoint, const JsonDocument &doc,
-             String *responsePayload, const int timeoutMs) {
+             String *responsePayload, const int timeoutMs,
+             DashboardResponseMetrics *metrics) {
     NetworkRequestLock requestLock;
+    if (metrics) *metrics = DashboardResponseMetrics{};
     if (responsePayload) *responsePayload = "";
     if (timeoutMs <= 0 || timeoutMs > 30000 || doc.overflowed())
         return HTTPC_ERROR_TOO_LESS_RAM;
@@ -271,6 +276,7 @@ int postJson(const String &endpoint, const JsonDocument &doc,
                   ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 #endif
     httpResponseCode = http.POST(requestBody);
+    if (metrics && httpResponseCode > 0) metrics->httpStatus = httpResponseCode;
 
     if (httpResponseCode < 0) {
         const String transportError =
@@ -310,6 +316,7 @@ int postJson(const String &endpoint, const JsonDocument &doc,
                 httpResponseCode = received < 0 ? received
                                                : HTTPC_ERROR_TOO_LESS_RAM;
         }
+        if (metrics) metrics->responseBytes = sink.receivedBytes();
     }
     if ((secureClient && secureClient->failed()) ||
         (plainClient && plainClient->failed()))
@@ -339,39 +346,29 @@ void checkIfPairedTask(void *pvParameters) {
     vTaskDelete(nullptr);
 }
 
-void notifyTrainingTask(void *pvParameters) {
-    // Fire-and-forget: if WiFi isn't up, silently drop. Do NOT emit
-    // done{}/fail{} events — this task runs as a side effect of the
-    // init.idle -> init.preflight transition and the state machine does
-    // not expect or handle response events on that edge.
-    if (WiFiClass::status() != WL_CONNECTED) {
-        ESP_LOGD(WIFI_TAG, "no wifi, skipping notifyTrainingTask");
-        vTaskDelete(nullptr);
-        return;
-    }
-    if (trainerId.isEmpty()) {
-        ESP_LOGD(WIFI_TAG, "no trainer ID yet, skipping notifyTrainingTask");
-        vTaskDelete(nullptr);
-        return;
-    }
-
+namespace {
+void notifyActualTraining(const String& boundTrainer) {
+    // Best effort only: no retry after an ambiguous POST, and no SML events.
+    if (WiFiClass::status() != WL_CONNECTED || boundTrainer.isEmpty()) return;
     JsonDocument doc;
-    doc["trainerId"] = trainerId;
-
-    String payload;
-    int httpResponseCode = postJson("/training-started", doc, &payload);
-    ESP_LOGD(WIFI_TAG, "training-started HTTP %d", httpResponseCode);
-
+    doc["trainerId"] = boundTrainer;
+    const int code = postJson("/training-started", doc);
+    ESP_LOGD(WIFI_TAG, "training-started HTTP %d", code);
 #ifdef PIO_UNIT_TESTING
-    // Test observability hooks (see wifiSettings.h). Order matters:
-    // write the code before flipping the bool so a racing test reader
-    // never sees notified=true with a stale code.
-    trainingStartedHttpCode = httpResponseCode;
-    trainingStartedNotified = (httpResponseCode == 200);
+    trainingStartedHttpCode = code;
+    trainingStartedNotified = code == 200;
 #endif
+}
+}  // namespace
 
+void notifyTrainingTask(void* parameter) {
+    {
+        std::unique_ptr<String> boundTrainer(static_cast<String*>(parameter));
+        notifyActualTraining(boundTrainer ? *boundTrainer : trainerId);
+    }
     vTaskDelete(nullptr);
 }
+
 #endif  // PROVISION
 
 String provisionError = "";
@@ -464,7 +461,53 @@ bool getTrainerIdAndSerial() {
 }
 
 #ifndef PROVISION
+namespace {
+portMUX_TYPE settingsFetchStatusMux = portMUX_INITIALIZER_UNLOCKED;
+SettingsFetchStatus settingsFetchStatus;
+
+template <typename Update>
+void updateSettingsFetchStatus(uint32_t generation, Update update) {
+    const uint32_t now = millis();
+    const uint32_t heap = ESP.getFreeHeap();
+    const uint32_t largest = ESP.getMaxAllocHeap();
+    portENTER_CRITICAL(&settingsFetchStatusMux);
+    if (settingsFetchStatus.generation == generation) {
+        update(settingsFetchStatus);
+        settingsFetchStatus.updatedAtMs = now;
+        settingsFetchStatus.freeHeap = heap;
+        settingsFetchStatus.largestBlock = largest;
+    }
+    portEXIT_CRITICAL(&settingsFetchStatusMux);
+}
+
+uint32_t beginSettingsFetchStatus() {
+    const uint32_t now = millis();
+    const uint32_t heap = ESP.getFreeHeap();
+    const uint32_t largest = ESP.getMaxAllocHeap();
+    portENTER_CRITICAL(&settingsFetchStatusMux);
+    uint32_t generation = settingsFetchStatus.generation + 1;
+    if (generation == 0) generation = 1;
+    settingsFetchStatus = SettingsFetchStatus{};
+    settingsFetchStatus.generation = generation;
+    settingsFetchStatus.stage = SettingsFetchStage::Requesting;
+    settingsFetchStatus.startedAtMs = now;
+    settingsFetchStatus.updatedAtMs = now;
+    settingsFetchStatus.freeHeap = heap;
+    settingsFetchStatus.largestBlock = largest;
+    portEXIT_CRITICAL(&settingsFetchStatusMux);
+    return generation;
+}
+}  // namespace
+
+SettingsFetchStatus getSettingsFetchStatus() {
+    portENTER_CRITICAL(&settingsFetchStatusMux);
+    const auto snapshot = settingsFetchStatus;
+    portEXIT_CRITICAL(&settingsFetchStatusMux);
+    return snapshot;
+}
+
 static void sessionFromJson(JsonDocument &sessionJson) {
+    TrainingGuard guard(trainingMutex);
 
     // the session id is set on device boot.
     session.settingsId = sessionJson["settingsId"].as<String>();
@@ -630,6 +673,34 @@ namespace {
 constexpr char SESSION_TEMP_FILE[] = "/session.tmp";
 constexpr char SESSION_BACKUP_FILE[] = "/session.bak";
 
+// Verify a closed staging file against the exact bounded serialization with
+// constant memory. A matching size alone cannot detect corrupted/short reads.
+class SessionFileVerifier {
+   public:
+    explicit SessionFileVerifier(File &file) : file_(file) {}
+    size_t write(uint8_t value) { return write(&value, 1); }
+    size_t write(const uint8_t *bytes, size_t length) {
+        if (failed_) return 0;
+        for (size_t index = 0; index < length; ++index) {
+            const int value = file_.read();
+            if (value < 0 || static_cast<uint8_t>(value) != bytes[index]) {
+                failed_ = true;
+                return index;
+            }
+            ++verifiedBytes_;
+        }
+        return length;
+    }
+    size_t verifiedBytes() const { return verifiedBytes_; }
+    bool complete(size_t expected) {
+        return !failed_ && verifiedBytes_ == expected && file_.read() == -1;
+    }
+   private:
+    File &file_;
+    size_t verifiedBytes_ = 0;
+    bool failed_ = false;
+};
+
 bool readSessionCache(const char *path, JsonDocument &document, String &error) {
     File file = SPIFFS.open(path, "r");
     if (!file || file.size() == 0 ||
@@ -649,30 +720,62 @@ bool readSessionCache(const char *path, JsonDocument &document, String &error) {
                                    SessionDocumentMode::DashboardPage);
 }
 
-bool persistSessionDocument(const JsonDocument &document, String &error) {
+bool persistSessionDocument(
+    const JsonDocument &document, String &error,
+    SessionPersistenceError *failure = nullptr,
+    SettingsWriteStatus *writeStatus = nullptr) {
+    if (failure) *failure = SessionPersistenceError::None;
+    SettingsWriteStatus observed;
+    const auto reject = [&](const char *message, SessionPersistenceError reason) {
+        error = message;
+        if (failure) *failure = reason;
+        if (writeStatus) *writeStatus = observed;
+        return false;
+    };
     const size_t expectedSize = measureJson(document);
+    observed.expected = expectedSize;
     if (document.overflowed() || expectedSize == 0 ||
         expectedSize > MAX_DASHBOARD_RESPONSE_BYTES) {
-        error = "Session document exceeds the storage limit";
-        return false;
+        return reject("Session document exceeds the storage limit",
+                      SessionPersistenceError::Limit);
     }
     // Mount without auto-formatting: a storage fault must not erase the last
     // session or pending upload queue as a side effect of a network request.
     if (!SPIFFS.begin(false)) {
-        error = "Could not mount session storage";
-        return false;
+        return reject("Could not mount session storage",
+                      SessionPersistenceError::Mount);
     }
+    observed.fsUsed = SPIFFS.usedBytes();
+    observed.fsTotal = SPIFFS.totalBytes();
     SPIFFS.remove(SESSION_TEMP_FILE);
     File temporary = SPIFFS.open(SESSION_TEMP_FILE, "w");
+    observed.opened = static_cast<bool>(temporary);
     const size_t written = temporary ? serializeJson(document, temporary) : 0;
+    observed.written = written;
     temporary.flush();
-    const bool complete = written == expectedSize &&
-                          temporary.size() == expectedSize;
+    // Writable SPIFFS handles may report a stale size until close. Record it
+    // for diagnostics, but never use it to accept or reject durable storage.
+    observed.openReportedSize = temporary.size();
     temporary.close();
+    bool complete = observed.opened && written == expectedSize;
+    if (complete) {
+        File staged = SPIFFS.open(SESSION_TEMP_FILE, "r");
+        observed.reopened = static_cast<bool>(staged);
+        observed.reopenedSize = staged.size();
+        complete = observed.reopened && observed.reopenedSize == expectedSize;
+        if (complete) {
+            SessionFileVerifier verifier(staged);
+            const size_t verified = serializeJson(document, verifier);
+            observed.verifiedBytes = verifier.verifiedBytes();
+            complete = verified == expectedSize && verifier.complete(expectedSize);
+        }
+        staged.close();
+    }
+    observed.verified = complete;
     if (!complete) {
         SPIFFS.remove(SESSION_TEMP_FILE);
-        error = "Could not persist the complete replacement session";
-        return false;
+        return reject("Could not persist the complete replacement session",
+                      SessionPersistenceError::Write);
     }
 
     if (SPIFFS.exists(SESSION_FILE)) {
@@ -686,8 +789,8 @@ bool persistSessionDocument(const JsonDocument &document, String &error) {
             if (readSessionCache(SESSION_FILE, previous, previousError)) {
                 if (!SPIFFS.remove(SESSION_BACKUP_FILE)) {
                     SPIFFS.remove(SESSION_TEMP_FILE);
-                    error = "Could not rotate the session backup";
-                    return false;
+                    return reject("Could not rotate the session backup",
+                                  SessionPersistenceError::Rotate);
                 }
             } else {
                 previous.clear();
@@ -695,26 +798,27 @@ bool persistSessionDocument(const JsonDocument &document, String &error) {
                                       previousError) ||
                     !SPIFFS.remove(SESSION_FILE)) {
                     SPIFFS.remove(SESSION_TEMP_FILE);
-                    error = "Could not recover the previous session cache";
-                    return false;
+                    return reject("Could not recover the previous session cache",
+                                  SessionPersistenceError::Recover);
                 }
                 stagePrimary = false;
             }
         }
         if (stagePrimary && !SPIFFS.rename(SESSION_FILE, SESSION_BACKUP_FILE)) {
             SPIFFS.remove(SESSION_TEMP_FILE);
-            error = "Could not stage the existing session";
-            return false;
+            return reject("Could not stage the existing session",
+                          SessionPersistenceError::Stage);
         }
     }
     if (!SPIFFS.rename(SESSION_TEMP_FILE, SESSION_FILE)) {
         if (SPIFFS.exists(SESSION_BACKUP_FILE))
             SPIFFS.rename(SESSION_BACKUP_FILE, SESSION_FILE);
         SPIFFS.remove(SESSION_TEMP_FILE);
-        error = "Could not commit the replacement session";
-        return false;
+        return reject("Could not commit the replacement session",
+                      SessionPersistenceError::Commit);
     }
     SPIFFS.remove(SESSION_BACKUP_FILE);
+    if (writeStatus) *writeStatus = observed;
     error = "";
     return true;
 }
@@ -740,14 +844,19 @@ bool applySessionDocument(JsonDocument sessionJson, String &error) {
 }
 
 void loadSessionTask(void *pvParameters) {
+    const uint32_t generation = getSettingsFetchStatus().generation;
     JsonDocument sessionJson;
     String error;
     bool valid = false;
-    if (SPIFFS.begin(false)) {
+    SettingsCacheSource cacheSource = SettingsCacheSource::Recovery;
+    const bool cacheMounted = SPIFFS.begin(false);
+    if (cacheMounted) {
         valid = readSessionCache(SESSION_FILE, sessionJson, error);
+        if (valid) cacheSource = SettingsCacheSource::Primary;
         if (!valid) {
             sessionJson.clear();
             valid = readSessionCache(SESSION_BACKUP_FILE, sessionJson, error);
+            if (valid) cacheSource = SettingsCacheSource::Backup;
         }
     }
     bool installed = false;
@@ -758,20 +867,30 @@ void loadSessionTask(void *pvParameters) {
                              session.segmentIdx / PAGE_SIZE) {
                 sessionFromJson(sessionJson);
             } else {
+                cacheSource = SettingsCacheSource::Recovery;
                 session = Session{};
                 ESP_LOGW(WIFI_TAG, "no usable cached session; using recovery");
             }
             return true;
         },
         installed});
+    updateSettingsFetchStatus(generation, [&](auto &status) {
+        status.cacheSource = cacheSource;
+        status.cacheMounted = cacheMounted;
+    });
     vTaskDelete(nullptr);
 }
 
 void fetchSettingsTask(void *pvParameters) {
+    const uint32_t generation = beginSettingsFetchStatus();
     JsonDocument sessionJson;
 
     // if not connected to wifi, return
     if (WiFiClass::status() != WL_CONNECTED) {
+        updateSettingsFetchStatus(generation, [](auto &status) {
+            status.stage = SettingsFetchStage::HttpFailed;
+            status.error = SettingsFetchError::Offline;
+        });
         // Fall back to the validated cache while offline.
         ESP_LOGD(WIFI_TAG, "no wifi, loading cached settings");
         stateMachine->process_event(session_load_failed{});
@@ -787,7 +906,15 @@ void fetchSettingsTask(void *pvParameters) {
     String payload = "{}";
     int httpResponseCode = -1;
     for (int attempt = 0; attempt < 3; ++attempt) {
-        httpResponseCode = postJson("/get-settings", doc, &payload);
+        DashboardResponseMetrics metrics;
+        httpResponseCode = postJson("/get-settings", doc, &payload, 15000, &metrics);
+        updateSettingsFetchStatus(generation, [&](auto &status) {
+            status.attempt = attempt + 1;
+            status.httpStatus = metrics.httpStatus;
+            status.clientStatus = httpResponseCode;
+            status.responseBytes = metrics.responseBytes;
+            status.retainedBodyBytes = payload.length();
+        });
         ESP_LOGD(WIFI_TAG, "HTTP Response code (attempt %d): %d", attempt + 1,
                  httpResponseCode);
         if (httpResponseCode == 200) {
@@ -797,6 +924,11 @@ void fetchSettingsTask(void *pvParameters) {
     }
 
     if (httpResponseCode != 200) {
+        updateSettingsFetchStatus(generation, [&](auto &status) {
+            status.stage = SettingsFetchStage::HttpFailed;
+            status.error = httpResponseCode < 0 ? SettingsFetchError::Transport
+                                               : SettingsFetchError::Http;
+        });
         // Diagnostic for support: distinguishes "dashboard errored while online"
         // (http>0, wifi=1, health=1) from "truly offline" (wifi=0).
         ESP_LOGW(WIFI_TAG,
@@ -810,15 +942,35 @@ void fetchSettingsTask(void *pvParameters) {
     }
 
     String validationError;
+    updateSettingsFetchStatus(generation, [](auto &status) {
+        status.stage = SettingsFetchStage::Parsing;
+    });
     const auto parseError = deserializeJson(
         sessionJson, payload, DeserializationOption::NestingLimit(8));
     // Release the raw body before cache serialization/parsing into Session.
     payload = String();
-    if (parseError || sessionJson.overflowed() ||
-        !validateSessionDocument(sessionJson.as<JsonObjectConst>(),
-                                 validationError,
-                                 SessionDocumentMode::DashboardPage) ||
-        sessionJson["pageIdx"].as<uint16_t>() != doc["pageIdx"].as<uint16_t>()) {
+    const bool valid = !parseError && !sessionJson.overflowed() &&
+        validateSessionDocument(sessionJson.as<JsonObjectConst>(), validationError,
+                                SessionDocumentMode::DashboardPage);
+    const bool pageMatches = valid &&
+        sessionJson["pageIdx"].as<uint16_t>() == doc["pageIdx"].as<uint16_t>();
+    updateSettingsFetchStatus(generation, [&](auto &status) {
+        status.parseCode = static_cast<uint8_t>(parseError.code());
+        status.overflow = sessionJson.overflowed();
+        if (parseError || status.overflow) {
+            status.stage = SettingsFetchStage::ParseFailed;
+            status.error = SettingsFetchError::Parse;
+        } else if (!valid) {
+            status.stage = SettingsFetchStage::ValidationFailed;
+            status.error = SettingsFetchError::Validation;
+        } else if (!pageMatches) {
+            status.stage = SettingsFetchStage::PageMismatch;
+            status.error = SettingsFetchError::RequestPage;
+        } else {
+            status.stage = SettingsFetchStage::AwaitingInstall;
+        }
+    });
+    if (!valid || !pageMatches) {
         ESP_LOGW(WIFI_TAG, "dashboard session rejected; keeping cached session");
         stateMachine->process_event(session_load_failed{});
         vTaskDelete(nullptr);
@@ -826,16 +978,55 @@ void fetchSettingsTask(void *pvParameters) {
     }
 
     bool installed = false;
-    stateMachine->process_event(session_load_ready{
+    const bool accepted = stateMachine->process_event(session_load_ready{
         [&]() {
+            updateSettingsFetchStatus(generation, [](auto &status) {
+                status.callbackInvoked = true;
+            });
             if (sessionJson["pageIdx"].as<uint16_t>() !=
-                    session.segmentIdx / PAGE_SIZE ||
-                !persistSessionDocument(sessionJson, validationError))
+                session.segmentIdx / PAGE_SIZE) {
+                updateSettingsFetchStatus(generation, [](auto &status) {
+                    status.stage = SettingsFetchStage::PageMismatch;
+                    status.error = SettingsFetchError::LivePage;
+                });
                 return false;
+            }
+            SessionPersistenceError persistenceError;
+            SettingsWriteStatus writeStatus;
+            updateSettingsFetchStatus(generation, [](auto &status) {
+                status.stage = SettingsFetchStage::Persisting;
+            });
+            if (!persistSessionDocument(sessionJson, validationError,
+                                        &persistenceError, &writeStatus)) {
+                updateSettingsFetchStatus(generation, [&](auto &status) {
+                    status.stage = SettingsFetchStage::PersistenceFailed;
+                    status.error = SettingsFetchError::Persistence;
+                    status.persistenceError = persistenceError;
+                    status.write = writeStatus;
+                });
+                return false;
+            }
+            updateSettingsFetchStatus(generation, [&](auto &status) {
+                status.stage = SettingsFetchStage::Installing;
+                status.persisted = true;
+                status.write = writeStatus;
+            });
             sessionFromJson(sessionJson);
+            updateSettingsFetchStatus(generation, [](auto &status) {
+                status.stage = SettingsFetchStage::Installed;
+                status.persisted = true;
+                status.installed = true;
+            });
             return true;
         },
         installed});
+    updateSettingsFetchStatus(generation, [&](auto &status) {
+        status.eventAccepted = accepted;
+        if (!installed && status.stage == SettingsFetchStage::AwaitingInstall) {
+            status.stage = SettingsFetchStage::StateRejected;
+            status.error = SettingsFetchError::State;
+        }
+    });
     if (!installed) {
         ESP_LOGW(WIFI_TAG, "dashboard session was not installed");
         vTaskDelete(nullptr);
@@ -851,49 +1042,61 @@ void fetchSettingsTask(void *pvParameters) {
     vTaskDelete(nullptr);
 }
 
-void saveResultsTask(void *pvParameters) {
-    // Build the payload while currentSegment is still alive, then persist it to
-    // flash BEFORE attempting any upload. Persisting is cheap (no TLS heap) and
-    // survives WiFi loss, low heap, crashes and reboots — the result is never
-    // dropped. flushUploadQueue() retries it now and on every boot/reconnect.
-    auto toyId = session.toy.has_value() ? session.toy->id : "";
-    auto settingsId = session.settingsId;
-
-    // Calculate passed status for pass/fail feature
-    const Segment *segment = getSegmentByIdx(session.segmentIdx);
-    int passedStatus = -1;  // Default to null (-1)
-
-    if (segment != nullptr && segment->passFail.enabled) {
-        int grade = currentSegment->grade();
-        bool passed = (grade >= segment->passFail.threshold);
-        passedStatus = passed ? 1 : 0;  // 1=true, 0=false
-    }
-
-    JsonDocument doc =
-        currentSegment->createPayload(trainerId, session.id, session.segmentIdx,
-                                      session.settingsId, toyId, passedStatus);
-
-    // Persist first — this is the durability guarantee.
-    if (!enqueuePayload(doc)) {
-        ESP_LOGE(WIFI_TAG, "failed to persist segment result to upload queue");
-    }
-
-    // Best-effort send now; no-ops if offline or low on heap. Anything left
-    // queued is recovered on the next boot/reconnect (fresh heap).
-    const int uploaded = flushUploadQueue();
-    if (uploaded == 0) {
-        ESP_LOGW(WIFI_TAG,
-                 "result queued but not uploaded yet (offline / low heap / "
-                 "server error) — will retry on reconnect/boot");
-    }
-
-#ifdef PIO_UNIT_TESTING
-    resultsUploaded = (uploaded > 0);
-    resultsHttpCode = (uploaded > 0) ? 200 : -1;
+namespace {
+std::unique_ptr<JsonDocument> captureCompletedResult() {
+    TrainingGuard guard(trainingMutex);
+    if (!currentSegment) return {};
+#ifndef BYPASS_PLAY
+    if (currentSegment->state != TrainingState::END) return {};
 #endif
+    String toyId = session.toy.has_value() ? session.toy->id : "";
+    const Segment* definition = getSegmentByIdx(session.segmentIdx);
+    int passedStatus = -1;
+    if (definition && definition->passFail.enabled)
+        passedStatus = currentSegment->grade() >= definition->passFail.threshold ? 1 : 0;
+    auto result = std::make_unique<JsonDocument>(currentSegment->createPayload(
+        trainerId, session.id, session.segmentIdx, session.settingsId, toyId, passedStatus));
+    if (result->overflowed()) return {};
+    return result;
+}
 
+void persistAndUploadResult(const JsonDocument& document) {
+    if (!enqueuePayload(document)) {
+        ESP_LOGE(WIFI_TAG, "failed to persist segment result to upload queue");
+        return;
+    }
+    const int uploaded = flushUploadQueue();
+    ESP_LOGD(WIFI_TAG, "queued-result flush uploaded %d item(s)", uploaded);
+#ifdef PIO_UNIT_TESTING
+    resultsUploaded = uploaded > 0;
+    resultsHttpCode = uploaded > 0 ? 200 : -1;
+#endif
+}
+}  // namespace
+
+void startSaveResultsTask() {
+    // Called synchronously on entry to grade while SML still binds this exact
+    // session/index. Upload owns the snapshot even if the user advances at once.
+    auto document = captureCompletedResult();
+    if (!document) return;
+    auto* parameter = document.release();
+    if (xTaskCreatePinnedToCore(saveResultsTask, saveResultsTaskName,
+            8 * configMINIMAL_STACK_SIZE, parameter, 1, &saveResultsTaskHandle, 1) != pdPASS) {
+        std::unique_ptr<JsonDocument> retained(parameter);
+        if (!enqueuePayload(*retained))
+            ESP_LOGE(WIFI_TAG, "failed to queue result after task creation failure");
+    }
+}
+
+void saveResultsTask(void* parameter) {
+    {
+        std::unique_ptr<JsonDocument> document(static_cast<JsonDocument*>(parameter));
+        if (!document) document = captureCompletedResult(); // synchronous test callers
+        if (document) persistAndUploadResult(*document);
+    }
     vTaskDelete(nullptr);
 }
+
 #endif  // PROVISION (sessionFromJson through saveResultsTask)
 
 void getIsPaired() {

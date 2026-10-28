@@ -9,18 +9,24 @@
 
 #ifndef PROVISION
 #include <trainingTypes.h>
+#include <TrainingLifecycle.h>
+#include <memory>
+#include <mutex>
+#include "utils/RecusiveMutex.h"
 #include "Session.h"
 #else
 #include "structs/DashboardState.h"
 #endif
 
 #include "services/eeprom_service.h"
+#include "services/settings_fetch_status.h"
 
 extern DashboardState dashboardState;
 
 // Helper to POST JSON to Bubble server
 int postJson(const String &endpoint, const JsonDocument &doc,
-             String *responsePayload = nullptr, int timeoutMs = 15000);
+             String *responsePayload = nullptr, int timeoutMs = 15000,
+             DashboardResponseMetrics *metrics = nullptr);
 
 void getIsPaired();
 
@@ -34,7 +40,10 @@ bool getTrainerIdAndSerial();
 void provisionTask(void *pvParameters);
 #else
 
-extern SegmentBase *currentSegment;
+extern std::shared_ptr<SegmentBase> currentSegment;
+extern ESP32RecursiveMutex trainingMutex;
+using TrainingGuard = std::lock_guard<ESP32RecursiveMutex>;
+extern TrainingLifecycle trainingLifecycle;
 extern Session session;
 
 #ifdef PIO_UNIT_TESTING
@@ -69,6 +78,7 @@ inline bool isSegmentLoaded(uint16_t idx) {
 
 bool getTrainerIdAndSerial();
 void saveResultsTask(void *pvParameters);
+void startSaveResultsTask();
 WiFiClient *getCurrentWiFiClient();
 void fetchSettingsTask(void *pvParameters);
 void loadSessionTask(void *pvParameters);
@@ -77,6 +87,7 @@ void checkIfPairedTask(void *pvParameters);
 void notifyTrainingTask(void *pvParameters);
 void sendCalibrationToBackend(float minCm, float maxCm);
 bool applySessionDocument(JsonDocument sessionJson, String &error);
+SettingsFetchStatus getSettingsFetchStatus();
 #endif  // PROVISION
 
 #endif  // WIFI_SETTINGS_H_
