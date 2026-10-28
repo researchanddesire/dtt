@@ -324,13 +324,19 @@ def tongue(grow=0.0):
         [box(g.XMin, g.YMin - 0.6, zs - 1, g.XMax + 2, g.YMax + 0.6, zs + 3) for g in gaps])
 
 
-def button_inlay(grow=0.2):
-    """Button outline, grown into the slot so the cut never lands on its walls."""
+def button_inlay(grow=0.05):
+    """Button outline: two discs and a shaft with a rounded end that runs into
+    the left disc. Grown a hair into the slot so the cut never lands on its walls."""
     (lx, ly, lr), (rx, ry, rr) = P["button_left"], P["button_right"]
     b0, b1 = P["button_bar_y"]
     z0, z1 = P["inlay_z"]
+    h = (b1 - b0) / 2 + grow
+    dy = (b0 + b1) / 2 - ly
+    xe = lx + math.sqrt(max((lr + h - 1.1) ** 2 - dy ** 2, 0.0))  # shaft end overlaps the disc
+    shaft = Part.makeCylinder(h, z1 + 1 - z0, V(xe, (b0 + b1) / 2, z0)).fuse(
+        box(xe, b0 - grow, z0, rx, b1 + grow, z1 + 1))
     return zcyl(lx, ly, 2 * (lr + grow), z0, z1 + 1).fuse(
-        [zcyl(rx, ry, 2 * (rr + grow), z0, z1 + 1), box(lx, b0 - grow, z0, rx, b1 + grow, z1 + 1)]).removeSplitter()
+        [zcyl(rx, ry, 2 * (rr + grow), z0, z1 + 1), shaft]).removeSplitter()
 
 
 def build_all(doc):
