@@ -21,19 +21,16 @@ static void test_capture_min_position() {
         exited,
         "Should have left play.calibration.min after button press (timed out)");
 
-    // captureMinPosition calls getDistance(100) which blocks for 100ms.
-    // The state transition may be detected before the value is written.
+    // captureMinPosition holds the reading until the deep position passes
+    // the range check, so check the same sensor read directly.
     vTaskDelay(pdMS_TO_TICKS(500));
+    const float tipCm = getDistance(100);
 
-    Serial.printf("[INFO] calibratedMinPosition: %.2f cm\n",
-                  session.calibratedMinPosition);
+    Serial.printf("[INFO] tip reading: %.2f cm\n", tipCm);
 
-    TEST_ASSERT_GREATER_THAN_MESSAGE(
-        0.0f, session.calibratedMinPosition,
-        "calibratedMinPosition should be > 0");
+    TEST_ASSERT_GREATER_THAN_MESSAGE(0.0f, tipCm, "tip reading should be > 0");
     TEST_ASSERT_LESS_THAN_MESSAGE(
-        25.0f, session.calibratedMinPosition,
-        "calibratedMinPosition should be < 25cm (sensor range)");
+        25.0f, tipCm, "tip reading should be < 25cm (sensor range)");
 
     TEST_ASSERT_TRUE_MESSAGE(
         stateMachine->is("play.calibration.max"_s),
@@ -51,35 +48,28 @@ static void test_capture_max_position() {
         exited,
         "Should have left play.calibration.max after button press (timed out)");
 
-    // captureMaxPosition calls getDistance(100) + updates segments + sends HTTP.
-    // Wait for it to finish before asserting.
-    vTaskDelay(pdMS_TO_TICKS(500));
-
-    Serial.printf("[INFO] calibratedMaxPosition: %.2f cm\n",
-                  session.calibratedMaxPosition);
-
-    TEST_ASSERT_GREATER_THAN_MESSAGE(
-        0.0f, session.calibratedMaxPosition,
-        "calibratedMaxPosition should be > 0");
-    TEST_ASSERT_LESS_THAN_MESSAGE(
-        25.0f, session.calibratedMaxPosition,
-        "calibratedMaxPosition should be < 25cm (sensor range)");
+    // The CI fixture has no mechanical actuator to move the carriage between
+    // the two captures, so both read the same distance. The device must
+    // reject that zero-width range instead of training on it.
+    bool rejected = waitForState(
+        []() { return stateMachine->is("play.calibration.invalid"_s); },
+        "play.calibration.invalid", 5000);
 
     TEST_ASSERT_TRUE_MESSAGE(
+        rejected,
+        "A stationary fixture's zero-width range should be rejected");
+    TEST_ASSERT_FALSE_MESSAGE(
         session.isCalibrated,
-        "session.isCalibrated should be true after both captures");
+        "A rejected calibration must not mark the session calibrated");
 
-    // The CI fixture validates both real sensor captures, but it has no
-    // mechanical actuator to move the carriage between them. A stationary
-    // fixture therefore produces a zero-width range, which the API correctly
-    // rejects and which makes the training loop complete immediately. Use a
-    // deterministic valid span for the remaining server and lifecycle tests.
-    // This is test-only state; production calibration continues to use the two
-    // physical positions captured above.
+    // Use a deterministic valid span for the remaining server and lifecycle
+    // tests, then keep it from the rejection page as a user keeps a previous
+    // calibration. Production calibration uses the two physical positions.
     constexpr float FIXTURE_INNER_CM = 2.0f;
     constexpr float FIXTURE_OUTER_CM = 12.0f;
     session.calibratedMinPosition = FIXTURE_OUTER_CM;
     session.calibratedMaxPosition = FIXTURE_INNER_CM;
+    session.isCalibrated = true;
 
     for (auto& segment : session.segments) {
         segment.params.startPosition = FIXTURE_OUTER_CM;
@@ -89,6 +79,12 @@ static void test_capture_max_position() {
     calibrationHttpCode = -1;
     calibrationUploaded = false;
     sendCalibrationToBackend(FIXTURE_INNER_CM, FIXTURE_OUTER_CM);
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        longPressButtonAndWaitForExit(
+            []() { return stateMachine->is("play.calibration.invalid"_s); },
+            "play.calibration.invalid"),
+        "Holding the button should keep the existing calibration");
 }
 
 // --- Test 4: Calibration applied to segments ---

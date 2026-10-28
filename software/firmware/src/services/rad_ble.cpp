@@ -6,6 +6,8 @@
 #include <WiFi.h>
 #include <esp_ota_ops.h>
 
+#include <mutex>
+
 #include "FirmwareProvenance.h"
 #include "FirmwareProvenanceResponse.h"
 #include "constants/Version.h"
@@ -178,7 +180,7 @@ void refreshPowerTelemetry(bool force = false) {
     if (!force && powerTelemetry.valid &&
         now - powerTelemetry.updatedAt < 1000U)
         return;
-    powerTelemetry.raw = analogRead(BATTERY_SENSE_INPUT);
+    powerTelemetry.raw = readAdc(BATTERY_SENSE_INPUT);
     powerTelemetry.voltage = getBatteryVoltage();
     powerTelemetry.percent = constrain(
         static_cast<int>((powerTelemetry.voltage - 3.3f) * 111.11f), 0, 100);
@@ -360,7 +362,7 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         else if (path == "analog.distanceVoltage")
             document["value"] = getAnalogVoltage(SENSOR_INPUT, 5);
         else if (path == "analog.distanceRaw")
-            document["value"] = analogRead(SENSOR_INPUT);
+            document["value"] = readAdc(SENSOR_INPUT);
         else if (path == "analog.batteryRaw" ||
                  path == "power.batteryVoltage" ||
                  path == "power.batteryPercent" ||
@@ -705,7 +707,14 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 String snapshot(radble::Surface surface, void*) {
     const String currentState = stateName();
 #ifndef PROVISION
-    TrainingGuard guard(trainingMutex);
+    // Hardware surfaces sample the ADC for up to tens of milliseconds and read
+    // no training state. Holding the training lock for them stalled play
+    // (the power refresh runs once a second).
+    const bool hardwareOnly = surface == radble::Surface::Button ||
+                              surface == radble::Surface::Analog ||
+                              surface == radble::Surface::Power;
+    std::unique_lock<ESP32RecursiveMutex> guard(trainingMutex, std::defer_lock);
+    if (!hardwareOnly) guard.lock();
 #endif
     JsonDocument document;
     switch (surface) {
@@ -752,7 +761,7 @@ String snapshot(radble::Surface surface, void*) {
         case radble::Surface::Analog:
             document["distanceCm"] = getDistance(1);
             document["distanceVoltage"] = getAnalogVoltage(SENSOR_INPUT, 1);
-            document["distanceRaw"] = analogRead(SENSOR_INPUT);
+            document["distanceRaw"] = readAdc(SENSOR_INPUT);
             refreshPowerTelemetry();
             document["batteryRaw"] = powerTelemetry.raw;
             break;

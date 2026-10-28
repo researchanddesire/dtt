@@ -15,6 +15,7 @@
 #include "utils/update.hpp"
 
 #ifndef PROVISION
+#include <Calibration.h>
 #include <SessionSnapshot.h>
 
 #include "input.h"
@@ -265,27 +266,73 @@ constexpr auto clearSegmentIndex = []() {
     setLedOff();
 };
 
+// The tip reading waits for the deep reading to pass the range check, so a
+// failed recalibration keeps the previous calibration.
+static float pendingTipCm = 0.0f;
+static CalibrationProblem calibrationProblem = CalibrationProblem::None;
+
 constexpr auto captureMinPosition = []() {
     TrainingGuard guard(trainingMutex);
-    session.calibratedMinPosition = getDistance(100);
-    process_done(false);
+    pendingTipCm = getDistance(100);
 };
 
 constexpr auto captureMaxPosition = []() {
-    TrainingGuard guard(trainingMutex);
-    session.calibratedMaxPosition = getDistance(100);
+    {
+        TrainingGuard guard(trainingMutex);
+        const float deepCm = getDistance(100);
+        calibrationProblem = checkCalibration(pendingTipCm, deepCm);
+        if (calibrationProblem == CalibrationProblem::None) {
+            session.calibratedMinPosition = pendingTipCm;
+            session.calibratedMaxPosition = deepCm;
 
-    for (auto &segment : session.segments) {
-        segment.params.startPosition = session.calibratedMinPosition;
-        segment.params.endPosition = session.calibratedMaxPosition;
+            for (auto &segment : session.segments) {
+                segment.params.startPosition = session.calibratedMinPosition;
+                segment.params.endPosition = session.calibratedMaxPosition;
+            }
+
+            session.isCalibrated = true;
+
+            sendCalibrationToBackend(session.calibratedMaxPosition,
+                                     session.calibratedMinPosition);
+        } else {
+            ESP_LOGW(ACTIONS_TAG, "Rejected calibration: tip %.2f cm, deep %.2f cm",
+                     pendingTipCm, deepCm);
+        }
     }
+    // Outside the training lock: the next state draws a page, and the play
+    // draw loop takes the display before the training lock.
+    if (calibrationProblem == CalibrationProblem::None)
+        process_done(false);
+    else
+        process_fail();
+};
 
-    session.isCalibrated = true;
-
-    sendCalibrationToBackend(session.calibratedMaxPosition,
-                             session.calibratedMinPosition);
-
-    process_done(false);
+constexpr auto drawCalibrationProblem = []() {
+    String content;
+    switch (calibrationProblem) {
+        case CalibrationProblem::OutOfRange:
+            content = "Toy not detected. Check it faces the sensor and try again";
+            break;
+        case CalibrationProblem::Reversed:
+            content = "Tip first, then as deep as you can. Try again";
+            break;
+        case CalibrationProblem::TooShort:
+            content = "Not enough movement. Go deeper on the second press";
+            break;
+        default:
+            content = "Sensor error. Try again";
+            break;
+    }
+    const bool canKeepPrevious =
+        (session.toy.has_value() && session.toy->calibration.isCalibrated) ||
+        session.isCalibrated;
+    drawTextPage(TextPage{
+        .icon = 297,
+        .content = content,
+        .leftFooter = canKeepPrevious ? "Hold: keep" : EMPTY_STRING,
+        .rightFooter = "Retry",
+        .showButton = true,
+        .center = true});
 };
 
 constexpr auto drawSessionDetails = []() {

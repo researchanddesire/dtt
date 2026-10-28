@@ -16,6 +16,11 @@
 #include "state/state.h"
 #include "wifiSettings.h"
 #include <SessionSnapshot.h>
+#include <algorithm>
+#include <atomic>
+#ifdef VERSIONDEV
+#include <Wire.h>
+#endif
 #include <memory>
 #include <new>
 
@@ -40,6 +45,16 @@ static int lastDisplayX = -1;
 static float lastRpm = -1.0f;
 static float lastStartWindow = -1.0f;
 static float lastEndWindow = -1.0f;
+static String lastValueText;
+static float needleRpm = 0.0f;
+// Time constant for the freeform needle's glide toward the measured RPM.
+static constexpr float NEEDLE_SMOOTHING_MS = 200.0f;
+
+#ifdef VERSIONDEV
+// Development builds report the play loop, redraw and sensor rates once per
+// second on serial, so a regression below the 120 Hz target is visible.
+static std::atomic<uint32_t> sensorSamples{0};
+#endif
 
 /**
  * Draws a simplified speedometer with N tick marks
@@ -91,7 +106,7 @@ void drawArc() {
     display.drawGlyph(glyphX, glyphY, iconGlyph);
 }
 
-void drawArcWithArrow(const SegmentBase* segment) {
+void drawArcWithArrow(const SegmentBase* segment, const float needleRpm) {
     String valueString = segment->valueString();
     setHeader(valueString);
     clearPage(true);
@@ -110,9 +125,10 @@ void drawArcWithArrow(const SegmentBase* segment) {
     constexpr int hubRadius = 5;
     display.drawDisc(centerX, centerY, hubRadius);
 
-    // Calculate the angle for the needle (triangle)
-    float pct = map_Generic(segment->currentRpm, 0,
-                            segment->params.trainingSpeed, 0.0f, 0.5f);
+    // The needle follows the smoothed RPM so it glides between stroke-sized
+    // steps; the LED below reflects the measured RPM without delay.
+    float pct = map_Generic(needleRpm, 0, segment->params.trainingSpeed, 0.0f,
+                            0.5f);
     float angle = max(0.0, min(pct * PI, PI));
 
     // Triangle parameters
@@ -145,7 +161,9 @@ void drawArcWithArrow(const SegmentBase* segment) {
 
     display.updateDisplayArea(10, 0, 4, 3);
 
-    if (pct <= 0.5f) {
+    const float measuredPct = map_Generic(
+        segment->currentRpm, 0, segment->params.trainingSpeed, 0.0f, 0.5f);
+    if (measuredPct <= 0.5f) {
         setLed(LED_RED, 255, 0);
     } else {
         setLed(LED_GREEN, 255, 0);
@@ -201,6 +219,27 @@ void drawBoxAndFollower(const SegmentBase* segment) {
 
 
 namespace {
+// Paces the play loops at 120 Hz on the 1 kHz tick (8, 8 and 9 ms periods).
+// Training maths is tuned to this cadence: the RPM history holds 256 loop
+// iterations (~2.1 s) and the position average DISTANCE_BUFFER_SIZE samples.
+// An iteration that overruns (a slow frame) yields once and restarts the
+// schedule instead of bursting to catch up.
+struct PlayPacer {
+    TickType_t wake = xTaskGetTickCount();
+    uint8_t phase = 0;
+
+    void wait() {
+        phase = (phase + 1) % 3;
+        const TickType_t period = pdMS_TO_TICKS(phase == 0 ? 9 : 8);
+        if (xTaskGetTickCount() - wake >= period) {
+            wake = xTaskGetTickCount();
+            vTaskDelay(1);
+            return;
+        }
+        vTaskDelayUntil(&wake, period);
+    }
+};
+
 struct TrainingWorkerContext {
     uint32_t generation;
     Segment definition;
@@ -246,6 +285,7 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
         notify = trainingLifecycle.reserveNotification(generation, context->sessionId.c_str());
         firstDraw = true;
         lastDisplayX = -1; lastRpm = -1.0f; lastStartWindow = -1.0f; lastEndWindow = -1.0f;
+        lastValueText = ""; needleRpm = running->currentRpm;
     }
     // One best-effort attempt on first genuine play, reserved before scheduling.
     // Recalibration, segment retries and subsequent segments do not retry an
@@ -263,7 +303,16 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
 #ifdef AUTOPLAY_FOR_VIDEO
     currentPosition = 25;
 #endif
+#ifdef VERSIONDEV
+    uint32_t rateSince = millis(), loops = 0, draws = 0;
+    uint32_t drawUs = 0, drawUsMax = 0, waitUsMax = 0;
+    sensorSamples = 0;
+#endif
+    PlayPacer pacer;
     while (true) {
+        bool needsUpdate = false;
+        bool headerChanged = false;
+        String headerText;
         {
             TrainingGuard guard(trainingMutex);
             if (!trainingLifecycle.current(generation)) break;
@@ -283,23 +332,74 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
                 naturalEnd = true;
                 break;
             }
-            bool needsUpdate = false;
             if (running->displayType == DisplayType::BOX) {
                 const int displayX = SegmentBase::toDisplayX(running->currentPosition);
                 if (displayX != lastDisplayX || running->startWindow != lastStartWindow || running->endWindow != lastEndWindow) {
                     needsUpdate = true; lastDisplayX = displayX;
                     lastStartWindow = running->startWindow; lastEndWindow = running->endWindow;
                 }
-            } else if (running->displayType == DisplayType::ARC && abs(running->currentRpm - lastRpm) > 0.5f) {
-                needsUpdate = true; lastRpm = running->currentRpm;
+            } else if (running->displayType == DisplayType::ARC) {
+                // RPM steps once per stroke entering or leaving its window;
+                // ease the needle toward it so the dial glides between steps.
+                needleRpm += (running->currentRpm - needleRpm) *
+                             (1.0f - expf(-static_cast<float>(deltaTime) / NEEDLE_SMOOTHING_MS));
+                if (abs(needleRpm - lastRpm) > 0.1f) {
+                    needsUpdate = true; lastRpm = needleRpm;
+                }
             }
-            if (needsUpdate && xSemaphoreTake(displayMutex, 100) == pdTRUE) {
-                if (running->displayType == DisplayType::BOX) drawBoxAndFollower(running.get());
-                else drawArcWithArrow(running.get());
-                xSemaphoreGive(displayMutex);
-            }
+            // Countdowns change every 10 ms; redraw the header with them
+            // instead of waiting for the next movement.
+            headerText = running->valueString();
+            headerChanged = headerText != lastValueText;
+            if (headerChanged) lastValueText = headerText;
         }
-        vTaskDelay(1);
+        // Draw outside the training lock: the sensor task takes it for every
+        // sample, and a frame occupies the display bus for milliseconds. Only
+        // this task mutates `running`. Re-check the generation while holding
+        // the display so a stopped run never draws over the page that replaced
+        // it (page changes stop the run before taking the display).
+#ifdef VERSIONDEV
+        const uint32_t waitStart = micros();
+#endif
+        if ((needsUpdate || headerChanged) && xSemaphoreTake(displayMutex, 100) == pdTRUE) {
+#ifdef VERSIONDEV
+            const uint32_t drawStart = micros();
+            waitUsMax = std::max(waitUsMax, drawStart - waitStart);
+#endif
+            bool live;
+            {
+                TrainingGuard guard(trainingMutex);
+                live = trainingLifecycle.current(generation);
+            }
+            if (live && needsUpdate) {
+                if (running->displayType == DisplayType::BOX) drawBoxAndFollower(running.get());
+                else drawArcWithArrow(running.get(), needleRpm);
+            } else if (live) {
+                setHeader(headerText);
+            }
+            xSemaphoreGive(displayMutex);
+            if (!live) break;
+#ifdef VERSIONDEV
+            ++draws;
+            const uint32_t elapsed = micros() - drawStart;
+            drawUs += elapsed;
+            drawUsMax = std::max(drawUsMax, elapsed);
+#endif
+        }
+#ifdef VERSIONDEV
+        ++loops;
+        if (millis() - rateSince >= 1000) {
+            Serial.printf("PLAY_RATE loop=%lu draw=%lu sensor=%lu draw_us_avg=%lu draw_us_max=%lu wait_us_max=%lu i2c=%lu\n",
+                          static_cast<unsigned long>(loops), static_cast<unsigned long>(draws),
+                          static_cast<unsigned long>(sensorSamples.exchange(0)),
+                          static_cast<unsigned long>(draws ? drawUs / draws : 0),
+                          static_cast<unsigned long>(drawUsMax), static_cast<unsigned long>(waitUsMax),
+                          static_cast<unsigned long>(Wire.getClock()));
+            rateSince = millis(); loops = 0; draws = 0;
+            drawUs = 0; drawUsMax = 0; waitUsMax = 0;
+        }
+#endif
+        pacer.wait();
     }
     // Never emit generic done on cooperative cancellation. The generation and
     // natural END are rechecked under the state-machine lock before grading.
@@ -319,6 +419,7 @@ void runDistanceTask(uint32_t generation) {
         trainingLifecycle.prepareSensor(generation);
     }
     uint32_t lastTime = micros();
+    PlayPacer pacer;
     while (true) {
         float nextValue = getDistance(1);
         const uint32_t now = micros();
@@ -339,7 +440,10 @@ void runDistanceTask(uint32_t generation) {
             distanceBuffer.push(nextValue); speedBuffer.push(nextSpeed);
             sum += nextValue - firstValue; speedSum += nextSpeed - firstSpeed;
         }
-        vTaskDelay(1);
+#ifdef VERSIONDEV
+        ++sensorSamples;
+#endif
+        pacer.wait();
     }
 }
 }  // namespace

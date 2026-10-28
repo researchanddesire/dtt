@@ -17,6 +17,7 @@ documentation) are in `../../AGENTS.md`.
   credential into `platformio.ini`.
 - Development builds read their dashboard origin from the ignored
   `../dev/local.settings.json` (see `../dev/local.settings.example.json`).
+  Outside CI, a loopback origin is rewritten to this machine's current LAN IP.
 - Build hooks import helpers from `../scripts/` and `../dev/`; keep those
   helpers there rather than copying them into the project.
 

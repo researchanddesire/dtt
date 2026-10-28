@@ -31,24 +31,20 @@ void drawWifiIcon(const int16_t x, const int16_t y) {
     }
 }
 
-int getBatteryLevel() {
-    const float voltage = getBatteryVoltage();
+int getBatteryLevel(const float voltage) {
     if (voltage > 3.9) return 3;
     if (voltage > 3.65) return 2;
     if (voltage > 3.4) return 1;
     return 0;
 }
 
-bool shouldDrawBatteryIcon() {
-    const bool currentCharging = checkIfCharging();
-    const int level = getBatteryLevel();
-    return currentCharging != lastCharging || level != lastBatteryLevel;
+bool shouldDrawBatteryIcon(const bool charging, const int level) {
+    return charging != lastCharging || level != lastBatteryLevel;
 }
 
-void drawBatteryIcon(const int16_t x, const int16_t y) {
+void drawBatteryIcon(const int16_t x, const int16_t y, const bool charging,
+                     const float voltage) {
     display.setFont(wifiFont);
-    const bool charging = checkIfCharging();
-    const float voltage = getBatteryVoltage();
     if (charging)
         display.drawGlyph(x, y + 8, GLYPH_BATTERY_CHARGING);
     else if (voltage > 3.9)
@@ -112,8 +108,13 @@ void headerBarTask(void *pvParameters) {
             }
         }
 
+        // Read power before taking the display: the readings can take over
+        // 100 ms, and play frames wait on the display while we hold it.
+        const bool charging = checkIfCharging();
+        const float voltage = getBatteryVoltage();
+        const int batteryLevel = getBatteryLevel(voltage);
         const bool shouldDrawWifi = shouldDrawWifiIcon();
-        const bool shouldDrawBattery = shouldDrawBatteryIcon();
+        const bool shouldDrawBattery = shouldDrawBatteryIcon(charging, batteryLevel);
         const bool shouldDrawTimeout = shouldDrawTimeoutIcon();
 
         const bool shouldDraw = shouldDrawWifi || shouldDrawBattery ||
@@ -131,7 +132,7 @@ void headerBarTask(void *pvParameters) {
             if (shouldDrawWifi || shouldDrawBattery) {
                 clearIcons();
                 drawWifiIcon(128 - 26, 0);
-                drawBatteryIcon(128 - 12, 0);
+                drawBatteryIcon(128 - 12, 0, charging, voltage);
                 refreshIcons();
                 ESP_LOGD("headerBar",
                          "shouldDrawWifi: %d, shouldDrawBattery: %d",
@@ -148,8 +149,8 @@ void headerBarTask(void *pvParameters) {
 
         lastWifiStatus = WiFi.status() != WL_CONNECTED;
         lastHealthCheckPassed = healthCheckPassed;
-        lastBatteryLevel = getBatteryLevel();
-        lastCharging = checkIfCharging();
+        lastBatteryLevel = batteryLevel;
+        lastCharging = charging;
         lastTimeoutLevel = getTimeoutLevel();
         lastShowButton = showButton;
 
