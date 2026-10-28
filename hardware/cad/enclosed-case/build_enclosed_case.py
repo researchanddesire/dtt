@@ -92,11 +92,11 @@ PARAMS = {
     "button_ball2": (13.251, 64.364, 2.9),  # second ball, behind the first
     "button_shaft_x0": 14.6,  # centre of the shaft's round end
     "button_blend": 4.0,  # fillet from the shaft end into the second ball
-    # The head replaces the button's original round end: a rim at the back, a
-    # long dome and a slit at the tip. The slot is recut around it.
-    "head_rim": (30.6, 65.05, 72.4, 0.9),  # back x, bottom y, top y, corner radius
-    "head_dome": (32.6, 6.0),  # dome centre x and length
-    "head_slit": (0.8, 1.5),  # width, length
+    # The head replaces the button's original round end: a soft rim at the
+    # back, a dome and a slit at the tip. The slot is recut around it.
+    "head_rim": (30.2, 64.75, 72.7, 1.8),  # back x, bottom y, top y, corner radius
+    "head_dome": (32.0, 6.2),  # dome centre x and length
+    "head_slit": (0.8, 1.2),  # width, length
     "head_slot": (26.0, 0.7, 12.57),  # recut from this x, width, top plate underside
     "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
 }
@@ -363,8 +363,11 @@ def button_head(z, grow=0.0):
     xc, yb, yt, rc = P["head_rim"]
     xe, a = P["head_dome"]
     ym, b = (yb + yt) / 2, (yt - yb) / 2
-    assert a > b  # the ellipse's major axis runs along X
-    dome = Part.Face(Part.Wire(Part.Ellipse(V(xe, ym, z), a, b).toShape()))
+    if math.isclose(a, b):
+        dome = disc(xe, ym, b, z)
+    else:
+        assert a > b  # the ellipse's major axis runs along X
+        dome = Part.Face(Part.Wire(Part.Ellipse(V(xe, ym, z), a, b).toShape()))
     head = merge_faces(rect(xc + rc, yb, xe, yt, z).fuse([
         rect(xc, yb + rc, xe, yt - rc, z),
         disc(xc + rc, yb + rc, rc, z),
