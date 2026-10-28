@@ -55,6 +55,8 @@ Size: 50.0 × 95.2 × 22.3 mm.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
 - USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
+- The button feel. Its icon is larger than the original, so the button is
+  about 15% stiffer.
 
 The CAD checks are geometric only. Clamp force, thread hold and drop
 strength need a physical test.

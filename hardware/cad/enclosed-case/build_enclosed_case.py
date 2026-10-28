@@ -85,19 +85,24 @@ PARAMS = {
     "tongue": (0.9, 0.8, 1.0),  # inset from the outer face, width, height
     "tongue_y": (6.0, 89.0),
     "tongue_clear": 0.1,
-    # Blue inlay on the flexure button (a touch point), inside its slot.
-    "button_left": (17.806, 65.004, 3.0),  # centre x, y, radius
-    "button_bar_y": (66.725, 70.725),
-    "button_channel_w": (0.800525, 0.7),  # slot below and above the shaft
-    "button_ball2": (13.251, 64.364, 2.9),  # second ball, behind the first
+    # Blue inlay on the flexure button (a touch point). The button is cut free
+    # of the top plate by a slot round a ball, a shaft and a head, and bends at
+    # the plate between the start of the top channel and the end of the arc.
+    "button_left": (17.45, 64.4, 3.5),  # ball: centre x, y, radius
+    "button_bar_y": (66.025, 71.425),  # shaft edges
+    "button_channel_w": (0.8, 0.7),  # slot below and above the shaft
+    "button_slot": (22.542, 188.0, 0.7),  # top channel start x, arc end (degrees), arc and ring width
+    "button_ball2": (12.55, 63.7, 3.5),  # second ball, on the case behind the first
     "button_shaft_x0": 14.6,  # centre of the shaft's round end
-    "button_blend": 4.0,  # fillet from the shaft end into the second ball
-    # The head replaces the button's original round end: a soft rim at the
-    # back, a dome and a slit at the tip. The slot is recut around it.
-    "head_rim": (30.2, 64.75, 72.7, 1.8),  # back x, bottom y, top y, corner radius
-    "head_dome": (32.0, 6.2),  # dome centre x and length
-    "head_slit": (0.8, 1.2),  # width, length
-    "head_slot": (26.0, 0.7, 12.57),  # recut from this x, width, top plate underside
+    "button_blend": 4.5,  # fillet from the shaft end into the second ball
+    # Head: a soft rim at the back, a dome and a slit at the tip.
+    "head_rim": (30.1, 64.2, 72.6, 2.5),  # back x, bottom y, top y, corner radius
+    "head_dome": (32.6, 6.0),  # dome start x and length; the tip is on the shaft axis
+    "head_slit": (0.8, 1.0),  # width, length
+    # Under the button, walls round the slot hold a floor that stops its travel.
+    "button_tray": (13.35, 29.8, 0.8, 9.57, 10.57),  # fences from x, to x, wall thickness, floor z
+    "plate_z": 12.57,  # top plate underside
+    "oled_clear": (59.75, 11.0),  # tray stays clear of the OLED board below this y and z
     "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
 }
 P = PARAMS
@@ -135,6 +140,15 @@ def rect(x0, y0, x1, y1, z=0.0):
 
 def disc(x, y, r, z=0.0):
     return Part.Face(Part.Wire(Part.makeCircle(r, V(x, y, z))))
+
+
+def sector(x, y, r, a0, a1, z=0.0):
+    """Pie slice from angle a0 to a1 (degrees, anticlockwise). Its arc is drawn
+    as chords, so trim circles of radius r / 1.1 or less with it."""
+    n = math.ceil((a1 - a0) / 30.0)
+    pts = [V(x, y, z)] + [V(x + r * math.cos(math.radians(a0 + (a1 - a0) * i / n)),
+                            y + r * math.sin(math.radians(a0 + (a1 - a0) * i / n)), z) for i in range(n + 1)]
+    return Part.Face(Part.makePolygon(pts + pts[:1]))
 
 
 def offset_face(face, d):
@@ -242,8 +256,8 @@ def build_housing(H, board):
     (a0, a1) = P["sw_body"]
     cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])] + slider_cuts() + connector_cuts()
     h = h.cut(cuts).removeSplitter()
-    fill, slot = head_slot()
-    h = h.fuse(fill).cut(slot).removeSplitter()
+    clear, add, slot = button_slot(H)
+    h = h.cut(clear).fuse(add).cut(slot).removeSplitter()
     return h, pcb
 
 
@@ -359,40 +373,79 @@ def tongue(grow=0.0):
 
 
 def button_head(z, grow=0.0):
-    """Outline of the button head at height z, grown outwards by grow."""
+    """Outline of the button head at height z, grown outwards by grow. The dome
+    is two quarter ellipses that meet at the tip, on the shaft axis, so the top
+    and the bottom of the head can stand out from the shaft by different amounts."""
     xc, yb, yt, rc = P["head_rim"]
     xe, a = P["head_dome"]
-    ym, b = (yb + yt) / 2, (yt - yb) / 2
-    if math.isclose(a, b):
-        dome = disc(xe, ym, b, z)
-    else:
+    ym = sum(P["button_bar_y"]) / 2
+    parts = [rect(xc, yb + rc, xe, yt - rc, z), disc(xc + rc, yb + rc, rc, z), disc(xc + rc, yt - rc, rc, z)]
+    if xe > xc + rc:
+        parts.append(rect(xc + rc, yb, xe, yt, z))
+    for y0, y1, b in ((ym, yt + 1, yt - ym), (yb - 1, ym, ym - yb)):
         assert a > b  # the ellipse's major axis runs along X
         dome = Part.Face(Part.Wire(Part.Ellipse(V(xe, ym, z), a, b).toShape()))
-    head = merge_faces(rect(xc + rc, yb, xe, yt, z).fuse([
-        rect(xc, yb + rc, xe, yt - rc, z),
-        disc(xc + rc, yb + rc, rc, z),
-        disc(xc + rc, yt - rc, rc, z),
-        dome.common(rect(xe, yb - 1, xe + a + 1, yt + 1, z)),
-    ]))
+        parts.append(dome.common(rect(xe, y0, xe + a + 1, y1, z)))
+    head = merge_faces(parts[0].fuse(parts[1:]))
     return offset_face(head, grow) if grow else head
 
 
-def head_slot():
-    """The original slot ends in a ring around a round end. Fill the top plate
-    from head_slot x on, then cut the slot again around the new head, with the
-    channels along the shaft as they were."""
-    x0, w, zu = P["head_slot"]
-    xc = P["head_rim"][0]
+def button_slot_face(z):
+    """The slot that frees the button: an arc round the ball from behind it,
+    channels below and above the shaft, and a ring round the head."""
+    lx, ly, lr = P["button_left"]
     b0, b1 = P["button_bar_y"]
     cb, ct = P["button_channel_w"]
-    zt = P["top_z"]
-    head = button_head(zu)
-    ring = offset_face(head, w).cut(head).cut(rect(xc - w - 0.2, b0, xc + 0.05, b1, zu))
-    slot = merge_faces(ring.fuse([rect(x0 - 0.5, b1, xc - w / 2, b1 + ct, zu),
-                                  rect(x0 - 0.5, b0 - cb, xc - w / 2, b0, zu)]))
-    bb = head.BoundBox
-    fill = box(x0, bb.YMin - 1.5, zu, bb.XMax + 1.5, bb.YMax + 1.0, zt)
-    return fill, slot.extrude(V(0, 0, zt + 1 - zu))
+    xt, a_end, w = P["button_slot"]
+    xc, _, _, rc = P["head_rim"]
+    aj = math.degrees(math.asin((b0 - ly) / lr))  # where the ball meets the shaft
+    ro, rm = lr + w, lr + w / 2
+    arc = disc(lx, ly, ro, z).cut(disc(lx, ly, lr, z)).common(sector(lx, ly, 2 * ro, a_end, 360 + aj, z))
+    arc = arc.cut(rect(lx, b0, lx + ro, b0 + ro, z))
+    end = disc(lx + rm * math.cos(math.radians(a_end)), ly + rm * math.sin(math.radians(a_end)), w / 2, z)
+    xh = xc + rc  # the channels run into the head, which trims them
+    below = rect(lx, b0 - cb, xh, b0, z).cut(disc(lx, ly, lr, z))
+    above = rect(xt + ct / 2, b1, xh, b1 + ct, z).fuse(disc(xt + ct / 2, b1 + ct / 2, ct / 2, z))
+    head = button_head(z)
+    slot = offset_face(head, w).cut([head, rect(xc - w - 0.2, b0, xh, b1, z)])
+    # One piece at a time: in a single boolean the shaft edge, which the arc and
+    # the lower channel share, leaves a broken face.
+    for f in (below.cut(head), above.cut(head), arc, end):
+        slot = merge_faces(slot.fuse(f))
+    return slot
+
+
+def button_slot(H):
+    """The original button is smaller. Fill its slot and clear its tray walls,
+    then cut the slot again round the new icon and stand new walls 0.05 outside
+    it: an arc round the ball and fences along the two channels, down to a
+    floor that stops the button 2 mm down."""
+    zu, zt = P["plate_z"], P["top_z"]
+    x0, x1, t, f0, f1 = P["button_tray"]
+    lx, ly, lr = P["button_left"]
+    b0, b1 = P["button_bar_y"]
+    cb, ct = P["button_channel_w"]
+    _, a_end, w = P["button_slot"]
+    old = [s for s in H.slice(V(0, 0, 1), zt - 0.2)
+           if s.BoundBox.XLength < 30 and s.BoundBox.isInside(V(25, 68.725, zt - 0.2))]
+    assert len(old) == 1
+    fill = ext(offset_face(Part.Face(old[0]), 0.1).OuterWire, zu, zt)
+    clear = box(13.0, 60.0, f1 - 0.07, 29.95, 72.6, zu)  # original walls: x 13.35-29.95, y 60.5-72.23
+    g, z = 0.05, f1
+    r0, r1 = lr + w + g, lr + w + g + t
+    yb, yt = b0 - cb - g, b1 + ct + g  # fence faces on the slot side
+    lower = merge_faces(disc(lx, ly, r1, z).fuse(rect(lx, yb - t, x1, yb, z)))
+    for f in (disc(lx, ly, r0, z), rect(lx, yb, lx + r1, yb + r1, z), button_head(z, w + g)):
+        lower = lower.cut(f)
+    lower = lower.common(sector(lx, ly, 2 * (x1 - lx), a_end, 450, z))
+    upper = rect(x0, yt, x1, yt + t, z).cut(button_head(z, w + g))
+    # Into the plate, whose underside steps up 0.2 mm over the OLED (y < 60).
+    oled = box(x0 - 2, ly - r1 - 1, f0 - 1, x1 + 2, P["oled_clear"][0], P["oled_clear"][1])
+    walls = [ext(merge_faces(f).OuterWire, f1 - 0.05, zu + 0.25).cut(oled) for f in (lower, upper)]
+    floor = ext(merge_faces(disc(lx, ly, r1, z).fuse(rect(x0, yb - t, x1 + 0.15, yt + t, z))).OuterWire, f0, f1)
+    floor = floor.cut(oled)
+    slot = ext(button_slot_face(zu).OuterWire, zu, zt + 1)
+    return clear, [fill, floor] + walls, slot
 
 
 def button_inlay(grow=0.05):
@@ -406,7 +459,7 @@ def button_inlay(grow=0.05):
     b0, b1 = P["button_bar_y"]
     xs, ys, hs = P["button_shaft_x0"], (b0 + b1) / 2, (b1 - b0) / 2 + grow
     rf = P["button_blend"]
-    xc, yb, yt, _ = P["head_rim"]
+    xc = P["head_rim"][0]
     sw, sl = P["head_slit"]
     z0, z1 = P["inlay_z"]
 
@@ -428,8 +481,8 @@ def button_inlay(grow=0.05):
         tri((xs, ys), (bx, by), (lx, ly)),  # closes the pinhole between the three
         tri((xs, ys), (bx, by), (fx, fy)).cut(disc(fx, fy, rf, z0)),
     ]))
-    tip, ym = sum(P["head_dome"]), (yb + yt) / 2
-    slit = rect(tip - sl, ym - sw / 2, tip + 1, ym + sw / 2, z0).fuse(disc(tip - sl, ym, sw / 2, z0))
+    tip = sum(P["head_dome"])
+    slit = rect(tip - sl, ys - sw / 2, tip + 1, ys + sw / 2, z0).fuse(disc(tip - sl, ys, sw / 2, z0))
     return icon.cut(slit).extrude(V(0, 0, z1 + 1 - z0))
 
 
