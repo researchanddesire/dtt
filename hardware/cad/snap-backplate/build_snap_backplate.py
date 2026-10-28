@@ -9,7 +9,7 @@ not modified. Edit PARAMS below and re-run to change the design.
 
 The enclosed case is one rounded rectangle, the same width all the way along, so the sleeve has one
 section: side walls with lips over the case's top fillet, and a hood over its jack end. The case
-rests on two skids, clear of the cup heads under it, and the lever's teeth catch its USB-C end face
+rests on a ledge along the foot of each side wall, and the lever's teeth catch its USB-C end face
 either side of the USB-C recess.
 
 Design language: the track and the plate are one form. The part is the intersection of
@@ -63,13 +63,13 @@ PARAMS = {
     'EndSlopeZ0': (9.5, 'verified: jack-end top slope starts at Y -0.6, Z 9.5'),
     'EndSlopeY1': (2.81, 'verified: jack-end top slope ends at Y 2.81, Z 14.17'),
     # plate outline: a body flush with the track, flaring into two wings that carry the upper cups
-    'PlateT': (5.0, 'design: 1 mm over the reference proxy, so the stop fingers stay thick for the longer press the case needs'),
+    'PlateT': (6.0, 'design: 2 mm over the reference proxy, so the stop fingers stay 1.7 mm thick under the 3.7 mm press the teeth need'),
     'DeviceTopInset': (17.0, 'reference proxy: plate top to housing top end'),
     'WingWeb': (6.0, 'design: plate web around the upper keyholes, wide enough not to snap when the plate is pushed onto the cups'),
     'FlareR': (14.0, 'design: concave blend from the body into each wing'),
     'CornerR': (6.2, 'design: convex plan corners; at the jack end round the case corners, so the wall stays 2 mm'),
     # sleeve: side elevation and edges
-    'RestGap': (1.0, 'design: plate front to the case rear; the cup heads stand 0.4 proud of the plate, so 0.6 clear'),
+    'RestGap': (1.0, 'design: plate front to the case rear, the height of the side ledges; the cup heads sit 0.6 below the plate front'),
     'WallClear': (0.2, 'design: clearance to the housing sides'),
     'RailT': (2.0, 'design: side wall thickness'),
     'WallTopAbove': (1.2, 'design: wall top above the case front face; the lips are 1 mm thick at the tip'),
@@ -89,9 +89,8 @@ PARAMS = {
     'LipChamfer': (0.6, 'design: 45 deg chamfer along the top of the lip tips, part of the section (OCC cannot round them)'),
     'SlotEdgeR': (0.4, 'design: rounded front edges of the lever slots'),
     'KeyEdgeR': (0.8, 'design: rounded front edges of the keyholes'),
-    'SkidW': (2.0, 'design: skids under the case, clear of the screws and the lower cup head'),
-    'SkidY0': (2.0, 'design: skid start'),
-    'SkidY1': (60.0, 'design: skid end, short of the lever'),
+    'LedgeReach': (3.8, 'design (Lucy: rails under the case sides): ledge from each side wall in under the case to X -0.2 and 42.2, 0.25 short of the screw countersinks'),
+    'LedgeY1': (78.0, 'design: ledge end, with a 45 deg lead-in, short of the upper keyhole entries (Y 79.3 at the wall)'),
     # release lever: part of the plate outline between two slots; teeth snap behind the case
     'LatchX0': (8.0, 'design: lever left edge'),
     'LatchX1': (34.0, 'design: lever right edge'),
@@ -105,7 +104,7 @@ PARAMS = {
     'ToothXR': (28.5, 'design: right tooth X 28.5-32.5, clear of the USB-C recess'),
     'ToothW': (4.0, 'design: each tooth'),
     'ToothEdgeR': (0.5, 'design: rounded side edges of the teeth'),
-    'ToothRise': (2.0, 'design: tooth top above the case rear; catches 1.2 mm of the USB-C end face above its 0.8 chamfer'),
+    'ToothRise': (3.0, 'design (Lucy: more proud): tooth top above the case rear; catches 2.2 mm of the USB-C end face above its 0.8 chamfer, 0.4 clear of the recess'),
     'ToothClear': (0.2, 'design: tooth stop face to the module end'),
     'ToothFlat': (1.0, 'design'),
     'RampAngle': (30.0, 'design: lead-in ramp, degrees from the plate'),
@@ -114,7 +113,7 @@ PARAMS = {
     'StopY0': (94.2, 'design: fingers start just past the flex zone (the lever is full thickness from Y 93.6)'),
     'StopW': (4.0, 'design: finger width along Y'),
     'StopLand': (0.6, 'design: square lever edge at the slot above the 45 deg pocket roof, clear of the slot edge round; one 0.6 mm line'),
-    'StopGap': (2.65, 'design: finger top to pocket roof, measured along Z: the press travel at the fingers'),
+    'StopGap': (3.7, 'design: finger top to pocket roof, measured along Z: the press travel at the fingers'),
     'StopPen': (0.9, 'design: finger overlap into the lever, beside the teeth'),
     'StopClear': (0.5, 'design: clearance around the fingers, wide enough that elephant foot does not fuse them'),
     'PullY0': (99.6, 'design: pull-out rails beside the press tab, from just past the press-stop pockets (Y 98.7) out to the top edge'),
@@ -125,19 +124,22 @@ PARAMS = {
     'GripPitch': (2.0, 'design'),
     'GripW': (1.0, 'design: groove width; straight walls with a round bottom'),
     'GripDepth': (0.9, 'design: groove depth, through the blue inlay so the groove bottoms are black'),
-    'GripStart': (1.5, 'design: first groove centre past the back foot of the teeth'),
+    'GripStart': (1.2, 'design: first groove centre past the back foot of the teeth'),
     # colour: black print with the touch point (the press tab) in blue, as a separate body
-    'TouchY0': (101.8, 'design: blue starts just past the teeth (back foot at Y 101.6), so the teeth stay on black'),
+    'TouchY0': (102.6, 'design: blue starts just past the teeth (back foot at Y 102.4), so the teeth stay on black'),
     'TouchInlayT': (0.6, 'design: blue inlay depth from the front face; only 3 layers need both colours'),
     # cups, keyhole travel and head size from the reference proxy
-    'TopCupX': (28.0, 'design: from the centreline (reference 28.5); the heads reach under the case corners, 0.6 below it'),
+    'TopCupX': (28.0, 'design: from the centreline (reference 28.5); the heads reach under the case corners, 1.6 below it'),
     'TopCupDrop': (13.0, 'reference proxy: below the plate top'),
     'TopSlot': (12.0, 'design: upper slots run upward from the entry, so the load seats the stems'),
-    'LowCupY': (28.0, 'design: stem under the module, head clear of the skids'),
+    'LowCupY': (28.0, 'design: stem under the module'),
     'LowSlot': (12.0, 'design: lower slot runs upward from the entry'),
     'KeyEntryD': (15.6, 'design: passes the 15 mm stem head, 0.3 mm a side; also the recess the head slides in'),
-    'KeySlotW': (8.9, 'design: takes the 8.5 mm stem groove, 0.2 mm a side'),
-    'KeyLandT': (2.2, 'design: plate left under the head recess, in the 2.5 mm groove with 0.3 mm slack (11 layers at 0.2)'),
+    'KeySlotW': (8.9, 'design: free slot from the entry, 0.2 mm a side on the 8.5 mm stem groove'),
+    'KeySnapD': (8.4, 'design (Lucy: tighter cups): pocket at the slot end, 0.1 mm under the 8.5 mm stem groove; tune on a test print'),
+    'KeySnapWrap': (190.0, 'design (Lucy): the pocket keeps 190 deg of its rim, so the stem clicks past the mouth'),
+    'KeySnapLead': (1.5, 'design: lead-in from the free slot width down to the mouth'),
+    'KeyLandT': (2.4, 'design (Lucy: tighter cups): plate left under the head recess, in the 2.5 mm groove with 0.1 mm slack (8 layers at 0.3)'),
     'CupD': (35.0, 'reference proxy (estimate)'),
     'CupDepth': (14.0, 'reference proxy (estimate): cup rim to plate rear'),
     'CupWall': (1.2, 'reference proxy'),
@@ -148,15 +150,15 @@ PARAMS = {
     'HeadT': (3.0, 'reference (measured): head flange, opposite the cup face'),
     'StemSeat': (0.1, 'reference proxy: stem shoulder to plate rear as modelled, inside the groove slack'),
     # optional wall bracket in place of the cups: screwed or stuck to the wall, the plate hangs on its studs
-    'BracketT': (6.0, 'design: plate rear to wall; at the stop the tab end moves 4.5 mm toward the wall'),
+    'BracketT': (7.0, 'design: plate rear to wall; at the stop the tab end moves 6.3 mm toward the wall'),
     'BracketInset': (1.0, 'design: bracket outline inside the plate outline'),
     'BracketNotchClear': (1.0, 'design: notch around the lever and its slots, so the lever is free of the bracket'),
     'BracketNotchR': (2.0, 'design: notch corners'),
     'BracketEdgeR': (1.0, 'design: front outer edge'),
     'BracketBedChamfer': (0.6, 'design: wall-side outer edge, against elephant foot'),
-    'StudNeckD': (8.4, 'design: in the 8.9 mm keyhole slot'),
+    'StudNeckD': (8.0, 'design: passes the 8.37 mm mouth of the slot-end pocket'),
     'StudGap': (0.3, 'design: keyhole land to the start of the head'),
-    'StudHeadD': (13.0, 'design: passes the 15.6 mm keyhole entry; 45 deg underside prints without support'),
+    'StudHeadD': (12.6, 'design: passes the 15.6 mm keyhole entry; 45 deg underside prints without support'),
     'StudChamfer': (0.3, 'design: stud top edge'),
     'ScrewY': (46.0, 'design: between the lower keyhole (top Y 32.5) and the lever notch (Y 59.75)'),
     'ScrewDX': (12.0, 'design: screws at X 21 +/- 12, behind the plate'),
@@ -184,7 +186,7 @@ PARAMS = {
     'DDPocketClear': (0.1, 'design: tight, so the screw cannot turn; tune on a test print'),
     'DDHoleClear': (0.35, 'design: thread hole in the boss top, radial'),
     'DDBossD': (38.0, 'design: boss on the plate front under the Double Double base'),
-    'DDBossT': (5.0, 'design: boss height; with the 5 mm plate the screw sits in 10 mm'),
+    'DDBossT': (5.0, 'design: boss height; with the 6 mm plate the screw sits in 11 mm'),
     'DDCupHeadClear': (0.3, 'design: room over the fourth cup head in the screw head'),
     'DDCupSnap': (0.4, 'design (Lucy: the cup clicks in): slot mouth this much narrower than the stem groove; tune on a test print'),
     'DDCupSnapLead': (1.5, 'design: lead-in from the free slot width down to the mouth'),
@@ -195,8 +197,6 @@ DD = False   # True while main() builds the Double Double version
 # The case is the same width all the way along, so the cavity has one section. The side lips run from
 # the jack end to where the swoop starts, at Y 44, so the swoop is a plain wall. The walls have fallen
 # to the plate before the switch cover.
-# Skids under the case (X ranges), clear of the screws (X 3 and 39) and of the lower cup head.
-SKIDS = [(11.0, 13.0), (29.0, 31.0)]
 FAR = 400.0   # extent of construction solids that must run past the part
 
 
@@ -460,16 +460,26 @@ def jack_opening():
     return face.extrude(V(0, P['DeviceBottomY'] + P['HookEngage'] + 1.0 + 6.0, 0))
 
 
+def key_mouth():
+    """(half-width, offset toward the entry) of the mouth of the slot-end pocket: the pocket keeps
+    KeySnapWrap of its rim, so the mouth is the chord across the rest."""
+    rp = P['KeySnapD'] / 2; a = math.radians((360 - P['KeySnapWrap']) / 2)
+    return rp * math.sin(a), rp * math.cos(a)
+
+
 def keyholes():
-    """Entry hole for the stem head, slot for its groove, and a recess from the front over the whole
-    slide so the plate left under the head (KeyLandT) fits the groove. The head sits in the recess."""
+    """Entry hole for the stem head; a slot for its groove that narrows to a mouth and opens into a round
+    pocket at the end, which the stem clicks into; and a recess from the front over the whole slide so
+    the plate left under the head (KeyLandT) fits the groove. The head sits in the recess."""
     zf = z_front(); zr = z_rear(); zl = zr + P['KeyLandT']
     cut = []
-    w, re = P['KeySlotW'] / 2, P['KeyEntryD'] / 2
+    w, re, rp = P['KeySlotW'] / 2, P['KeyEntryD'] / 2, P['KeySnapD'] / 2
+    m, ym = key_mouth(); yl = ym + P['KeySnapLead']
     for key, (sx, sy) in cup_centres().items():
         ex, ey = entry_centre(key)
-        cut += [cyl(re, sx, ey, zr - 1, zf + 1), cyl(w, sx, sy, zr - 1, zf + 1),
-                box(sx - w, sx + w, ey, sy, zr - 1, zf + 1),
+        slot = prism([(sx - w, ey), (sx + w, ey), (sx + w, sy - yl), (sx + m, sy - ym), (sx + m, sy),
+                      (sx - m, sy), (sx - m, sy - ym), (sx - w, sy - yl)], zr - 1, zf + 1)
+        cut += [cyl(re, sx, ey, zr - 1, zf + 1), cyl(rp, sx, sy, zr - 1, zf + 1), slot,
                 cyl(re, sx, sy, zl, zf + 1), box(sx - re, sx + re, ey, sy, zl, zf + 1)]
     return cut
 
@@ -676,10 +686,19 @@ def latch_strain():
     return (P['LatchT'] / 2) * Lt * d / compliance
 
 
-def skids():
-    zf = z_front(); h = P['BodyRearZ'] - zf; y0, y1 = P['SkidY0'], P['SkidY1']
-    prof = [(y0, zf - 0.01), (y1, zf - 0.01), (y1 - h, P['BodyRearZ']), (y0 + h, P['BodyRearZ'])]
-    return [prism_yz(prof, xa, xb) for xa, xb in SKIDS]
+def ledges():
+    """The case rests on a ledge along the foot of each side wall, in under its sides and clear of the
+    screw countersinks. The inner face is 45 deg, and the end where the case comes in is a 45 deg lead-in."""
+    zf, zb, c = z_front(), P['BodyRearZ'], P['WallClear']; h = zb - zf
+    y0, y1, reach = P['DeviceBottomY'] - c - 0.01, P['LedgeY1'], P['LedgeReach']
+    run = prism_yz([(y0, zf - 0.01), (y1, zf - 0.01), (y1 - h, zb), (y0, zb)], -FAR / 2, FAR / 2)
+    out = []
+    for edge, inward in ((P['BodyX0'], 1), (P['BodyX1'], -1)):
+        x = lambda d: edge + inward * d                    # d: distance in from the case side
+        sec = prism_xz([(x(-c - 0.01), zf - 0.01), (x(reach + h), zf - 0.01), (x(reach), zb), (x(-c - 0.01), zb)],
+                       y0 - 1, y1 + 1)
+        out.append(sec.common(run))
+    return out
 
 
 def fillet_edges_in(shape, boxes, r, z, label, exclude=()):
@@ -832,7 +851,7 @@ def printed_part():
     fingers, pockets = stop_parts()
     rails, corner_cuts = pull_stop_parts()
     body = body.cut(pockets + corner_cuts).removeSplitter()
-    printed = body.fuse(skids() + latch_teeth() + fingers + rails).removeSplitter()
+    printed = body.fuse(ledges() + latch_teeth() + fingers + rails).removeSplitter()
     return printed
 
 
@@ -978,8 +997,12 @@ def design_checks(printed, black, blue, bracket):
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
     zf = z_front()
-    print('CHECK cup head and stud top to the case rear %.2f mm, %.2f above the plate front' % (
-        P['BodyRearZ'] - cup_head_top(), cup_head_top() - zf))
+    print('CHECK cup head and stud top %.2f mm under the case rear, %.2f under the plate front' % (
+        P['BodyRearZ'] - cup_head_top(), zf - cup_head_top()))
+    m, _ = key_mouth()
+    print('CHECK cup click: %.2f mm pocket keeps %.0f deg of its rim, so a %.2f mm mouth on the %.2f mm stem groove; '
+          'bracket stud neck %.2f passes it with %.2f a side' % (P['KeySnapD'], P['KeySnapWrap'], 2 * m, P['GrooveD'],
+                                                                 P['StudNeckD'], m - P['StudNeckD'] / 2))
     if bracket is not None:
         bb = bracket.BoundBox
         print('CHECK bracket valid %s, solids %d, %.1f x %.1f x %.1f mm, volume %.1f cm3' % (
@@ -1051,6 +1074,9 @@ def module_checks(doc, printed):
         s = slider.translated(V(0, y, 0))
         print('CHECK switch cover %s: overlap %.4f mm3, gap %.2f mm' % (name, s.common(printed).Volume, s.distToShape(printed)[0]))
     rear = doc.getObject('RearCover').Shape
+    screws = [o.Shape for o in parts if o.Name.startswith('PCBMountScrew')]
+    print('CHECK ledges: the case rests on %.1f mm of its flat rear a side, %.2f mm clear of the screw heads' % (
+        P['LedgeReach'] - ENC.P['bottom_chamfer'], min(l.distToShape(s)[0] for l in ledges() for s in screws)))
     for key, (x, y) in cup_positions().items():
         cup = cup_shape(x, y)
         print('CHECK cup %s to the case: overlap %.4f mm3, gap %.2f mm' % (key, cup.common(rear).Volume, cup.distToShape(rear)[0]))

@@ -20,9 +20,9 @@ bracket.
   its USB-C end.
 - **Release:** unplug USB-C, press the blue tab toward the wall and slide the
   case out.
-- **Suction cups:** snap the three cups into the keyholes before fitting the
-  case. The keyholes fit a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm
-  groove.
+- **Suction cups:** before fitting the case, push each cup's head through a
+  keyhole and slide it up until it clicks into the round end. The keyholes fit
+  a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm groove.
 - **Wall bracket:** instead of the cups. Fix it level with two #6 or #8 screws,
   at least 25 mm long, or with Command strips on its back. Hang the plate on the
   studs and push it down 12 mm. To take it off, lift it 12 mm.
@@ -67,5 +67,5 @@ dimension and its basis is in `PARAMS`. Run it from the repository root with
 - Lever click and release force (`ToothRise`, `LatchT`).
 - Track slide fit (`WallClear`).
 - Stop fingers print free of the lever (`StopClear`).
-- Cups and bracket studs seat without rattling (`KeyLandT`, `KeySlotW`, `StudGap`).
+- Cups click in and sit tight (`KeySnapD`, `KeyLandT`). Bracket studs seat without rattling (`StudNeckD`, `StudGap`).
 - Double Double: screw tight in its pocket (`DDPocketClear`), thread fit (`ThreadCrest`), cup click (`DDCupSnap`).
