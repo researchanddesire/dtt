@@ -3,7 +3,7 @@
 
 Run with KiCad 7+ Python (needs `pcbnew`):  python3 build_dtt_v2.py
 The netlist below is the single source; schematic and board are regenerated
-from it. Placement is a starting point for hand routing in KiCad.
+from it, then route_dtt_v2.py routes the board.
 """
 import json
 import shutil
@@ -29,6 +29,9 @@ PARAMS = {
     'screen_h': 52.0,
     'origin': (100.0, 100.0),  # board top-left in KiCad coordinates
 }
+
+# Nets routed 0.4 mm wide.
+POWER_NETS = ('VBUS', 'VBAT', 'VBAT_SW', 'VSYS', 'VSYS_PORT', '+3V3', 'OUT1', 'OUT2')
 
 NS = uuid.UUID('6b1f8a2e-6f0e-4f4e-9a52-0d7d2c1e5a10')
 
@@ -673,7 +676,7 @@ def build_board():
         z.SetNet(netinfo['GND'])
         z.SetMinThickness(mm(0.2))
         z.SetLocalClearance(mm(0.25))
-        z.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+        z.SetPadConnection(pcbnew.ZONE_CONNECTION_THT_THERMAL)  # solid SMD, relieved THT
         z.SetZoneName(f'GND {"top" if layer == pcbnew.F_Cu else "bottom"}')
         o = z.Outline()
         o.NewOutline()
@@ -713,11 +716,13 @@ def build_project():
     rules['min_copper_edge_clearance'] = 0.3
     pro['sheets'] = [[uid('root'), 'Root']] + [[uid('sheet', k), t] for k, _, t in SHEETS]
     classes = pro['net_settings']['classes']
-    for c in classes:
-        if c['name'] == 'USB_D':
-            c['track_width'] = 0.2
-    pro['net_settings']['netclass_patterns'] = [
-        {'netclass': 'USB_D', 'pattern': 'USB_*D?'}]
+    default = next(c for c in classes if c['name'] == 'Default')
+    classes[:] = [default,
+                  dict(default, name='Power', track_width=0.4),
+                  dict(default, name='USB_D', track_width=0.2)]
+    pro['net_settings']['netclass_patterns'] = (
+        [{'netclass': 'Power', 'pattern': n} for n in POWER_NETS]
+        + [{'netclass': 'USB_D', 'pattern': n} for n in ('USB_DP', 'USB_DN')])
     (HERE / f'{STEM}.kicad_pro').write_text(json.dumps(pro, indent=2) + '\n')
     syms = ' '.join(lib_symbol(p, prefix=False) for p in PARTS)
     (HERE / f'{LIB}.kicad_sym').write_text(
@@ -733,8 +738,8 @@ def main():
         raise SystemExit('\n'.join(problems))
     build_footprints()
     build_schematic(uid('root'))
-    build_project()
     path = build_board()
+    build_project()   # after the board: saving the board rewrites the project file
     print(f'{len(PARTS)} parts, {len(nets())} nets -> {path.name}')
 
 
