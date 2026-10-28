@@ -76,10 +76,14 @@ static void test_training_active() {
     // on_entry spawns distance + play tasks which set currentSegment.
     // Give them time to start.
     vTaskDelay(pdMS_TO_TICKS(2000));
+    TrainingGuard guard(trainingMutex);
 
     TEST_ASSERT_NOT_NULL_MESSAGE(
-        currentSegment,
+        currentSegment.get(),
         "currentSegment should be set during active training");
+
+    TEST_ASSERT_TRUE_MESSAGE(trainingLifecycle.active(),
+        "Active worker status must be true during actual training");
 
     Serial.printf("[INFO] Training type: %d, state: %d, target: %d\n",
                   (int)currentSegment->type, (int)currentSegment->state,
@@ -101,9 +105,10 @@ static void test_complete_training_and_grade() {
 
     // Assert on OUTCOME: grade was calculated
     vTaskDelay(pdMS_TO_TICKS(500));
+    TrainingGuard guard(trainingMutex);
 
     TEST_ASSERT_NOT_NULL_MESSAGE(
-        currentSegment,
+        currentSegment.get(),
         "currentSegment should still be set after training");
 
     int grade = currentSegment->grade();
