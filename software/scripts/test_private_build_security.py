@@ -4,12 +4,14 @@ import io
 import os
 from pathlib import Path
 import runpy
+import sys
 import tempfile
 import unittest
 from unittest import mock
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1] / "firmware"
+sys.path.insert(0, str(ROOT.parent / "dev"))
 
 
 class Environment(dict):
@@ -54,7 +56,7 @@ class PrivateBuildSecurityTests(unittest.TestCase):
             env = Environment(PIOENV=profile, defines=["VERSIONDEV"])
             with mock.patch("development_server.development_server", return_value="http://192.168.2.59:3000") as load:
                 self.assertEqual(run_guard(env), "")
-            load.assert_called_once_with(ROOT)
+            load.assert_called_once_with(ROOT.parent / "dev")
             self.assertIn(("RAD_SERVER", '"http://192.168.2.59:3000"'), env["defines"])
             with self.assertRaises(ValueError):
                 run_guard(Environment(PIOENV=profile, defines=["VERSIONDEV", "RAD_SERVER"]))

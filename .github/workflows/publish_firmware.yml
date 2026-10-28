@@ -54,7 +54,7 @@ jobs:
       name: ${{ github.ref_name == 'main' && 'firmware-production' || 'firmware-staging' }}
     defaults:
       run:
-        working-directory: software
+        working-directory: software/firmware
     env:
       FIRMWARE_PUBLISH_TOKEN: ${{ secrets.FIRMWARE_PUBLISH_TOKEN }}
       FIRMWARE_PROVENANCE_SIGNING_KEY_PEM: ${{ secrets.FIRMWARE_PROVENANCE_SIGNING_KEY_PEM }}
@@ -80,7 +80,7 @@ jobs:
           python-version: "3.12"
 
       - name: Select track and build environment
-        run: python ../.github/scripts/release_workflow.py configure --branch "$GITHUB_REF_NAME"
+        run: python ../../.github/scripts/release_workflow.py configure --branch "$GITHUB_REF_NAME"
 
       - name: Resolve merged PR title
         id: pull_request
@@ -113,7 +113,7 @@ jobs:
         env:
           PR_TITLE: ${{ steps.pull_request.outputs.title }}
           DEVICE_TYPE: dtt
-          VERSION_HEADER: software/src/constants/Version.h
+          VERSION_HEADER: software/firmware/src/constants/Version.h
           RELEASE_VERSION: software/scripts/release_version.py
         run: bash .github/scripts/allocate_version.sh
       - name: Install PlatformIO
@@ -121,16 +121,16 @@ jobs:
 
       - name: Test publisher
         run: |
-          python ../.github/scripts/test_check_firmware_size.py
-          python ../.github/scripts/test_check_migration_image.py
-          python ../.github/scripts/test_build_web_installer.py
-          python ../.github/scripts/test_download_verified_release.py
-          python ../.github/scripts/test_firmware_provenance.py
-          python ../.github/scripts/test_publish_immutable_firmware.py
-          python ../.github/scripts/test_release_workflow.py
+          python ../../.github/scripts/test_check_firmware_size.py
+          python ../../.github/scripts/test_check_migration_image.py
+          python ../../.github/scripts/test_build_web_installer.py
+          python ../../.github/scripts/test_download_verified_release.py
+          python ../../.github/scripts/test_firmware_provenance.py
+          python ../../.github/scripts/test_publish_immutable_firmware.py
+          python ../../.github/scripts/test_release_workflow.py
 
       - name: Run release helper tests
-        run: python scripts/test_release_version.py
+        run: python ../scripts/test_release_version.py
 
       - name: Run native unit tests
         run: pio test -e test_native
@@ -143,44 +143,44 @@ jobs:
 
       - name: Verify each firmware fits its approved OTA partition
         run: |
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment "$PIO_ENV_V1" \
             --partition partition-v1.csv \
             --partition-binary ".pio/build/$PIO_ENV_V1/partitions.bin" \
             --firmware ".pio/build/$PIO_ENV_V1/firmware.bin" \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment "$PIO_ENV_V2" \
             --partition partition-v2.csv \
             --partition-binary ".pio/build/$PIO_ENV_V2/partitions.bin" \
             --firmware ".pio/build/$PIO_ENV_V2/firmware.bin" \
             --expected-partition-blob 87b066320a83be1d390fd4cdfea9d1b5b6bccea4 \
             --expected-partition-binary-sha256 df8bb78d1134d502246d4ae7de59d397bc1d2529fa9c4affdd68aa78514e6c09
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment "$PIO_ENV_MIGRATION" \
             --partition partition-v1.csv \
             --partition-binary ".pio/build/$PIO_ENV_MIGRATION/partitions.bin" \
             --firmware ".pio/build/$PIO_ENV_MIGRATION/firmware.bin" \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 4194304 \
             ".pio/build/$PIO_ENV_V1/firmware.bin"
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
             ".pio/build/$PIO_ENV_V2/firmware.bin"
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
             ".pio/build/$PIO_ENV_MIGRATION/firmware.bin"
 
       - name: Build and validate V1 and V2 web installers
         run: |
-          python ../.github/scripts/build_web_installer.py \
+          python ../../.github/scripts/build_web_installer.py \
             --profile esp32-4mb \
             --build-dir ".pio/build/$PIO_ENV_V1" \
             --output ".pio/build/$PIO_ENV_V1/web-installer.bin"
-          python ../.github/scripts/build_web_installer.py \
+          python ../../.github/scripts/build_web_installer.py \
             --profile esp32-16mb \
             --build-dir ".pio/build/$PIO_ENV_V2" \
             --output ".pio/build/$PIO_ENV_V2/web-installer.bin"
@@ -188,7 +188,7 @@ jobs:
       - name: Publish validating V1 release
         id: publish_v1
         run: |
-          python ../.github/scripts/publish_immutable_firmware.py \
+          python ../../.github/scripts/publish_immutable_firmware.py \
             --device-type dtt \
             --hardware-variant v1 \
             --track "$TRACK" \
@@ -203,7 +203,7 @@ jobs:
       - name: Publish validating V2 release
         id: publish_v2
         run: |
-          python ../.github/scripts/publish_immutable_firmware.py \
+          python ../../.github/scripts/publish_immutable_firmware.py \
             --device-type dtt \
             --hardware-variant v2 \
             --track "$TRACK" \
@@ -219,7 +219,7 @@ jobs:
       - name: Publish validating migration bridge
         id: publish_migration
         run: |
-          python ../.github/scripts/publish_immutable_firmware.py \
+          python ../../.github/scripts/publish_immutable_firmware.py \
             --device-type dtt \
             --hardware-variant v2 \
             --track "$TRACK" \

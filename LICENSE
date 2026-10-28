@@ -8,7 +8,7 @@ Because this project consists of many types of source, individual parts are made
 
 1. Hardware designs at `./hardware/cad` and `./hardware/pcb` are available under **CERN-OHL-S v2**. Full text: [`LICENSES/CERN-OHL-S-2.0.txt`](LICENSES/CERN-OHL-S-2.0.txt).
 
-2. Firmware and software at `./software`, `./scripts`, and `./developer-docs` are available under **Mozilla Public License 2.0**. Bundled third-party code in `./software/lib` and `./software/include`, and the ESP-IDF DHCP server backport at `./software/src/services/dhcp_server_patch.c` (Apache-2.0, see `dhcp_server_patch.LICENSE`), keeps its own license. Full text: [`LICENSES/MPL-2.0.txt`](LICENSES/MPL-2.0.txt).
+2. Firmware and software at `./software` and `./developer-docs` are available under **Mozilla Public License 2.0**. Bundled third-party code in `./software/firmware/lib` and `./software/firmware/include`, and the ESP-IDF DHCP server backport at `./software/firmware/src/services/dhcp_server_patch.c` (Apache-2.0, see `dhcp_server_patch.LICENSE`), keeps its own license. Full text: [`LICENSES/MPL-2.0.txt`](LICENSES/MPL-2.0.txt).
 
 3. CI workflows and scripts at `./.github` are available under **Mozilla Public License 2.0**.
 

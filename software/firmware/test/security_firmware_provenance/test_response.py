@@ -31,7 +31,7 @@ class ProvenanceResponseTests(unittest.TestCase):
         source = source.replace("// ACTUAL_RESULT", between(reply, "Result Result::success(", "\nServer::Server()"))
         source = source.replace("// ACTUAL_REPLY", between(reply, "void Server::sendStage(", "\nvoid Server::sendSerialized("))
         source = source.replace("// ACTUAL_CRYPTO_PORT", (HERE / "native_crypto_port.h.in").read_text(encoding="utf-8"))
-        vector = json.loads((ROOT.parent / ".github/scripts/firmware_provenance_test_vector.json").read_text(encoding="utf-8"))
+        vector = json.loads((ROOT.parents[1] / ".github/scripts/firmware_provenance_test_vector.json").read_text(encoding="utf-8"))
         source = source.replace("// SIGNED_VECTOR", "static const std::string signedToken = " + json.dumps(vector["compactJws"]) + ";")
         states = sorted(set(re.findall(r'"([A-Za-z][A-Za-z0-9_.]*)"_s', (ROOT / "src/state/machine.h").read_text(encoding="utf-8"))))
         source = source.replace("// DTT_STATE_NAMES", "static const char* states[] = {" + ",".join(json.dumps(s) for s in states) + "};")

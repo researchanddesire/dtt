@@ -37,6 +37,15 @@ jobs:
           path: firmware-source
           fetch-depth: 1
 
+      - name: Locate the firmware project in that source
+        # Sources before the software/firmware layout keep PlatformIO in software/.
+        run: |
+          if [ -f firmware-source/software/firmware/platformio.ini ]; then
+            echo "FIRMWARE_DIR=firmware-source/software/firmware" >> "$GITHUB_ENV"
+          else
+            echo "FIRMWARE_DIR=firmware-source/software" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -46,24 +55,24 @@ jobs:
 
       - name: Verify requested source version
         run: |
-          test "$(python software/scripts/release_version.py read --header firmware-source/software/src/constants/Version.h)" = "${{ inputs.version }}"
+          test "$(python software/scripts/release_version.py read --header "$FIRMWARE_DIR/src/constants/Version.h")" = "${{ inputs.version }}"
 
       - name: Install PlatformIO
         run: python -m pip install --upgrade platformio
 
       - name: Build and verify bridge
         run: |
-          pio run --project-dir firmware-source/software -e migration-production -j 1
+          pio run --project-dir "$FIRMWARE_DIR" -e migration-production -j 1
           python .github/scripts/check_firmware_size.py \
             --environment migration-production \
-            --partition firmware-source/software/partition-v1.csv \
-            --partition-binary firmware-source/software/.pio/build/migration-production/partitions.bin \
-            --firmware firmware-source/software/.pio/build/migration-production/firmware.bin \
+            --partition "$FIRMWARE_DIR/partition-v1.csv" \
+            --partition-binary "$FIRMWARE_DIR/.pio/build/migration-production/partitions.bin" \
+            --firmware "$FIRMWARE_DIR/.pio/build/migration-production/firmware.bin" \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
           python .github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
-            firmware-source/software/.pio/build/migration-production/firmware.bin
+            "$FIRMWARE_DIR/.pio/build/migration-production/firmware.bin"
 
       - name: Publish validating migration bridge
         run: |
@@ -72,10 +81,10 @@ jobs:
             --hardware-variant v2 \
             --track main \
             --build-sha "$RELEASE_BUILD_SHA" \
-            --version-file firmware-source/software/src/constants/Version.h \
+            --version-file "$FIRMWARE_DIR/src/constants/Version.h" \
             --kind migration \
             --min-flash-size-bytes 16777216 \
             --partition-layout legacy-v1 \
-            --artifact "partitions:firmware-source/software/.pio/build/migration-production/partitions.bin:1:false" \
-            --artifact "application:firmware-source/software/.pio/build/migration-production/firmware.bin:2:true" \
-            --artifact "bootloader:firmware-source/software/.pio/build/migration-production/bootloader.bin:3:false"
+            --artifact "partitions:$FIRMWARE_DIR/.pio/build/migration-production/partitions.bin:1:false" \
+            --artifact "application:$FIRMWARE_DIR/.pio/build/migration-production/firmware.bin:2:true" \
+            --artifact "bootloader:$FIRMWARE_DIR/.pio/build/migration-production/bootloader.bin:3:false"

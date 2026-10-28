@@ -7,7 +7,7 @@ from release_workflow import branch_configuration, main, tag_action
 
 PUBLISH_WORKFLOW = Path(__file__).resolve().parents[1] / "workflows" / "publish_firmware.yml"
 VERSION_ALLOCATOR = Path(__file__).with_name("allocate_version.sh")
-FIRMWARE_ROOT = Path(__file__).resolve().parents[2] / "software"
+FIRMWARE_ROOT = Path(__file__).resolve().parents[2] / "software" / "firmware"
 
 
 class ReleaseWorkflowTests(unittest.TestCase):

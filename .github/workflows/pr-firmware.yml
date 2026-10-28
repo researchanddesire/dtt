@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: software
+        working-directory: software/firmware
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -66,8 +66,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install platformio==6.2.0
-      - run: python -m unittest discover -s scripts -p 'test_capture_screen.py'
-      - run: python -m unittest discover -s scripts -p 'test_serial_identity.py'
+      - run: python -m unittest discover -s ../scripts -p 'test_capture_screen.py'
+      - run: python -m unittest discover -s ../scripts -p 'test_serial_identity.py'
       - name: Compile development display capture (never upload)
         env:
           PIO_ENV: ${{ matrix.environment }}
@@ -75,7 +75,7 @@ jobs:
       - name: Verify development console inclusion
         env:
           PIO_ENV: ${{ matrix.environment }}
-        run: python scripts/check_screen_build.py --build-dir "./.pio/build/$PIO_ENV" --expect enabled
+        run: python ../scripts/check_screen_build.py --build-dir "./.pio/build/$PIO_ENV" --expect enabled
   harness_tests:
     needs: changes
     if: needs.changes.outputs.firmware == 'true'
@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: software
+        working-directory: software/firmware
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -133,7 +133,7 @@ jobs:
       - name: Verify development console inclusion
         env:
           PIO_ENV: ${{ matrix.environment }}
-        run: python scripts/check_screen_build.py --build-dir "./.pio/build/$PIO_ENV" --expect disabled
+        run: python ../scripts/check_screen_build.py --build-dir "./.pio/build/$PIO_ENV" --expect disabled
       - name: Verify approved OTA layout and release headroom
         # Preserve the existing release gate before publishing hardware bundles.
         env:
@@ -147,7 +147,7 @@ jobs:
             partition_blob=87b066320a83be1d390fd4cdfea9d1b5b6bccea4
             partition_sha256=df8bb78d1134d502246d4ae7de59d397bc1d2529fa9c4affdd68aa78514e6c09
           fi
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment "$PIO_ENV" --partition "partition-$VARIANT.csv" \
             --partition-binary ".pio/build/$PIO_ENV/partitions.bin" \
             --firmware ".pio/build/$PIO_ENV/firmware.bin" \
@@ -159,14 +159,14 @@ jobs:
           PIO_ENV: ${{ matrix.environment }}
           VARIANT: ${{ matrix.variant }}
         run: >-
-          python scripts/hil/bundle.py --repository "$GITHUB_REPOSITORY"
+          python ../scripts/hil/bundle.py --repository "$GITHUB_REPOSITORY"
           --build-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
           --variant "$VARIANT" --build-dir "./.pio/build/$PIO_ENV" --output hardware-parts
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: matrix.track == 'staging'
         with:
           name: hardware-parts-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.variant }}
-          path: software/hardware-parts/
+          path: software/firmware/hardware-parts/
           if-no-files-found: error
           retention-days: 14
   prepare_hardware:

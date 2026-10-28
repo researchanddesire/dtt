@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(env.subst("$PROJECT_DIR")) / "scripts"))
+sys.path.insert(0, str(Path(env.subst("$PROJECT_DIR")).parent / "scripts"))
 from ble_memory import install
 install(env)
 from tls_log_size import install as install_tls_log_size
@@ -14,7 +14,7 @@ install_tls_log_size(env)
 project_dir = Path(env.subst("$PROJECT_DIR"))
 build_sha = os.getenv("RELEASE_BUILD_SHA", os.getenv("GITHUB_SHA", "unknown"))
 if str(env.get("PIOENV", "")).startswith("migration-"):
-    sys.path.insert(0, str(project_dir / "scripts"))
+    sys.path.insert(0, str(project_dir.parent / "scripts"))
     from migration_build_identity import migration_build_identity
 
     build_sha = migration_build_identity(project_dir)
