@@ -1,8 +1,8 @@
 # DTT snap backplate (concept)
 
-A printed backplate the DTT module slides into and clicks onto. The module only
-loses its hook-and-loop backing. Mount the plate on three suction cups, or hang
-it on the wall bracket.
+A printed backplate the [enclosed case](../enclosed-case/) slides into and
+clicks onto. Mount the plate on three suction cups, or hang it on the wall
+bracket.
 
 ![Hero](images/Snap-Backplate-Hero.png)
 
@@ -16,12 +16,12 @@ it on the wall bracket.
 
 ## Use
 
-- **Fit:** slide the module in, jack end first, until the lever clicks behind
-  the USB-C edge.
+- **Fit:** slide the case in, jack end first, until the lever clicks behind
+  its USB-C end.
 - **Release:** unplug USB-C, press the blue tab toward the wall and slide the
-  module out.
+  case out.
 - **Suction cups:** snap the three cups into the keyholes before fitting the
-  module. The keyholes fit a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm
+  case. The keyholes fit a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm
   groove.
 - **Wall bracket:** instead of the cups. Fix it level with two #6 or #8 screws,
   at least 25 mm long, or with Command strips on its back. Hang the plate on the
@@ -41,7 +41,8 @@ The files are in
 
 For the OSSM Double Double 24 mm threaded toy mount. A printed hex flange screw
 holds it 12.5 mm below the jack end, with a fourth cup right under it. Use a
-right-angle vibrator plug, or a straight one under 13.7 mm long.
+right-angle vibrator plug, or a straight one under 12.5 mm long (15 mm if it is
+under 6 mm thick).
 
 ![Double Double](images/Snap-Backplate-Double-Double-Hero.png)
 
@@ -55,10 +56,11 @@ right-angle vibrator plug, or a straight one under 13.7 mm long.
 
 ## Source
 
-`build_snap_backplate.py` builds everything from `hardware/cad/DTT.FCStd`
-without modifying it. Every dimension and its basis is in `PARAMS`. Run it from
-the repository root with `freecad hardware/cad/snap-backplate/build_snap_backplate.py`.
-It writes an `.FCStd` for each version, the exports and the images in `images/`.
+`build_snap_backplate.py` builds everything from
+`hardware/cad/enclosed-case/DTT-Enclosed.FCStd` without modifying it. Every
+dimension and its basis is in `PARAMS`. Run it from the repository root with
+`freecad hardware/cad/snap-backplate/build_snap_backplate.py`. It writes an
+`.FCStd` for each version, the exports and the images in `images/`.
 
 ## Check on a test print
 
@@ -66,5 +68,4 @@ It writes an `.FCStd` for each version, the exports and the images in `images/`.
 - Track slide fit (`WallClear`).
 - Stop fingers print free of the lever (`StopClear`).
 - Cups and bracket studs seat without rattling (`KeyLandT`, `KeySlotW`, `StudGap`).
-- PCB through-hole leads stay under 1.2 mm over the lower cup.
 - Double Double: screw tight in its pocket (`DDPocketClear`), thread fit (`ThreadCrest`), cup click (`DDCupSnap`).

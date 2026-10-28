@@ -1,11 +1,16 @@
-"""Build the DTT slide-in backplate around the unmodified module.
+"""Build the DTT slide-in backplate around the enclosed case.
 
 Run from the repository root under the FreeCAD GUI (needed for colours and previews):
     freecad hardware/cad/snap-backplate/build_snap_backplate.py
-or headless with xvfb-run. It opens hardware/cad/DTT.FCStd read-only, adds the backplate and
-saves the result beside this script as DTT-Snap-Backplate-Concept.FCStd, with STEP/STL exports in
-hardware/production-exports/cad/snap-backplate/. DTT.FCStd itself is not modified. Edit PARAMS
-below and re-run to change the design.
+or headless with xvfb-run. It opens hardware/cad/enclosed-case/DTT-Enclosed.FCStd read-only, adds
+the backplate and saves the result beside this script as DTT-Snap-Backplate-Concept.FCStd, with
+STEP/STL exports in hardware/production-exports/cad/snap-backplate/. DTT-Enclosed.FCStd itself is
+not modified. Edit PARAMS below and re-run to change the design.
+
+The enclosed case is one rounded rectangle, the same width all the way along, so the sleeve has one
+section: side walls with lips over the case's top fillet, and a hood over its jack end. The case
+rests on two skids, clear of the cup heads under it, and the lever's teeth catch its USB-C end face
+either side of the USB-C recess.
 
 Design language: the track and the plate are one form. The part is the intersection of
 a plan outline (body flaring into the two cup wings with large radii) and a side elevation (a hood
@@ -27,87 +32,94 @@ sits right under the toy: its stem clicks into a slot in the screw head, and the
 slot once the screw is in.
 
 Device coordinates: X across the module, Y along it (USB-C end at +Y), Z out of the front face. The
-PCB rear face is Z -5.1. The wall is at -Z; the part prints rear face down.
+case's rear face is Z -8.1. The wall is at -Z; the part prints rear face down.
 """
-import math, os
+import math, os, sys
 import FreeCAD as App
 import Part
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')) if '__file__' in globals() else os.getcwd()
 CAD = os.path.join(ROOT, 'hardware', 'cad')
+MODULE = os.path.join(CAD, 'enclosed-case', 'DTT-Enclosed.FCStd')
 HERE = os.path.join(CAD, 'snap-backplate')
 IMAGES = os.path.join(HERE, 'images')
 OUT = os.path.join(ROOT, 'hardware', 'production-exports', 'cad', 'snap-backplate')
 TAG = 'SnapBackplate'
+sys.path.insert(0, os.path.dirname(MODULE))
+import build_enclosed_case as ENC   # the case's own dimensions, for the fit checks
 
 # name: (value, basis)
 PARAMS = {
-    # module, measured from the housing and board solids in DTT.FCStd
-    'PCBRearZ': (-5.1, 'verified: board rear face'),
-    'DeviceCx': (21.0, 'verified: housing centreline'),
-    'DeviceBottomY': (1.0, 'verified: housing jack end face'),
-    'DeviceTopY': (93.0, 'verified: housing USB-C end'),
+    # module: the enclosed case, measured from the solids in DTT-Enclosed.FCStd
+    'BodyRearZ': (-8.1, 'verified: rear cover outer face, flat, with the screws flush'),
+    'BodyX0': (-4.0, 'verified: case side, the same all the way along'),
+    'BodyX1': (46.0, 'verified: case side; the switch cover grip stands 0.4 proud at Y 79.9-88.1'),
+    'BodyCornerR': (4.0, 'verified: plan corners'),
+    'TopFilletR': (1.2, 'verified: round along the top edges'),
+    'DeviceCx': (21.0, 'verified: case centreline'),
+    'DeviceBottomY': (-0.6, 'verified: jack end face'),
+    'DeviceTopY': (94.6, 'verified: USB-C end face'),
     'HousingTopZ': (14.17, 'verified: front face'),
-    'EndSlopeZ0': (9.5, 'verified: jack-end top slope starts at Y 1.0, Z 9.5'),
-    'EndSlopeY1': (4.41, 'verified: jack-end top slope ends at Y 4.41, Z 14.17'),
-    'EndCornerC': (3.0, 'verified: jack-end plan corners are 3 mm 45 deg chamfers (R1 blends)'),
+    'EndSlopeZ0': (9.5, 'verified: jack-end top slope starts at Y -0.6, Z 9.5'),
+    'EndSlopeY1': (2.81, 'verified: jack-end top slope ends at Y 2.81, Z 14.17'),
     # plate outline: a body flush with the track, flaring into two wings that carry the upper cups
-    'PlateT': (4.0, 'reference proxy (estimate)'),
+    'PlateT': (5.0, 'design: 1 mm over the reference proxy, so the stop fingers stay thick for the longer press the case needs'),
     'DeviceTopInset': (17.0, 'reference proxy: plate top to housing top end'),
     'WingWeb': (6.0, 'design: plate web around the upper keyholes, wide enough not to snap when the plate is pushed onto the cups'),
     'FlareR': (14.0, 'design: concave blend from the body into each wing'),
-    'CornerR': (8.0, 'design: convex plan corners, also the jack-end corners of the sleeve'),
+    'CornerR': (6.2, 'design: convex plan corners; at the jack end round the case corners, so the wall stays 2 mm'),
     # sleeve: side elevation and edges
-    'RestGap': (2.6, 'design: plate front to PCB rear; PCB screw heads and the lower cup head pass under the PCB'),
+    'RestGap': (1.0, 'design: plate front to the case rear; the cup heads stand 0.4 proud of the plate, so 0.6 clear'),
     'WallClear': (0.2, 'design: clearance to the housing sides'),
-    'RailT': (2.0, 'design: side wall thickness at the widest housing section'),
-    'WallTopAbove': (0.8, 'design: wall top above the housing front face'),
+    'RailT': (2.0, 'design: side wall thickness'),
+    'WallTopAbove': (1.2, 'design: wall top above the case front face; the lips are 1 mm thick at the tip'),
     'HoodT': (1.4, 'design: jack-end hood thickness normal to the housing end slope'),
     'HoodTopR': (4.0, 'design: blend from the hood slope into the flat top'),
-    'SwoopY0': (44.0, 'design: wall top starts to fall here; lips run to about Y 50'),
-    'SwoopY1': (78.0, 'design: wall reaches the plate here, below the S1 switch at Y 79.4'),
+    'SwoopY0': (44.0, 'design: wall top starts to fall here; the lips run to here'),
+    'SwoopY1': (77.0, 'design: wall reaches the plate here, clear of the upper keyhole entries (Y 78.8) and the switch cover grip (Y 79.9)'),
     'EdgeR': (1.0, 'design: fillet along the whole outer top edge of the sleeve and wings, half the 2 mm wall so its top stays square'),
     'BedChamfer': (0.6, 'design: rear outer edge, against elephant foot'),
     'InnerChamfer': (1.0, 'design: 45 deg fillet-chamfer at the inner foot of the walls'),
-    'HookEngage': (0.6, 'design: lip overlap onto the top chamfer and onto the jack-end slope'),
+    'HookEngage': (0.6, 'design: lip reach over the case sides onto the top fillet, and over the jack end onto its slope'),
     'JackOpenX0': (14.0, 'design: opening in the hood for the 3.5 mm plug'),
     'JackOpenX1': (28.0, 'design'),
     'JackOpenR': (3.0, 'design: bottom corners of the plug opening'),
     'JackEdgeR': (1.0, 'design: rounded edges of the plug opening'),
-    'InnerEdgeR': (0.5, 'design: rounded inner top edges of the walls and lips'),
+    'InnerEdgeR': (0.5, 'design: rounded inner top edges of the walls and the hood'),
+    'LipChamfer': (0.6, 'design: 45 deg chamfer along the top of the lip tips, part of the section (OCC cannot round them)'),
     'SlotEdgeR': (0.4, 'design: rounded front edges of the lever slots'),
     'KeyEdgeR': (0.8, 'design: rounded front edges of the keyholes'),
-    'SkidW': (2.0, 'design: skids under the PCB, between the screw-head and connector tracks'),
-    'SkidY0': (5.0, 'design: skid start'),
-    'SkidY1': (64.0, 'design: skid end, short of the tongue'),
-    # release lever: part of the plate outline between two slots; teeth snap behind the PCB
-    'LatchX0': (9.0, 'design: lever left edge'),
-    'LatchX1': (33.0, 'design: lever right edge'),
-    'LatchRootY': (66.0, 'design: lever root (slot ends), under the module'),
+    'SkidW': (2.0, 'design: skids under the case, clear of the screws and the lower cup head'),
+    'SkidY0': (2.0, 'design: skid start'),
+    'SkidY1': (60.0, 'design: skid end, short of the lever'),
+    # release lever: part of the plate outline between two slots; teeth snap behind the case
+    'LatchX0': (8.0, 'design: lever left edge'),
+    'LatchX1': (34.0, 'design: lever right edge'),
+    'LatchRootY': (62.0, 'design: lever root (slot ends), under the module'),
     'LatchSlot': (1.5, 'design: slot width either side of the lever; slots run out through the top edge'),
     'LatchReliefD': (2.5, 'design: round stress-relief ends of the slots at the root'),
     'LatchT': (2.0, 'design: flex zone thickness, thinned from the FRONT so it prints flat on the bed'),
     'LatchRootRamp': (6.0, 'design: run of the thinning ramps at both ends of the flex zone'),
-    'LatchFlexEndY': (86.0, 'design: flex zone ends; the press tab with the teeth is full thickness'),
-    'ToothXL': (10.5, 'design: left tooth X 10.5-14.5, outside the USB-C plug zone'),
-    'ToothXR': (27.5, 'design: right tooth X 27.5-31.5, outside the USB-C zone and the J2/J6 lead tracks'),
+    'LatchFlexEndY': (87.6, 'design: flex zone ends; the press tab with the teeth is full thickness'),
+    'ToothXL': (9.5, 'design: left tooth X 9.5-13.5, clear of the USB-C recess in the case end'),
+    'ToothXR': (28.5, 'design: right tooth X 28.5-32.5, clear of the USB-C recess'),
     'ToothW': (4.0, 'design: each tooth'),
     'ToothEdgeR': (0.5, 'design: rounded side edges of the teeth'),
-    'ToothRise': (1.2, 'design: tooth top above the PCB rear, catches the board edge'),
+    'ToothRise': (2.0, 'design: tooth top above the case rear; catches 1.2 mm of the USB-C end face above its 0.8 chamfer'),
     'ToothClear': (0.2, 'design: tooth stop face to the module end'),
     'ToothFlat': (1.0, 'design'),
     'RampAngle': (30.0, 'design: lead-in ramp, degrees from the plate'),
     # over-travel stop: a fixed finger from the plate crosses each slot on the bed into a pocket in the
     # lever's rear; the pocket roof is bridged over the finger and bottoms out on it when pressed too far
-    'StopY0': (92.6, 'design: fingers start just past the flex zone (the lever is full thickness from Y 92)'),
+    'StopY0': (94.2, 'design: fingers start just past the flex zone (the lever is full thickness from Y 93.6)'),
     'StopW': (4.0, 'design: finger width along Y'),
-    'StopLand': (0.5, 'design: square lever edge at the slot above the 45 deg pocket roof, clear of the slot edge round'),
-    'StopGap': (1.8, 'design: finger top to pocket roof, measured along Z: the press travel at the fingers'),
+    'StopLand': (0.6, 'design: square lever edge at the slot above the 45 deg pocket roof, clear of the slot edge round; one 0.6 mm line'),
+    'StopGap': (2.65, 'design: finger top to pocket roof, measured along Z: the press travel at the fingers'),
     'StopPen': (0.9, 'design: finger overlap into the lever, beside the teeth'),
     'StopClear': (0.5, 'design: clearance around the fingers, wide enough that elephant foot does not fuse them'),
-    'PullY0': (98.0, 'design: pull-out rails beside the press tab, from just past the press-stop pockets (Y 97.1) out to the top edge'),
+    'PullY0': (99.6, 'design: pull-out rails beside the press tab, from just past the press-stop pockets (Y 98.7) out to the top edge'),
     'PullPen': (0.9, 'design: rail reach over the lever edge'),
-    'PullLand': (0.4, 'design: rail thickness at its tip, flush with the front'),
+    'PullLand': (0.6, 'design: rail thickness at its tip, flush with the front; one 0.6 mm line'),
     'PullGap': (1.0, 'design: rail underside to the lever, measured along Z: the outward travel at the tab edges'),
     'GripN': (4.0, 'design: grip grooves across the press tab'),
     'GripPitch': (2.0, 'design'),
@@ -115,10 +127,10 @@ PARAMS = {
     'GripDepth': (0.9, 'design: groove depth, through the blue inlay so the groove bottoms are black'),
     'GripStart': (1.5, 'design: first groove centre past the back foot of the teeth'),
     # colour: black print with the touch point (the press tab) in blue, as a separate body
-    'TouchY0': (99.5, 'design: blue starts just past the teeth (back foot at Y 99.3), so the teeth stay on black'),
+    'TouchY0': (101.8, 'design: blue starts just past the teeth (back foot at Y 101.6), so the teeth stay on black'),
     'TouchInlayT': (0.6, 'design: blue inlay depth from the front face; only 3 layers need both colours'),
     # cups, keyhole travel and head size from the reference proxy
-    'TopCupX': (28.0, 'design: from the centreline (reference 28.5), heads just outside the module'),
+    'TopCupX': (28.0, 'design: from the centreline (reference 28.5); the heads reach under the case corners, 0.6 below it'),
     'TopCupDrop': (13.0, 'reference proxy: below the plate top'),
     'TopSlot': (12.0, 'design: upper slots run upward from the entry, so the load seats the stems'),
     'LowCupY': (28.0, 'design: stem under the module, head clear of the skids'),
@@ -136,7 +148,7 @@ PARAMS = {
     'HeadT': (3.0, 'reference (measured): head flange, opposite the cup face'),
     'StemSeat': (0.1, 'reference proxy: stem shoulder to plate rear as modelled, inside the groove slack'),
     # optional wall bracket in place of the cups: screwed or stuck to the wall, the plate hangs on its studs
-    'BracketT': (5.0, 'design: plate rear to wall; at the stop the tab end moves 3.3 mm toward the wall'),
+    'BracketT': (6.0, 'design: plate rear to wall; at the stop the tab end moves 4.5 mm toward the wall'),
     'BracketInset': (1.0, 'design: bracket outline inside the plate outline'),
     'BracketNotchClear': (1.0, 'design: notch around the lever and its slots, so the lever is free of the bracket'),
     'BracketNotchR': (2.0, 'design: notch corners'),
@@ -146,7 +158,7 @@ PARAMS = {
     'StudGap': (0.3, 'design: keyhole land to the start of the head'),
     'StudHeadD': (13.0, 'design: passes the 15.6 mm keyhole entry; 45 deg underside prints without support'),
     'StudChamfer': (0.3, 'design: stud top edge'),
-    'ScrewY': (46.0, 'design: between the lower keyhole (top Y 32.5) and the lever notch (Y 63.75)'),
+    'ScrewY': (46.0, 'design: between the lower keyhole (top Y 32.5) and the lever notch (Y 59.75)'),
     'ScrewDX': (12.0, 'design: screws at X 21 +/- 12, behind the plate'),
     'ScrewClearD': (4.5, 'design: clears #6 (3.5 mm) and #8 (4.2 mm) drywall screws'),
     'ScrewCskD': (9.0, 'design: 90 deg countersink diameter'),
@@ -155,7 +167,7 @@ PARAMS = {
     'ScrewShankD': (3.5, 'reference: #6 drywall screw'),
     'ScrewLen': (32.0, 'reference: 1-1/4 in drywall screw'),
     # Double Double version: a printed screw with the OSSM 24 mm thread, in a hex pocket from the rear
-    'DDGap': (12.5, 'design (Lucy): holder bottom to the Double Double base; 13.7 mm from the jack face, so a straight plug body must be shorter'),
+    'DDGap': (12.5, 'design (Lucy): holder bottom to the Double Double base; see dd_checks for the plug room'),
     'DDBaseD': (33.0, 'reference (measured): OSSM Double Double 24mm Threaded base'),
     'DDThreadDepth': (21.0, 'reference (measured): Double Double internal thread depth'),
     'ThreadMajorD': (23.5, 'reference (measured): OSSM 24 mm clamping thread crest'),
@@ -172,7 +184,7 @@ PARAMS = {
     'DDPocketClear': (0.1, 'design: tight, so the screw cannot turn; tune on a test print'),
     'DDHoleClear': (0.35, 'design: thread hole in the boss top, radial'),
     'DDBossD': (38.0, 'design: boss on the plate front under the Double Double base'),
-    'DDBossT': (6.0, 'design: boss height; with the 4 mm plate the screw sits in 10 mm'),
+    'DDBossT': (5.0, 'design: boss height; with the 5 mm plate the screw sits in 10 mm'),
     'DDCupHeadClear': (0.3, 'design: room over the fourth cup head in the screw head'),
     'DDCupSnap': (0.4, 'design (Lucy: the cup clicks in): slot mouth this much narrower than the stem groove; tune on a test print'),
     'DDCupSnapLead': (1.5, 'design: lead-in from the free slot width down to the mouth'),
@@ -180,18 +192,10 @@ PARAMS = {
 P = {k: v for k, (v, _) in PARAMS.items()}
 DD = False   # True while main() builds the Double Double version
 
-# Housing side profile: (y0, y1, outer x left, outer x right, chamfer start z, chamfer inset)
-SECTIONS = {'bottom': (4.0, 24.0, 2.0, 40.0, 13.18, 0.99),
-            'mid': (26.4, 56.6, 0.0, 42.0, 13.18, 0.99),
-            'wide': (58.4, 88.0, -1.0, 43.0, 12.18, 1.41)}
-# The cavity runs continuously from the jack end out of the open end. Each Y band takes the inner
-# face and chamfer lip of the section at its top end, so in the steps between sections the wall
-# clears the narrower housing. The module slides toward -Y, so a band is only ever passed by its own
-# section or narrower ones. The walls have fallen to the plate before the S1 switch (Y 79.4).
-# The mid band (and the side lips) end where the swoop starts, at Y 44, so the swoop is a plain wall.
-TRACK = [('bottom', 23.0), ('mid', 44.0), ('wide', None)]   # (section, band top Y; None = open)
-# Skids under the PCB (X ranges). They sit between the tracks swept by the PCB screw heads
-# (X 0.6-5.7, 36.3-41.4) and clear of the J5 and J2/J6 through-hole parts.
+# The case is the same width all the way along, so the cavity has one section. The side lips run from
+# the jack end to where the swoop starts, at Y 44, so the swoop is a plain wall. The walls have fallen
+# to the plate before the switch cover.
+# Skids under the case (X ranges), clear of the screws (X 3 and 39) and of the lower cup head.
 SKIDS = [(11.0, 13.0), (29.0, 31.0)]
 FAR = 400.0   # extent of construction solids that must run past the part
 
@@ -201,7 +205,7 @@ def plate_top():
 
 
 def z_front():
-    return P['PCBRearZ'] - P['RestGap']
+    return P['BodyRearZ'] - P['RestGap']
 
 
 def z_rear():
@@ -279,8 +283,7 @@ def dd_axis():
 
 def outer_x(side):
     c, t = P['WallClear'], P['RailT']
-    return (min(v[2] for v in SECTIONS.values()) - c - t if side == 'L'
-            else max(v[3] for v in SECTIONS.values()) + c + t)
+    return P['BodyX0'] - c - t if side == 'L' else P['BodyX1'] + c + t
 
 
 def y_end():
@@ -399,44 +402,41 @@ def sleeve_blank():
 
 
 def cavity():
-    """Module space: one prism per Y band (inner faces, lips, inner foot chamfer), clipped at the jack end
-    by the housing's chamfered plan corners and its sloped end, both offset by the clearance."""
+    """Module space: the side section with its lips and inner foot chamfer, clipped at the jack end by
+    the case's round plan corners and its sloped end, both offset by the clearance."""
     zf = z_front(); c = P['WallClear']; ch = P['InnerChamfer']; ztop = z_wall_top() + 5
-    he = P['HookEngage']
+    he = P['HookEngage']; xl, xr, r = P['BodyX0'], P['BodyX1'], P['TopFilletR']
+    il, ir = xl - c, xr + c
+    # The lip underside is a 45 deg line clear of the top fillet by the clearance, so it prints without
+    # support: x + z = k on the right, mirrored on the left.
+    kl = (xr - r) + (P['HousingTopZ'] - r) + (r + c) * math.sqrt(2)
+    zl = kl - ir                                          # where it leaves the inner face
 
-    def prof(sec, lips):
-        _, _, xl, xr, zc, inset = SECTIONS[sec]
-        il, ir, zl = xl - c, xr + c, zc + c
+    zw, lc = z_wall_top(), P['LipChamfer']
+
+    def prof(lips):
         if lips:
-            zt = zc + he * (P['HousingTopZ'] - zc) / inset + c
-            tl, tr = xl + (he - c), xr - (he - c)
+            tl, tr, zt, d = xl + he, xr - he, kl - (xr - he), lc
         else:                                             # same vertices, the lip faces run straight up
-            tl, tr, zt = il, ir, zl + he
-        return [(il + ch, zf), (ir - ch, zf), (ir, zf + ch), (ir, zl), (tr, zt), (tr, ztop),
-                (tl, ztop), (tl, zt), (il, zl), (il, zf + ch)]
+            tl, tr, zt, d = il, ir, zl + he, 0.0
+        return [(il + ch, zf), (ir - ch, zf), (ir, zf + ch), (ir, zl), (tr, zt), (tr, zw - lc), (tr + d, zw),
+                (tr + d, ztop), (tl - d, ztop), (tl - d, zw), (tl, zw - lc), (tl, zt), (il, zl), (il, zf + ch)]
 
     def ramp(p0, y0, p1, y1):
         w = [Part.makePolygon([V(x, y, z) for x, z in pr + pr[:1]]) for pr, y in ((p0, y0), (p1, y1))]
         return Part.makeLoft(w, True, True)
 
-    # Bands follow the housing sections, except that the side lips and the mid band end where the swoop
-    # starts: the cavity tapers out to the wide band at 45 deg in plan on the flat top, so the swoop is a
-    # plain 2 mm wall. The housing's mid section is only guided below Y 44 (it passes the swoop with 1.2
-    # mm a side), and the wide section never reaches the swoop's lower end.
-    (_, y_bm), (_, le), _ = TRACK
-    mid, wide = prof('mid', True), prof('wide', False)
-    taper = (mid[6][0] - wide[6][0])                      # lip tip to the wide inner face, along X
-    parts = [prism_xz(prof('bottom', True), -10.0, y_bm), prism_xz(mid, y_bm, le - taper),
-             ramp(mid, le - taper, wide, le), prism_xz(wide, le, FAR)]
+    # The lips end where the swoop starts, tapering out to the inner face at 45 deg in plan, so the
+    # swoop is a plain 2 mm wall.
+    le = P['SwoopY0']; lip, plain = prof(True), prof(False)
+    taper = lip[11][0] - plain[11][0]                     # lip tip to the inner face, along X
+    parts = [prism_xz(lip, -10.0, le - taper), ramp(lip, le - taper, plain, le), prism_xz(plain, le, FAR)]
     # jack end: plan corners
-    _, _, bxl, bxr, _, _ = SECTIONS['bottom']
-    yb0, cc = P['DeviceBottomY'], P['EndCornerC']
-    foot = [(bxl, yb0 + cc), (bxl + cc, yb0), (bxr - cc, yb0), (bxr, yb0 + cc), (bxr, 60.0), (bxl, 60.0)]
-    zr = z_rear()
-    plan = prism(foot, zr, zr + 1)
-    plan_f = [f for f in plan.Faces if abs(f.CenterOfMass.z - zr) < 1e-6][0].makeOffset2D(c, join=0)
-    plan = plan_f.extrude(V(0, 0, 40))
-    # jack end: end lip that follows the housing's end slope
+    yb0, zr = P['DeviceBottomY'], z_rear()
+    foot = Part.Face(Part.makePolygon([V(xl, yb0, zr), V(xr, yb0, zr), V(xr, 60.0, zr), V(xl, 60.0, zr),
+                                       V(xl, yb0, zr)]))
+    plan = round_face(foot, 0, P['BodyCornerR']).makeOffset2D(c, join=0).extrude(V(0, 0, 40))
+    # jack end: end lip that follows the case's end slope
     y0, z0, y1, z1 = yb0, P['EndSlopeZ0'], P['EndSlopeY1'], P['HousingTopZ']
     k = (z1 - z0) / (y1 - y0); L = math.hypot(y1 - y0, z1 - z0)
     n = (-(z1 - z0) / L, (y1 - y0) / L)
@@ -484,7 +484,7 @@ def screw_centres():
 
 def stud(x, y):
     """Keyhole stud: a neck through the slot and a head with a 45 deg underside, so the bracket prints
-    upright without support. The top is level with the cup heads, so the lower one clears the PCB."""
+    upright without support. The top is level with the cup heads, so the lower one clears the case."""
     zr = z_rear()
     rn, rh, c = P['StudNeckD'] / 2, P['StudHeadD'] / 2, P['StudChamfer']
     z0 = zr + P['KeyLandT'] + P['StudGap']; zt = cup_head_top()
@@ -532,12 +532,12 @@ def screw_shape(x, y):
 
 def tooth_profile():
     """YZ profile of a tooth on the full-thickness press tab: stop face, flat, 30 deg lead-in ramp to
-    just below the PCB rear, then a 45 deg back slope down to the plate front."""
+    just below the case rear, then a 45 deg back slope down to the plate front."""
     zt0 = z_front() - 0.01
-    zt = P['PCBRearZ'] + P['ToothRise']
+    zt = P['BodyRearZ'] + P['ToothRise']
     ys = P['DeviceTopY'] + P['ToothClear']
     yf = ys + P['ToothFlat']
-    z_r = P['PCBRearZ'] - 0.5
+    z_r = P['BodyRearZ'] - 0.5
     yr = yf + (zt - z_r) / math.tan(math.radians(P['RampAngle']))
     yb = yr + (z_r - zt0)
     return [(ys, zt0), (ys, zt), (yf, zt), (yr, z_r), (yb, zt0)]
@@ -677,8 +677,8 @@ def latch_strain():
 
 
 def skids():
-    zf = z_front(); h = P['PCBRearZ'] - zf; y0, y1 = P['SkidY0'], P['SkidY1']
-    prof = [(y0, zf - 0.01), (y1, zf - 0.01), (y1 - h, P['PCBRearZ']), (y0 + h, P['PCBRearZ'])]
+    zf = z_front(); h = P['BodyRearZ'] - zf; y0, y1 = P['SkidY0'], P['SkidY1']
+    prof = [(y0, zf - 0.01), (y1, zf - 0.01), (y1 - h, P['BodyRearZ']), (y0 + h, P['BodyRearZ'])]
     return [prism_yz(prof, xa, xb) for xa, xb in SKIDS]
 
 
@@ -725,11 +725,18 @@ def try_fillet(shape, edges, radii, label):
     return shape
 
 
+def mesh_ok(shape):
+    """The shape tessellates, at the export settings, to a closed mesh without self-intersections."""
+    import MeshPart
+    m = MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.02, AngularDeflection=0.2, Relative=False)
+    return m.isSolid() and not m.hasNonManifolds() and not m.getSelfIntersections()
+
+
 def fillet_inner_top(shape):
-    """Round the inner top edges of the sleeve: lip tips, the inner faces where the swoop crosses
-    them, the band steps and the hood lip. They are edges between a vertical face and an upward
-    face inside the module footprint."""
-    zf = z_front(); x0 = min(v[2] for v in SECTIONS.values()) - 0.3; x1 = max(v[3] for v in SECTIONS.values()) + 0.3
+    """Round the inner top edges of the sleeve: the inner faces where the swoop crosses them and the
+    hood lip. They are edges between a vertical face and an upward face inside the module footprint.
+    The lip tips have a chamfer in the section instead."""
+    zf = z_front(); x0 = P['BodyX0'] - 0.3; x1 = P['BodyX1'] + 0.3
     sel = []
     for e in shape.Edges:
         b = e.BoundBox
@@ -743,12 +750,14 @@ def fillet_inner_top(shape):
         if vert.count(True) != 1:
             continue
         up = n[vert.index(False)]
+        if abs(up.z - math.sqrt(0.5)) < 0.01 and abs(abs(up.x) - math.sqrt(0.5)) < 0.01:
+            continue                                      # the lip chamfers
         if up.z > 0.2 and not (abs(up.z - 1) < 1e-6 and abs(faces[vert.index(False)].CenterOfMass.z - zf) < 1e-6):
             sel.append(e)
     r = P['InnerEdgeR']
     try:
         s = shape.makeFillet(r, sel)
-        if s.isValid() and len(s.Solids) == 1:
+        if s.isValid() and len(s.Solids) == 1 and mesh_ok(s):
             print('inner top edges: fillet R%.2f on all %d edges' % (r, len(sel))); return s
     except Exception:
         pass
@@ -763,13 +772,14 @@ def fillet_inner_top(shape):
             pass
     print('inner top edges: %d of %d can be rounded' % (len(ok), len(sel)))
     s = try_fillet(shape, ok, (r,), 'inner top edges (subset)')
-    if s is not shape:
+    if s is not shape and mesh_ok(s):
         return s
     chosen = []                                           # together they fail: add them one at a time
+    s = shape                                             # and keep only rounds that mesh cleanly
     for e in ok:
         try:
             t = shape.makeFillet(r, chosen + [e])
-            if t.isValid() and len(t.Solids) == 1:
+            if t.isValid() and len(t.Solids) == 1 and mesh_ok(t):
                 chosen.append(e); s = t
         except Exception:
             pass
@@ -944,6 +954,13 @@ def dd_checks(printed, screw):
         cup_head_top() + P['DDCupHeadClear'] - z_rear() - P['KeyLandT']))
     print('CHECK fourth cup captive: head slid 20 mm out along its slot overlaps the plate by %.0f mm3' % (
         head.translated(V(0, 20, 0)).common(printed).Volume))
+    jx, jz = ENC.P['jack_axis']; face = 0.0              # J5 nose face, 0.6 inside the case end
+    for r in (3.0, 4.5):
+        n = 0.0
+        while n < 40 and Part.makeCylinder(r, n + 0.1, V(jx, face, jz), V(0, -1, 0)).common(
+                printed.fuse(dd)).Volume < 1e-6:
+            n += 0.1
+        print('CHECK straight 3.5 mm plug: a %.0f mm body has %.1f mm from the jack face' % (2 * r, n))
     m, rg = dd_cup_mouth(), P['GrooveD'] / 2
     print('CHECK fourth cup click: %.2f mm mouth on the %.2f mm groove, %.2f mm a side, so the slot wraps %.0f deg of the groove' % (
         m, P['GrooveD'], P['DDCupSnap'] / 2, 360 - 2 * math.degrees(math.asin(m / 2 / rg))))
@@ -961,8 +978,8 @@ def design_checks(printed, black, blue, bracket):
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
     zf = z_front()
-    print('CHECK cup head and stud top to PCB rear %.2f mm, %.2f above the plate front' % (
-        P['PCBRearZ'] - cup_head_top(), cup_head_top() - zf))
+    print('CHECK cup head and stud top to the case rear %.2f mm, %.2f above the plate front' % (
+        P['BodyRearZ'] - cup_head_top(), cup_head_top() - zf))
     if bracket is not None:
         bb = bracket.BoundBox
         print('CHECK bracket valid %s, solids %d, %.1f x %.1f x %.1f mm, volume %.1f cm3' % (
@@ -981,7 +998,7 @@ def design_checks(printed, black, blue, bracket):
     strain = latch_strain()
     print('CHECK latch strain %.2f %%' % (strain * 100))
     d_teeth, s_stop, sigma = stop_checks()
-    print('CHECK stop: teeth travel %.2f mm (%.2f below the PCB rear), lever strain %.2f %%, finger root stress %.1f MPa per 10 N'
+    print('CHECK stop: teeth travel %.2f mm (%.2f below the case rear), lever strain %.2f %%, finger root stress %.1f MPa per 10 N'
           % (d_teeth, d_teeth - P['ToothRise'], s_stop * 100, sigma))
     print('CHECK pull stop: teeth move out %.2f mm, rail stress %.1f MPa per 10 N' % pull_checks())
     print('CHECK colour split: black valid %s (%d solid), blue valid %s (%d solid), volume %.1f + %.1f = %.1f of %.1f' % (
@@ -993,6 +1010,54 @@ def design_checks(printed, black, blue, bracket):
     e = elevation_wire_pts()
     print('CHECK swoop radius %.1f mm, %.1f deg' % (e['swoop_r'], e['swoop_deg']))
     return strain
+
+
+# The enclosed case's outer parts in DTT-Enclosed.FCStd
+MODULE_PARTS = ['Part__Feature001', 'RearCover', 'SwitchCover', 'Diffuser', 'LogoInlay', 'ButtonInlay'] + [
+    'PCBMountScrew%d' % i for i in range(1, 5)]
+
+
+def plug_proxies():
+    """(3.5 mm plug, USB-C plug): a 9 mm plug body out of the jack end, and a USB-C overmold the size
+    of the case's USB-C recess, the largest that seats, out of the USB-C end."""
+    jx, jz = ENC.P['jack_axis']; ux, uz = ENC.P['usb_center']; w, h, d = ENC.P['usb_recess']
+    jack = Part.makeCylinder(4.5, 60.0, V(jx, P['DeviceBottomY'], jz), V(0, -1, 0))
+    usb = ENC.stadium_y(ux, uz, w - 0.2, h - 0.2, (h - 0.2) / 2 - 1e-3, P['DeviceTopY'] - d + 0.1, P['DeviceTopY'] + 60)
+    return jack, usb
+
+
+def module_checks(doc, printed):
+    """Fit against the enclosed case as modelled: clear in place and all along the slide (the lever
+    springs aside), held by the lips and the teeth, the switch cover free over its travel, the cup
+    heads clear under it, and room for both plugs."""
+    parts = [doc.getObject(n) for n in MODULE_PARTS]
+    worst = max((o.Shape.common(printed).Volume, o.Label) for o in parts)
+    print('CHECK case in place: worst overlap %.4f mm3 (%s), %d parts' % (worst[0], worst[1], len(parts)))
+    case = [o.Shape for o in parts[:3]]                     # housing, rear cover, switch cover
+    lever = box(P['LatchX0'], P['LatchX1'], P['LatchRootY'], FAR, z_rear() - 1, P['BodyRearZ'] + P['ToothRise'] + 1)
+    fixed = printed.cut(lever)
+    slide = [max(s.translated(V(0, d, 0)).common(fixed).Volume for s in case)
+             for d in (0.5, 2, 5, 10, 20, 30, 45, 60, 80, 100, 120)]
+    print('CHECK slide out to 120 mm: worst overlap %.4f mm3 outside the lever' % max(slide))
+    held = case[1].translated(V(0, 0.5, 0)).common(Part.makeCompound(latch_teeth()))
+    bb = held.BoundBox if held.Volume > 0 else None
+    print('CHECK teeth: case pulled out 0.5 mm meets them over %.2f mm of its end face (Z %.2f to %.2f), %.1f mm3' % (
+        bb.ZLength if bb else 0, bb.ZMin if bb else 0, bb.ZMax if bb else 0, held.Volume))
+    lift = sum(s.translated(V(0, 0, 0.5)).common(printed).Volume for s in case)
+    print('CHECK lips: case lifted 0.5 mm meets them, %.1f mm3' % lift)
+    slider = doc.getObject('SwitchCover').Shape
+    t = ENC.P['travel']
+    for y, name in ((0, 'at rest'), (t, 'at full travel')):
+        s = slider.translated(V(0, y, 0))
+        print('CHECK switch cover %s: overlap %.4f mm3, gap %.2f mm' % (name, s.common(printed).Volume, s.distToShape(printed)[0]))
+    rear = doc.getObject('RearCover').Shape
+    for key, (x, y) in cup_positions().items():
+        cup = cup_shape(x, y)
+        print('CHECK cup %s to the case: overlap %.4f mm3, gap %.2f mm' % (key, cup.common(rear).Volume, cup.distToShape(rear)[0]))
+    jack, usb = plug_proxies()
+    print('CHECK USB-C: recess-size overmold overlap %.4f mm3' % usb.common(printed).Volume)
+    if not DD:   # the Double Double version reports its plug room in dd_checks
+        print('CHECK 3.5 mm plug: 9 mm body overlap %.4f mm3' % jack.common(printed).Volume)
 
 
 def tagged(doc, name, label, shape, colour=None, transparency=0):
@@ -1031,16 +1096,15 @@ def build(dd):
     global DD
     DD = dd
     stem = 'DTT-Snap-Backplate' + ('-Double-Double' if dd else '')
-    doc = App.openDocument(os.path.join(CAD, 'DTT.FCStd'))
-    # The backplate replaces the hook-and-loop backing; hide it and the exploded copies.
-    for n in ('LoopBacking', 'ExplodedView'):
-        o = doc.getObject(n)
-        if o is not None:
-            o.Visibility = False
+    doc = App.openDocument(MODULE)
+    o = doc.getObject('ExplodedView')   # the case's exploded copies
+    if o is not None:
+        o.Visibility = False
     printed = printed_part()
     black, blue = split_colours(printed)
     bracket = None if dd else wall_bracket()
     design_checks(printed, black, blue, bracket)
+    module_checks(doc, printed)
     group = doc.addObject('App::Part', 'SnapBackplate'); group.Label = 'Snap backplate'
     parameter_sheet(doc)
     bodies = [tagged(doc, 'SnapBackplatePrinted', 'Snap backplate - printed, black', black, PLATE_COLOUR),
@@ -1111,7 +1175,7 @@ def render(doc, pic):
     pv.SetBool('ShowNaviCube', False); pv.SetBool('ShowAxisCross', False)
     view = Gui.getDocument(doc.Name).ActiveView
     printed = doc.getObject('SnapBackplatePrinted')
-    housing = doc.getObject('Cover___V3_v5'); shell = doc.getObject('Part__Feature001')
+    housing = doc.getObject('Cover___V3_v5')
     cups = [doc.getObject('SnapCup' + k) for k in cup_positions()]
     extras = [o for o in (doc.getObject('SnapDDScrew'), doc.getObject('SnapDoubleDouble')) if o is not None]
     proxy = doc.getObject('SnapDoubleDouble')
@@ -1120,7 +1184,6 @@ def render(doc, pic):
     tops = [o for o in doc.RootObjects if o.TypeId == 'App::Part']
     saved = {o.Name: o.Visibility for o in tops}
     # standard previews (same set as the baseline concept)
-    shell.ViewObject.Transparency = 55
     view.viewIsometric(); view.fitAll()
     view.saveImage(out('Assembled'), 1400, 1400, 'White')
     for o in tops:
@@ -1140,9 +1203,10 @@ def render(doc, pic):
     pv.SetBool('Gradient', True); pv.SetBool('Simple', False)
     pv.SetUnsigned('BackgroundColor2', _rgb_uint(0.93, 0.93, 0.95))
     pv.SetUnsigned('BackgroundColor3', _rgb_uint(0.70, 0.71, 0.75))
-    for o in [printed, doc.getObject('SnapBackplateTouch')] + cups + extras:
-        o.ViewObject.DisplayMode = 'Shaded'
-    shell.ViewObject.Transparency = 40
+    case = [doc.getObject(n) for n in MODULE_PARTS]
+    for o in [printed, doc.getObject('SnapBackplateTouch')] + cups + extras + case:
+        if 'Shaded' in o.ViewObject.getEnumerationsOfProperty('DisplayMode') if hasattr(o.ViewObject, 'DisplayMode') else []:
+            o.ViewObject.DisplayMode = 'Shaded'
     cam = App.Rotation(V(0, 1, 0), 36).multiply(App.Rotation(V(1, 0, 0), -20))
     view.setCameraOrientation(cam); view.fitAll()
     view.saveImage(out('Hero'), 1600, 1600, 'Current')

@@ -3,7 +3,8 @@
 The DTT case at one constant width, with a blue switch cover that slides S1
 and a rear cover tray that holds the PCB from its top face down. The original
 four PCB screws hold it together, flush in countersinks in the rear cover.
-It replaces the loop backing.
+It replaces the loop backing, and slides into the
+[snap backplate](../snap-backplate/).
 
 | | |
 | --- | --- |
