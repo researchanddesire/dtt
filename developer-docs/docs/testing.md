@@ -1,6 +1,6 @@
 # Testing
 
-DTT has two test suites, both run through PlatformIO.
+DTT has two test suites, both run through PlatformIO from `software/firmware/`.
 
 ## Unit tests
 
@@ -20,4 +20,4 @@ pio test -e development --filter "test_integration" -v
 
 Prerequisites: a device connected over USB, `WIFI_SSID`/`WIFI_PASSWORD` set in `[env:development]`, `BYPASS_EEPROM` enabled, and `RAD_SERVER` pointing at a reachable staging server.
 
-See [`test/README.md`](https://github.com/researchanddesire/DT_Trainer-OSS/blob/main/test/README.md) in the repository root.
+The suites live in [`software/firmware/test/`](https://github.com/researchanddesire/Open-Source-Deepthroat-Trainer_DTT/tree/main/software/firmware/test).
