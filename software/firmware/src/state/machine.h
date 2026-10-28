@@ -132,7 +132,15 @@ struct dtt_state_machine {
             "play.calibration.min"_s + event<button_pressed> / captureMinPosition = "play.calibration.max"_s,
 
             "play.calibration.max"_s + on_entry<_> / drawPage(&calibrationMaxPage),
-            "play.calibration.max"_s + event<button_pressed> / captureMaxPosition = "play.ready"_s,
+            "play.calibration.max"_s + event<button_pressed> = "play.calibration.check"_s,
+
+            "play.calibration.check"_s + on_entry<_> / captureMaxPosition,
+            "play.calibration.check"_s + event<done> = "play.ready"_s,
+            "play.calibration.check"_s + event<fail> = "play.calibration.invalid"_s,
+
+            "play.calibration.invalid"_s + on_entry<_> / drawCalibrationProblem,
+            "play.calibration.invalid"_s + event<button_pressed> = "play.calibration.min"_s,
+            "play.calibration.invalid"_s + event<button_long_pressed>[isCalibrated<button_long_pressed>] = "play.ready"_s,
 
             "play.ready"_s + on_entry<_> / next,
             "play.ready"_s + event<done>[hasSeenSessionDetails<done>] = "play.details.segment"_s,
