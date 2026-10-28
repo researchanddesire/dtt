@@ -3,6 +3,8 @@
 
 #include <esp_log.h>
 
+#include <algorithm>
+
 #include "constants/strings.h"
 
 static auto TAG = "DISPLAY";
@@ -70,9 +72,14 @@ void refreshIcons() {
     display.updateDisplayArea(0, 7, ICON_TILES, 1);
 }
 
+// Header tiles that may show drawn pixels. setHeader sends only the tiles its
+// old and new text cover; a full header refresh may have drawn anywhere.
+static int headerTilesOnScreen = 16 - ICON_TILES;
+
 void refreshHeader() {
     display.setMaxClipWindow();
     display.updateDisplayArea(ICON_TILES, 7, 16 - ICON_TILES, 1);
+    headerTilesOnScreen = 16 - ICON_TILES;
 }
 
 void refreshPage(bool includeFooter, bool includeHeader) {
@@ -273,7 +280,14 @@ void setHeader(String& text) {
     clearHeader();
     display.setFont(u8g2_font_spleen5x8_mu);
     display.drawStr(0, 8, text.c_str());
-    refreshHeader();
+    // Play countdowns change the header every frame. Send the tiles the old
+    // and new text cover (from the left edge) instead of the whole row.
+    const int textTiles = std::min(
+        16 - ICON_TILES, (display.getStrWidth(text.c_str()) + 7) / 8);
+    const int tiles = std::max(textTiles, headerTilesOnScreen);
+    display.setMaxClipWindow();
+    if (tiles > 0) display.updateDisplayArea(16 - tiles, 7, tiles, 1);
+    headerTilesOnScreen = textTiles;
 }
 
 void setFooter(String& left, String& right) {

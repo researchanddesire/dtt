@@ -5,7 +5,6 @@
 #include <services/leds.h>
 
 #include <cstring>
-#include <utils/getTiles.hpp>
 
 #include "bounce.h"
 #include "constants/iconFonts.h"
@@ -32,19 +31,50 @@ static float sum = 21.0 * DISTANCE_BUFFER_SIZE;
 static float speedSum = 0;
 static int radius = 1;
 
-static int boxTiles[4] = {0, 0, 0, 0};
-static int lastBoxTiles[4] = {0, 0, 0, 0};
+namespace {
+// A rectangle of 8x8 tiles in controller coordinates: the display is rotated
+// 180 degrees, so tile (0, 0) is the bottom-right corner. Width 0 is empty.
+struct TileArea {
+    int x = 0, y = 0, w = 0, h = 0;
+};
 
-static int glyphTiles[4] = {0, 0, 0, 0};
-static int lastGlyphTiles[4] = {0, 0, 0, 0};
+TileArea tileArea(const int x, const int y, const int w, const int h) {
+    const int left = std::max(0, x), top = std::max(0, y);
+    const int right = std::min(128, x + w), bottom = std::min(64, y + h);
+    if (right <= left || bottom <= top) return {};
+    const int firstColumn = left / 8, lastColumn = (right - 1) / 8;
+    const int firstRow = top / 8, lastRow = (bottom - 1) / 8;
+    return {15 - lastColumn, 7 - lastRow, lastColumn - firstColumn + 1,
+            lastRow - firstRow + 1};
+}
+
+TileArea unite(const TileArea& a, const TileArea& b) {
+    if (a.w == 0) return b;
+    if (b.w == 0) return a;
+    const int x = std::min(a.x, b.x), y = std::min(a.y, b.y);
+    return {x, y, std::max(a.x + a.w, b.x + b.w) - x,
+            std::max(a.y + a.h, b.y + b.h) - y};
+}
+
+void sendArea(const TileArea& area) {
+    if (area.w > 0) display.updateDisplayArea(area.x, area.y, area.w, area.h);
+}
+
+// What the box page last sent, so a frame sends only what moved.
+struct BoxFrame {
+    int left = -1, right = -1, top = -1, followerX = -1;
+    TileArea box, follower;
+};
+BoxFrame sentBoxFrame;
+}  // namespace
 
 static bool firstDraw = true;
 
 // Display change tracking - skip mutex if no visual change
 static int lastDisplayX = -1;
 static float lastRpm = -1.0f;
-static float lastStartWindow = -1.0f;
-static float lastEndWindow = -1.0f;
+static int lastStartX = -1;
+static int lastEndX = -1;
 static String lastValueText;
 static float needleRpm = 0.0f;
 // Time constant for the freeform needle's glide toward the measured RPM.
@@ -126,7 +156,7 @@ void drawArcWithArrow(const SegmentBase* segment, const float needleRpm) {
     display.drawDisc(centerX, centerY, hubRadius);
 
     // The needle follows the smoothed RPM so it glides between stroke-sized
-    // steps; the LED below reflects the measured RPM without delay.
+    // steps; the LED (updatePlayLed) reflects the measured RPM without delay.
     float pct = map_Generic(needleRpm, 0, segment->params.trainingSpeed, 0.0f,
                             0.5f);
     float angle = max(0.0, min(pct * PI, PI));
@@ -160,14 +190,6 @@ void drawArcWithArrow(const SegmentBase* segment, const float needleRpm) {
     // display.drawBox(0, 0, 128, 64);
 
     display.updateDisplayArea(10, 0, 4, 3);
-
-    const float measuredPct = map_Generic(
-        segment->currentRpm, 0, segment->params.trainingSpeed, 0.0f, 0.5f);
-    if (measuredPct <= 0.5f) {
-        setLed(LED_RED, 255, 0);
-    } else {
-        setLed(LED_GREEN, 255, 0);
-    }
 }
 
 void drawBoxAndFollower(const SegmentBase* segment) {
@@ -193,20 +215,47 @@ void drawBoxAndFollower(const SegmentBase* segment) {
     int iconGlyph = session.icon.set_id;
 
     display.setFont(iconFont);
-    display.drawGlyph(currentValue - 11, 64, iconGlyph);
+    const int glyphLeft = currentValue - 11;
+    display.drawGlyph(glyphLeft, 64, iconGlyph);
     display.drawTriangle(currentValue, 32, currentValue + 3, 37,
                          currentValue - 3, 37);
 
-    getTiles(leftBox, contentY, boxWidth, 22, boxTiles, lastBoxTiles);
-    display.updateDisplayArea(boxTiles[0], boxTiles[1], boxTiles[2],
-                              boxTiles[3]);
+    // The display bus moves about 50 bytes per millisecond, so send only what
+    // moved: the box when its window changes and the follower when it moves.
+    // Each area also covers where it was last drawn, clearing old pixels.
+    BoxFrame& sent = sentBoxFrame;
+    if (leftBox != sent.left || rightBox != sent.right || contentY != sent.top) {
+        const TileArea box = tileArea(leftBox, contentY, boxWidth, 22);
+        sendArea(unite(sent.box, box));
+        sent.box = box;
+        sent.left = leftBox; sent.right = rightBox; sent.top = contentY;
+    }
+    if (currentValue != sent.followerX) {
+        // The glyph is at most one font cell wide; the arrow spans +/-3 px.
+        const int glyphRight = glyphLeft + display.getMaxCharWidth() + 1;
+        const int followerLeft = std::min(glyphLeft - 1, currentValue - 3);
+        const int followerRight = std::max(glyphRight, currentValue + 4);
+        const TileArea follower =
+            tileArea(followerLeft, 32, followerRight - followerLeft, 32);
+        sendArea(unite(sent.follower, follower));
+        sent.follower = follower;
+        sent.followerX = currentValue;
+    }
+}
 
-    getTiles(currentValue - 16, 32, 32, 32, glyphTiles, lastGlyphTiles);
-    display.updateDisplayArea(glyphTiles[0], glyphTiles[1], glyphTiles[2],
-                              glyphTiles[3]);
-
-    if (segment->isWaitingForReturn ||
-        segment->state == TrainingState::START) {
+// Runs every loop iteration rather than per frame, so the LED follows zone
+// changes even when the follower has not moved a whole pixel.
+void updatePlayLed(const SegmentBase* segment) {
+    if (segment->displayType == DisplayType::ARC) {
+        const float measuredPct = map_Generic(
+            segment->currentRpm, 0, segment->params.trainingSpeed, 0.0f, 0.5f);
+        if (measuredPct <= 0.5f) {
+            setLed(LED_RED, 255, 0);
+        } else {
+            setLed(LED_GREEN, 255, 0);
+        }
+    } else if (segment->isWaitingForReturn ||
+               segment->state == TrainingState::START) {
         setLed(LED_LOGO_BLUE);
     } else if (segment->positionState == TrainingPosition::BEHIND) {
         setLed(LED_RED, 255, 0);
@@ -284,8 +333,9 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
         running->train(0);
         notify = trainingLifecycle.reserveNotification(generation, context->sessionId.c_str());
         firstDraw = true;
-        lastDisplayX = -1; lastRpm = -1.0f; lastStartWindow = -1.0f; lastEndWindow = -1.0f;
+        lastDisplayX = -1; lastRpm = -1.0f; lastStartX = -1; lastEndX = -1;
         lastValueText = ""; needleRpm = running->currentRpm;
+        sentBoxFrame = {};
     }
     // One best-effort attempt on first genuine play, reserved before scheduling.
     // Recalibration, segment retries and subsequent segments do not retry an
@@ -328,15 +378,20 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
             running->setPositionSpeed(currentPosition, speedSum / SPEED_BUFFER_SIZE);
             running->train(deltaTime);
             vibratorInstance.tick(*running);
+            updatePlayLed(running.get());
             if (running->state == TrainingState::END) {
                 naturalEnd = true;
                 break;
             }
             if (running->displayType == DisplayType::BOX) {
+                // Compare in pixels: the windows move continuously in some
+                // modes, but a frame only changes when an edge crosses a pixel.
                 const int displayX = SegmentBase::toDisplayX(running->currentPosition);
-                if (displayX != lastDisplayX || running->startWindow != lastStartWindow || running->endWindow != lastEndWindow) {
+                const int startX = SegmentBase::toDisplayX(running->startWindow);
+                const int endX = SegmentBase::toDisplayX(running->endWindow);
+                if (displayX != lastDisplayX || startX != lastStartX || endX != lastEndX) {
                     needsUpdate = true; lastDisplayX = displayX;
-                    lastStartWindow = running->startWindow; lastEndWindow = running->endWindow;
+                    lastStartX = startX; lastEndX = endX;
                 }
             } else if (running->displayType == DisplayType::ARC) {
                 // RPM steps once per stroke entering or leaving its window;
