@@ -3,10 +3,27 @@
 import ipaddress
 import json
 from pathlib import Path
-from urllib.parse import urlsplit
+import socket
+from urllib.parse import urlsplit, urlunsplit
 
 
 DEFAULT_SERVER = "http://127.0.0.1:3000"
+PRIVATE_LAN = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def detect_lan_ip():
+    """Return this machine's private LAN IPv4 address, or None."""
+    try:
+        # Connecting a UDP socket selects the outbound interface; it sends nothing.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            address = ipaddress.ip_address(probe.getsockname()[0])
+    except (OSError, ValueError):
+        return None
+    if any(address in ipaddress.ip_network(network) for network in PRIVATE_LAN):
+        return str(address)
+    return None
 
 
 def local_origin(value):
@@ -34,9 +51,22 @@ def local_origin(value):
     return value.rstrip("/")
 
 
-def development_server(project):
+def development_server(project, lan_ip=None):
+    """The dashboard origin for a development build.
+
+    A device cannot reach the build machine as localhost, so a loopback origin
+    is rewritten to `lan_ip` (this machine's LAN address) when one is given.
+    """
     path = Path(project) / "local.settings.json"
     settings = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if not isinstance(settings, dict) or set(settings) - {"server"}:
         raise ValueError("Local development settings support only a server origin")
-    return local_origin(settings.get("server", DEFAULT_SERVER))
+    origin = local_origin(settings.get("server", DEFAULT_SERVER))
+    url = urlsplit(origin)
+    if lan_ip is None or url.hostname not in LOOPBACK_HOSTS:
+        return origin
+    # Validates lan_ip as a private address, like an explicit origin.
+    netloc = urlsplit(local_origin(f"{url.scheme}://{lan_ip}")).netloc
+    if url.port is not None:
+        netloc = f"{netloc}:{url.port}"
+    return urlunsplit((url.scheme, netloc, url.path, "", "")).rstrip("/")

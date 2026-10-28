@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
+import development_server as dev
 from development_server import DEFAULT_SERVER, development_server, local_origin
 
 
@@ -29,6 +31,30 @@ class DevelopmentServerTests(unittest.TestCase):
                        "http://127.0.0.1\n", 'http://127.0.0.1/"'):
             with self.subTest(origin=origin), self.assertRaises(ValueError):
                 local_origin(origin)
+
+    def test_rewrites_loopback_origins_to_the_lan_address(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(development_server(directory, lan_ip="192.168.1.195"),
+                             "http://192.168.1.195:3000")
+            path = Path(directory) / "local.settings.json"
+            for server, expected in (("http://localhost:3000", "http://192.168.1.195:3000"),
+                                     ("https://[::1]:18443", "https://192.168.1.195:18443"),
+                                     ("http://192.168.2.59:3000", "http://192.168.2.59:3000")):
+                path.write_text(json.dumps({"server": server}))
+                with self.subTest(server=server):
+                    self.assertEqual(development_server(directory, lan_ip="192.168.1.195"), expected)
+            path.write_text(json.dumps({"server": "http://localhost:3000"}))
+            with self.assertRaises(ValueError):
+                development_server(directory, lan_ip="8.8.8.8")
+
+    def test_detects_only_a_private_lan_address(self):
+        for detected, expected in (("192.168.1.195", "192.168.1.195"), ("8.8.4.4", None),
+                                   ("127.0.0.1", None)):
+            with self.subTest(detected=detected), mock.patch.object(dev.socket, "socket") as factory:
+                factory.return_value.__enter__.return_value.getsockname.return_value = (detected, 5000)
+                self.assertEqual(dev.detect_lan_ip(), expected)
+        with mock.patch.object(dev.socket, "socket", side_effect=OSError):
+            self.assertIsNone(dev.detect_lan_ip())
 
     def test_rejects_unknown_settings(self):
         with tempfile.TemporaryDirectory() as directory:
