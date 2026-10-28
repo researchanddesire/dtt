@@ -87,11 +87,17 @@ PARAMS = {
     "tongue_clear": 0.1,
     # Blue inlay on the flexure button (a touch point), inside its slot.
     "button_left": (17.806, 65.004, 3.0),  # centre x, y, radius
-    "button_right": (33.414, 68.725, 3.5),
     "button_bar_y": (66.725, 70.725),
+    "button_channel_w": (0.800525, 0.7),  # slot below and above the shaft
     "button_ball2": (13.251, 64.364, 2.9),  # second ball, behind the first
     "button_shaft_x0": 14.6,  # centre of the shaft's round end
     "button_blend": 4.0,  # fillet from the shaft end into the second ball
+    # The head replaces the button's original round end: a rim at the back, a
+    # long dome and a slit at the tip. The slot is recut around it.
+    "head_rim": (30.6, 65.05, 72.4, 0.9),  # back x, bottom y, top y, corner radius
+    "head_dome": (32.6, 6.0),  # dome centre x and length
+    "head_slit": (0.8, 1.5),  # width, length
+    "head_slot": (26.0, 0.7, 12.57),  # recut from this x, width, top plate underside
     "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
 }
 P = PARAMS
@@ -121,6 +127,29 @@ def rounded_rect(x0, y0, x1, y1, r, z=0.0):
         Part.Arc(V(x0, y0 + r, z), V(x0 + k, y0 + k, z), V(x0 + r, y0, z)),
     ]
     return Part.Face(Part.Wire([e.toShape() for e in edges]))
+
+
+def rect(x0, y0, x1, y1, z=0.0):
+    return Part.Face(Part.makePolygon([V(x0, y0, z), V(x1, y0, z), V(x1, y1, z), V(x0, y1, z), V(x0, y0, z)]))
+
+
+def disc(x, y, r, z=0.0):
+    return Part.Face(Part.Wire(Part.makeCircle(r, V(x, y, z))))
+
+
+def offset_face(face, d):
+    """2D offset with the offset curves turned into B-splines, which STEP
+    readers rebuild into a closed solid."""
+    edges = [e.toNurbs().Edges[0] if e.Curve.TypeId == "Part::GeomOffsetCurve" else e
+             for e in face.makeOffset2D(d).OuterWire.Edges]
+    return Part.Face(Part.Wire(Part.__sortEdges__(edges)))
+
+
+def merge_faces(shape):
+    """One face from coplanar overlapping faces, without inner holes."""
+    faces = Part.Shell(shape.Faces).removeSplitter().Faces
+    assert len(faces) == 1
+    return Part.Face(faces[0].OuterWire)
 
 
 def zcyl(x, y, d, z0, z1):
@@ -213,6 +242,8 @@ def build_housing(H, board):
     (a0, a1) = P["sw_body"]
     cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])] + slider_cuts() + connector_cuts()
     h = h.cut(cuts).removeSplitter()
+    fill, slot = head_slot()
+    h = h.fuse(fill).cut(slot).removeSplitter()
     return h, pcb
 
 
@@ -327,22 +358,56 @@ def tongue(grow=0.0):
         [box(g.XMin, g.YMin - 0.6, zs - 1, g.XMax + 2, g.YMax + 0.6, zs + 3) for g in gaps])
 
 
+def button_head(z, grow=0.0):
+    """Outline of the button head at height z, grown outwards by grow."""
+    xc, yb, yt, rc = P["head_rim"]
+    xe, a = P["head_dome"]
+    ym, b = (yb + yt) / 2, (yt - yb) / 2
+    assert a > b  # the ellipse's major axis runs along X
+    dome = Part.Face(Part.Wire(Part.Ellipse(V(xe, ym, z), a, b).toShape()))
+    head = merge_faces(rect(xc + rc, yb, xe, yt, z).fuse([
+        rect(xc, yb + rc, xe, yt - rc, z),
+        disc(xc + rc, yb + rc, rc, z),
+        disc(xc + rc, yt - rc, rc, z),
+        dome.common(rect(xe, yb - 1, xe + a + 1, yt + 1, z)),
+    ]))
+    return offset_face(head, grow) if grow else head
+
+
+def head_slot():
+    """The original slot ends in a ring around a round end. Fill the top plate
+    from head_slot x on, then cut the slot again around the new head, with the
+    channels along the shaft as they were."""
+    x0, w, zu = P["head_slot"]
+    xc = P["head_rim"][0]
+    b0, b1 = P["button_bar_y"]
+    cb, ct = P["button_channel_w"]
+    zt = P["top_z"]
+    head = button_head(zu)
+    ring = offset_face(head, w).cut(head).cut(rect(xc - w - 0.2, b0, xc + 0.05, b1, zu))
+    slot = merge_faces(ring.fuse([rect(x0 - 0.5, b1, xc - w / 2, b1 + ct, zu),
+                                  rect(x0 - 0.5, b0 - cb, xc - w / 2, b0, zu)]))
+    bb = head.BoundBox
+    fill = box(x0, bb.YMin - 1.5, zu, bb.XMax + 1.5, bb.YMax + 1.0, zt)
+    return fill, slot.extrude(V(0, 0, zt + 1 - zu))
+
+
 def button_inlay(grow=0.05):
     """Button icon: head, shaft and two balls. The first ball, the shaft bottom
     and the head follow the slot, grown a hair into it so the cut never lands on
     its walls. The second ball sits on the case behind the first, so the slot arc
-    between them reads as the crease, and a fillet runs the shaft end into it."""
-    (lx, ly, lr), (rx, ry, rr) = P["button_left"], P["button_right"]
+    between them reads as the crease, and a fillet runs the shaft end into it.
+    The case shows through a slit at the tip."""
+    lx, ly, lr = P["button_left"]
     bx, by, br = P["button_ball2"]
     b0, b1 = P["button_bar_y"]
     xs, ys, hs = P["button_shaft_x0"], (b0 + b1) / 2, (b1 - b0) / 2 + grow
     rf = P["button_blend"]
+    xc, yb, yt, _ = P["head_rim"]
+    sw, sl = P["head_slit"]
     z0, z1 = P["inlay_z"]
 
-    def disc(x, y, r):
-        return Part.Face(Part.Wire(Part.makeCircle(r, V(x, y, z0))))
-
-    def poly(*pts):
+    def tri(*pts):
         return Part.Face(Part.makePolygon([V(x, y, z0) for x, y in pts + pts[:1]]))
 
     # Fillet circle touching the shaft end and the second ball from behind.
@@ -352,17 +417,17 @@ def button_inlay(grow=0.05):
     a = (r1 * r1 - r2 * r2 + d * d) / (2 * d)
     h = math.sqrt(r1 * r1 - a * a)
     fx, fy = xs + (a * dx + h * dy) / d, ys + (a * dy - h * dx) / d
-    pieces = disc(lx, ly, lr + grow).fuse([
-        disc(bx, by, br),
-        disc(rx, ry, rr + grow),
-        disc(xs, ys, hs),
-        poly((xs, b0 - grow), (rx, b0 - grow), (rx, b1 + grow), (xs, b1 + grow)),
-        poly((xs, ys), (bx, by), (lx, ly)),  # closes the pinhole between the three
-        poly((xs, ys), (bx, by), (fx, fy)).cut(disc(fx, fy, rf)),
-    ])
-    icon = Part.Shell(pieces.Faces).removeSplitter().Faces
-    assert len(icon) == 1
-    return Part.Face(icon[0].OuterWire).extrude(V(0, 0, z1 + 1 - z0))
+    icon = merge_faces(disc(lx, ly, lr + grow, z0).fuse([
+        disc(bx, by, br, z0),
+        button_head(z0, grow),
+        disc(xs, ys, hs, z0),
+        rect(xs, b0 - grow, xc + 1, b1 + grow, z0),
+        tri((xs, ys), (bx, by), (lx, ly)),  # closes the pinhole between the three
+        tri((xs, ys), (bx, by), (fx, fy)).cut(disc(fx, fy, rf, z0)),
+    ]))
+    tip, ym = sum(P["head_dome"]), (yb + yt) / 2
+    slit = rect(tip - sl, ym - sw / 2, tip + 1, ym + sw / 2, z0).fuse(disc(tip - sl, ym, sw / 2, z0))
+    return icon.cut(slit).extrude(V(0, 0, z1 + 1 - z0))
 
 
 def build_all(doc):
