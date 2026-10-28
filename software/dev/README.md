@@ -6,6 +6,9 @@ Local settings and helpers for `development-v1` and `development-v2` builds.
   and set `server` to the dashboard origin the build should use: `localhost`,
   a loopback address, or a private-LAN address. Without it, development builds
   use `http://127.0.0.1:3000`.
+- Outside CI, a `localhost` or loopback origin (including the default) is
+  rewritten to this machine's current private LAN address, so the device can
+  reach the dashboard; pin an explicit LAN origin here to override it.
 - `development_server.py` validates that origin; `../firmware/pre_build_script.py`
   embeds it as `RAD_SERVER`. Staging and production builds never read it.
 - Test: `python -m unittest discover -s software/dev -p 'test_*.py'`.

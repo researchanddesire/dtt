@@ -92,8 +92,7 @@ def apply_api_credential():
 apply_api_credential()
 
 
-# Build flags may contain local credentials. Never print or rewrite them, and
-# never infer a development endpoint from the machine's network interfaces.
+# Build flags may contain local credentials. Never print or rewrite them.
 if str(env.get("PIOENV", "")).startswith(("production", "staging")):
     for forbidden in ("BYPASS_EEPROM", "FORCE_TRAINER_ID", "WIFI_SSID", "WIFI_PASSWORD"):
         if has_build_define(forbidden):
@@ -103,11 +102,14 @@ if str(env.get("PIOENV", "")).startswith(("production", "staging")):
 sys.path.insert(0, str(Path(env.subst("$PROJECT_DIR")).parent / "scripts"))
 sys.path.insert(0, str(Path(env.subst("$PROJECT_DIR")).parent / "dev"))
 if str(env.get("PIOENV", "")) in ("development-v1", "development-v2"):
-    from development_server import development_server
+    from development_server import detect_lan_ip, development_server
 
     if has_build_define("RAD_SERVER"):
         raise ValueError("Configure Development through ignored software/dev/local.settings.json")
-    server = development_server(Path(env.subst("$PROJECT_DIR")).parent / "dev")
+    # Like the other firmware repos, replace localhost with this machine's
+    # current LAN address so the device can reach the local dashboard.
+    lan_ip = None if os.environ.get("CI") else detect_lan_ip()
+    server = development_server(Path(env.subst("$PROJECT_DIR")).parent / "dev", lan_ip=lan_ip)
     env.Append(CPPDEFINES=[("RAD_SERVER", env.StringifyMacro(server))])
 
 from check_dhcp_patch import verify_link_map

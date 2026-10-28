@@ -56,7 +56,7 @@ class PrivateBuildSecurityTests(unittest.TestCase):
             env = Environment(PIOENV=profile, defines=["VERSIONDEV"])
             with mock.patch("development_server.development_server", return_value="http://192.168.2.59:3000") as load:
                 self.assertEqual(run_guard(env), "")
-            load.assert_called_once_with(ROOT.parent / "dev")
+            load.assert_called_once_with(ROOT.parent / "dev", lan_ip=mock.ANY)
             self.assertIn(("RAD_SERVER", '"http://192.168.2.59:3000"'), env["defines"])
             with self.assertRaises(ValueError):
                 run_guard(Environment(PIOENV=profile, defines=["VERSIONDEV", "RAD_SERVER"]))
