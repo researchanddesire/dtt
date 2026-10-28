@@ -89,6 +89,9 @@ PARAMS = {
     "button_left": (17.806, 65.004, 3.0),  # centre x, y, radius
     "button_right": (33.414, 68.725, 3.5),
     "button_bar_y": (66.725, 70.725),
+    "button_ball2": (13.251, 64.364, 2.9),  # second ball, behind the first
+    "button_shaft_x0": 14.6,  # centre of the shaft's round end
+    "button_blend": 4.0,  # fillet from the shaft end into the second ball
     "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
 }
 P = PARAMS
@@ -325,18 +328,41 @@ def tongue(grow=0.0):
 
 
 def button_inlay(grow=0.05):
-    """Button outline: two discs and a shaft with a rounded end that runs into
-    the left disc. Grown a hair into the slot so the cut never lands on its walls."""
+    """Button icon: head, shaft and two balls. The first ball, the shaft bottom
+    and the head follow the slot, grown a hair into it so the cut never lands on
+    its walls. The second ball sits on the case behind the first, so the slot arc
+    between them reads as the crease, and a fillet runs the shaft end into it."""
     (lx, ly, lr), (rx, ry, rr) = P["button_left"], P["button_right"]
+    bx, by, br = P["button_ball2"]
     b0, b1 = P["button_bar_y"]
+    xs, ys, hs = P["button_shaft_x0"], (b0 + b1) / 2, (b1 - b0) / 2 + grow
+    rf = P["button_blend"]
     z0, z1 = P["inlay_z"]
-    h = (b1 - b0) / 2 + grow
-    dy = (b0 + b1) / 2 - ly
-    xe = lx + math.sqrt(max((lr + h - 1.1) ** 2 - dy ** 2, 0.0))  # shaft end overlaps the disc
-    shaft = Part.makeCylinder(h, z1 + 1 - z0, V(xe, (b0 + b1) / 2, z0)).fuse(
-        box(xe, b0 - grow, z0, rx, b1 + grow, z1 + 1))
-    return zcyl(lx, ly, 2 * (lr + grow), z0, z1 + 1).fuse(
-        [zcyl(rx, ry, 2 * (rr + grow), z0, z1 + 1), shaft]).removeSplitter()
+
+    def disc(x, y, r):
+        return Part.Face(Part.Wire(Part.makeCircle(r, V(x, y, z0))))
+
+    def poly(*pts):
+        return Part.Face(Part.makePolygon([V(x, y, z0) for x, y in pts + pts[:1]]))
+
+    # Fillet circle touching the shaft end and the second ball from behind.
+    r1, r2 = hs + rf, br + rf
+    dx, dy = bx - xs, by - ys
+    d = math.hypot(dx, dy)
+    a = (r1 * r1 - r2 * r2 + d * d) / (2 * d)
+    h = math.sqrt(r1 * r1 - a * a)
+    fx, fy = xs + (a * dx + h * dy) / d, ys + (a * dy - h * dx) / d
+    pieces = disc(lx, ly, lr + grow).fuse([
+        disc(bx, by, br),
+        disc(rx, ry, rr + grow),
+        disc(xs, ys, hs),
+        poly((xs, b0 - grow), (rx, b0 - grow), (rx, b1 + grow), (xs, b1 + grow)),
+        poly((xs, ys), (bx, by), (lx, ly)),  # closes the pinhole between the three
+        poly((xs, ys), (bx, by), (fx, fy)).cut(disc(fx, fy, rf)),
+    ])
+    icon = Part.Shell(pieces.Faces).removeSplitter().Faces
+    assert len(icon) == 1
+    return Part.Face(icon[0].OuterWire).extrude(V(0, 0, z1 + 1 - z0))
 
 
 def build_all(doc):
