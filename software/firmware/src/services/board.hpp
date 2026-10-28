@@ -20,6 +20,9 @@ constexpr int ADC_RESOLUTION = 11;
 // Board initialization function
 inline void initBoard() {
     ESP_LOGI(TAG, "Initializing board pins...");
+    // gpio_config logs every pinMode at INFO; the 5 V probe reconfigures its
+    // pin each check, and each line holds the console for ~9 ms.
+    esp_log_level_set("gpio", ESP_LOG_WARN);
     pinMode(SENSOR_INPUT, INPUT);
     adcAttachPin(SENSOR_INPUT);
     analogReadResolution(

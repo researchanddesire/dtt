@@ -6,6 +6,7 @@
  * @param samples time in ms to measure for
  */
 float getDistance(int samples);
+int readAdc(int pin);
 float getAnalog(int pin, int samples);
 float getAnalogVoltage(int pin, int samples);
 float getBatteryVoltage();

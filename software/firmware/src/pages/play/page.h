@@ -5,7 +5,9 @@
 
 #include <CircularBuffer.hpp>
 
-#define DISTANCE_BUFFER_SIZE 40
+// Sampled at 120 Hz: 15 positions average ~125 ms, matching the original
+// firmware's 40-sample window at roughly 330 Hz.
+#define DISTANCE_BUFFER_SIZE 15
 #define SPEED_BUFFER_SIZE 9
 
 extern CircularBuffer<float, DISTANCE_BUFFER_SIZE> distanceBuffer;
