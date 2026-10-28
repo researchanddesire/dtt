@@ -7,6 +7,8 @@
 #include <cstring>
 #include <initializer_list>
 
+#include "Calibration.h"
+
 enum class SessionDocumentMode { DashboardPage, Complete };
 
 constexpr uint32_t SESSION_PAGE_SIZE = 100;
@@ -121,6 +123,11 @@ bool validateSessionDocument(JsonObjectConst root, ErrorString &error,
                     calibratedMin >= calibratedMax)
                     return reject(
                         "Calibration positions are outside safe ranges");
+                // A stored range the device cannot train with is ignored:
+                // the device asks for a new calibration instead.
+                if (checkCalibration(calibratedMax, calibratedMin) !=
+                    CalibrationProblem::None)
+                    calibrated = false;
             }
         }
     }

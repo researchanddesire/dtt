@@ -166,6 +166,28 @@ namespace {
         TEST_ASSERT_FALSE(valid(doc));
         calibration["minCm"] = nullptr;
         TEST_ASSERT_FALSE(valid(doc));
+        // A stored range the device cannot train with is ignored, so the
+        // segment's own positions decide.
+        calibration["minCm"] = 10;
+        calibration["maxCm"] = 11;
+        TEST_ASSERT_FALSE(valid(doc));
+        doc["segments"][0]["params"]["startPosition"] = 16;
+        doc["segments"][0]["params"]["endPosition"] = 2;
+        TEST_ASSERT_TRUE(valid(doc));
+    }
+
+    void test_calibration_range_checks() {
+        TEST_ASSERT_TRUE(checkCalibration(16, 2) == CalibrationProblem::None);
+        TEST_ASSERT_TRUE(checkCalibration(12, 10) == CalibrationProblem::None);
+        TEST_ASSERT_TRUE(checkCalibration(NAN, 2) == CalibrationProblem::SensorError);
+        TEST_ASSERT_TRUE(checkCalibration(16, INFINITY) == CalibrationProblem::SensorError);
+        // Nothing in front of the sensor reads about 22 cm.
+        TEST_ASSERT_TRUE(checkCalibration(21.9f, 2) == CalibrationProblem::OutOfRange);
+        TEST_ASSERT_TRUE(checkCalibration(16, 1) == CalibrationProblem::OutOfRange);
+        TEST_ASSERT_TRUE(checkCalibration(2, 16) == CalibrationProblem::Reversed);
+        TEST_ASSERT_TRUE(checkCalibration(10, 10) == CalibrationProblem::TooShort);
+        TEST_ASSERT_TRUE(checkCalibration(10, 11) == CalibrationProblem::TooShort);
+        TEST_ASSERT_TRUE(checkCalibration(11.9f, 10) == CalibrationProblem::TooShort);
     }
 
     void test_bounded_text_and_pass_fail_types() {
@@ -223,6 +245,7 @@ int main() {
     RUN_TEST(test_fractional_dashboard_values_use_parsed_integers);
     RUN_TEST(test_dashboard_pagination_and_complete_limits);
     RUN_TEST(test_calibration_override_preserves_existing_dashboard_format);
+    RUN_TEST(test_calibration_range_checks);
     RUN_TEST(test_bounded_text_and_pass_fail_types);
     RUN_TEST(test_countdown_snapshot_survives_session_reallocation);
     return UNITY_END();
