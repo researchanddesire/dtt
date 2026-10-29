@@ -1,8 +1,9 @@
 # DTT snap backplate (concept)
 
 A printed backplate the [enclosed case](../enclosed-case/) slides into and
-clicks onto. Mount the plate on three suction cups, or hang it on the wall
-bracket.
+clicks onto. It follows the case's taper and is no wider than it needs to be.
+Mount it on two suction cups in line, both hidden behind it, or hang it on the
+wall bracket.
 
 ![Hero](images/Snap-Backplate-Hero.png)
 
@@ -22,7 +23,9 @@ bracket.
   case out.
 - **Suction cups:** before fitting the case, push each cup's head through a
   keyhole and slide it up until it clicks into the round end. The keyholes fit
-  a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm groove.
+  a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm groove. The upper cup sits
+  on a fixed tongue inside the U-shaped lever, so pressing the tab never pulls
+  on it.
 - **Wall bracket:** instead of the cups. Fix it level with two #6 or #8 screws,
   at least 25 mm long, or with Command strips on its back. Hang the plate on the
   studs and push it down 12 mm. To take it off, lift it 12 mm.

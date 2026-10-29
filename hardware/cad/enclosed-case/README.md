@@ -1,10 +1,10 @@
 # Enclosed case
 
-The DTT case at one constant width, with a blue switch cover that slides S1
-and a rear cover tray that holds the PCB from its top face down. The original
-four PCB screws hold it together, flush in countersinks in the rear cover.
-It replaces the loop backing, and slides into the
-[snap backplate](../snap-backplate/).
+The DTT case, 50 mm wide at the USB-C end and curving in to 44 mm at the jack,
+with a blue switch cover that slides S1 and a rear cover tray that holds the
+PCB from its top face down. The original four PCB screws hold it together,
+flush in countersinks in the rear cover. It replaces the loop backing, and
+slides into the [snap backplate](../snap-backplate/).
 
 | | |
 | --- | --- |
@@ -31,13 +31,14 @@ It replaces the loop backing, and slides into the
 
 ## Assemble
 
-1. With the housing upside down, drop the switch cover into its slot from
-   inside, grip outwards.
-2. Fit the PCB so the S1 actuator enters the pocket in the switch cover.
-3. Fit the rear cover and drive the four screws into the original bosses.
+1. With the housing upside down, push the OLED module in, glass first, until
+   the two clips click over its board. No glue.
+2. Drop the switch cover into its slot from inside, grip outwards.
+3. Fit the PCB so the S1 actuator enters the pocket in the switch cover.
+4. Fit the rear cover and drive the four screws into the original bosses.
    Snug them; do not strip the bosses.
 
-Size: 50.0 × 95.2 × 22.3 mm.
+Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 
 ## Source
 
@@ -59,8 +60,11 @@ Size: 50.0 × 95.2 × 22.3 mm.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
 - USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
-- The button feel. Its icon is larger than the original, so the button is
-  about 15% stiffer.
+- The button feel: a plain bar with a round pad over the plunger. Its tray
+  now stays 5 mm clear of the screen board.
+- The OLED clips: the module clicks in and its glass sits flat on the plate.
+  The lips are set to lift the board 0.3 mm past its seat, so the beams stay
+  sprung against it.
 
 The CAD checks are geometric only. Clamp force, thread hold and drop
 strength need a physical test.
