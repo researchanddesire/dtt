@@ -14,7 +14,7 @@ BUILD = os.path.join(HERE, 'build')
 IMAGES = os.path.join(HERE, 'images')
 COL = json.load(open(os.path.join(BUILD, 'colours.json')))
 
-CASE = ['front', 'rear', 'slider']
+CASE = ['front', 'rear', 'rear_icon', 'slider']
 INSIDE = ['pcb', 'models', 'proxies', 'glass', 'active', 'fpc', 'battery', 'screws']
 CRADLE = ['cradle_black', 'cradle_blue', 'cups']
 UP_Y = [0, 1, 0]
@@ -57,6 +57,11 @@ def main():
         scene('DTT-v2-Section-Switch.png', CASE + INSIDE,
               {'dir': [0.25, 1.0, -0.55], 'up': [0, 0, 1], 'center': [0, 16, -5], 'zoom': 1.6}, (1400, 900),
               prefix='secy_'),
+        scene('Detail-Boot-Pin.png', CASE + ['screws'],
+              {'dir': [0.3, -0.35, 1.0], 'up': UP_Y, 'center': [-14, 42.5, -13.5], 'zoom': 4.0}, (900, 800)),
+        scene('Section-Boot-Pin.png', CASE + INSIDE,
+              {'dir': [0.05, 1.0, 0.02], 'up': [0, 0, 1], 'center': [-14, 42.5, -7.5], 'zoom': 2.8}, (1100, 900),
+              prefix='secp_'),
         scene('DTT-v2-Cradle.png', CRADLE, front34),
         scene('DTT-v2-Cradle-Rear.png', CRADLE, {'dir': [0.45, -0.45, 1.0], 'up': UP_Y}),
         scene('Part-Front-Shell-Inside.png', ['front'], {'dir': [0.35, 0.45, 1.0], 'up': UP_Y}, (1000, 800)),

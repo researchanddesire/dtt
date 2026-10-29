@@ -70,7 +70,16 @@ PARAMS = {
     # side openings (device Y / Z)
     'UsbY': (28.0, 'board: J1'), 'UsbZ': (-3.23, 'board: J1 shell centre'), 'UsbWH': ((9.6, 3.8), 'design: HRO plug 8.3 x 2.6 + 0.6'),
     'Ph6Y': (28.5, 'board: J4'), 'Ph6Z': (-4.6, 'board: J4 body centre'), 'Ph6WH': ((15.0, 7.2), 'design: PHR-6 housing 13 x 5'),
-    'Sw2Y': (42.5, 'board: SW2 reset'), 'Sw2Z': (-3.35, 'board'), 'Sw2HoleD': (1.3, 'design: pin reset'),
+    'Sw2XY': ((-14.0, 42.5), 'board: SW2 BOOT, a top-push TS-1187A on the board back, plunger toward the rear cover'),
+    'Sw2Body': (5.1, 'TS-1187A'), 'Sw2H': (1.5, 'TS-1187A: board to plunger top'),
+    'PinBoreD': (1.5, 'design: paperclip bore, prints about 1.2 as a vertical hole'),
+    'PinCskD': (2.5, 'design: lead-in on the outer face'),
+    'PinTubeOD': (3.4, 'design: guide tube up from the floor so the clip lands on the plunger'),
+    'PinTubeGap': (1.0, 'design: tube top to the plunger'),
+    'IconInlayT': (0.6, 'design: white reset icon inlaid in the outer face, 2 layers at 0.30'),
+    'IconR': (2.9, 'design: icon ring centre radius'), 'IconLine': (1.0, 'design: line width for a 0.6 nozzle'),
+    'IconArc': ((45.0, 255.0), 'design: ring tail angle and clockwise sweep, seen from the back'),
+    'IconHead': ((2.8, 1.9), 'design: arrowhead base and length'),
     # slide switch SW1 and its printed cover (blue touch point), as on the rev 4 enclosed case
     'SwBody': (((14.9, 18.5), (9.5, 18.5), (-5.1, -1.6)), 'board: JS102011JAQN, X / Y / Z ranges'),
     'ActY': (15.55, 'board: actuator centre as drawn on the fab layer; the other detent is 3.1 lower'),
@@ -116,6 +125,7 @@ P = {k: v for k, (v, _) in PARAMS.items()}
 
 BLACK = (0.16, 0.16, 0.17)
 BLUE = (0.09, 0.42, 0.93)
+WHITE = (0.93, 0.93, 0.92)
 PCB = (0.12, 0.35, 0.22)
 GLASS = (0.05, 0.05, 0.07)
 SCREEN = (0.14, 0.22, 0.42)
@@ -260,6 +270,46 @@ def load_board():
     return pcb, others
 
 
+def sw2_proxy(zb):
+    (hx, hy), b, h = P['Sw2XY'], P['Sw2Body'] / 2, P['Sw2H']
+    return box(hx - b, hx + b, hy - b, hy + b, zb - h + 0.35, zb).fuse(box(hx - 0.9, hx + 0.9, hy - 0.9, hy + 0.9,
+                                                                         zb - h, zb - h + 0.36))
+
+
+def pin_geom():
+    (hx, hy) = P['Sw2XY']
+    plunger = -P['PcbT'] - P['Sw2H']
+    return hx, hy, plunger, plunger - P['PinTubeGap']
+
+
+def reset_icon():
+    """A clockwise open-circle arrow round the BOOT pin hole, as seen from the back (X mirrored)."""
+    hx, hy, _, _ = pin_geom()
+    zr = P['RearZ']
+    r, lw = P['IconR'], P['IconLine']
+    ro, ri = r + lw / 2, r - lw / 2
+    t0, sweep = P['IconArc']
+    t1 = t0 - sweep
+    base, length = P['IconHead']
+    to_dev = lambda sx, sy: V(hx - sx, hy + sy, zr)
+    pol = lambda rad, deg: (rad * math.cos(math.radians(deg)), rad * math.sin(math.radians(deg)))
+    tm = (t0 + t1) / 2
+    arc_o = Part.Arc(to_dev(*pol(ro, t0)), to_dev(*pol(ro, tm)), to_dev(*pol(ro, t1))).toShape()
+    arc_i = Part.Arc(to_dev(*pol(ri, t1)), to_dev(*pol(ri, tm)), to_dev(*pol(ri, t0))).toShape()
+    band = Part.Face(Part.Wire([arc_o, Part.LineSegment(to_dev(*pol(ro, t1)), to_dev(*pol(ri, t1))).toShape(), arc_i,
+                                Part.LineSegment(to_dev(*pol(ri, t0)), to_dev(*pol(ro, t0))).toShape()]))
+    a = math.radians(t1)
+    n, tg = (math.cos(a), math.sin(a)), (math.sin(a), -math.cos(a))      # radial, clockwise tangent
+    bx, by = r * n[0], r * n[1]
+    pts = [(bx + n[0] * base / 2, by + n[1] * base / 2), (bx + tg[0] * length, by + tg[1] * length),
+           (bx - n[0] * base / 2, by - n[1] * base / 2)]
+    # overlap the band a little so the head and the ring fuse into one face
+    pts = [(x - tg[0] * 0.05, y - tg[1] * 0.05) if i != 1 else (x, y) for i, (x, y) in enumerate(pts)]
+    head = Part.Face(Part.makePolygon([to_dev(*q) for q in pts] + [to_dev(*pts[0])]))
+    face = band.fuse(head).removeSplitter()
+    return face.extrude(V(0, 0, P['IconInlayT']))
+
+
 def board_proxies():
     """Boxes for the parts whose 3D models are not in the KiCad export."""
     zb = -P['PcbT']
@@ -272,8 +322,7 @@ def board_proxies():
         'J4 PH6 port': box(-16.8, -7.2, 20.5, 36.5, zb - 6.0, zb),
         'SW1 slide switch': box(sx0, sx1, sy0, sy1, sz0, sz1).fuse(
             box(sx1 - 0.01, P['ActTipX'], ay - P['ActW'] / 2, ay + P['ActW'] / 2, az0, az1)),
-        'SW2 reset button': box(-16.5, -11.5, 39.5, 45.5, zb - 3.5, zb).fuse(
-            box(-18.5, -16.49, 41.5, 43.5, -4.1, -2.6)),
+        'SW2 BOOT button': sw2_proxy(zb),
         'U6 IMU': box(-1.5 + P['TofXY'][0] * 0 - 3.7, -1.2, 47.5, 50.5, zb - 0.83, zb),
         'U7 magnetometer': box(0.0, 2.0, 14.0, 16.0, zb - 1.0, zb),
     }
@@ -316,14 +365,13 @@ def active_y():
 
 # ----------------------------------------------------------------------------- case
 def side_cuts():
-    """Openings shared by the shells: USB-C, PH6, reset pinhole, switch window and flange channel."""
+    """Openings in the rear cover sides: USB-C, PH6, switch window and flange channel."""
     x = P['CaseX']
     w, h = P['UsbWH']
     usb = yz_rect(P['UsbY'], P['UsbZ'], w, h, h / 2 - 1e-3, x - 4, x + 2)
     w, h = P['Ph6WH']
     ph6 = yz_rect(P['Ph6Y'], P['Ph6Z'], w, h, 1.0, -x - 2, -x + 4)
-    pin = Part.makeCylinder(P['Sw2HoleD'] / 2, 6, V(-x - 2, P['Sw2Y'], P['Sw2Z']), V(1, 0, 0))
-    return [usb, ph6, pin] + slider_cuts()
+    return [usb, ph6] + slider_cuts()
 
 
 def slider_geom():
@@ -430,7 +478,14 @@ def rear_cover():
             for sx in (-1, 1)]
     ribs = [box(min(r.BoundBox.XMin, r.BoundBox.XMax), max(r.BoundBox.XMin, r.BoundBox.XMax), by0 - 0.3, by0 + bl + 0.3,
                 zr + fl - 0.01, zr + fl + 2.0) for r in ribs]
-    s = s.fuse(lips + posts + ribs).removeSplitter()
+    hx, hy, _, tube_top = pin_geom()
+    tube = cyl(P['PinTubeOD'], hx, hy, zr + fl - 0.01, tube_top)
+    s = s.fuse(lips + posts + ribs + [tube]).removeSplitter()
+    # BOOT pin hole through the back and up the tube, with a lead-in, and the white icon round it
+    s = s.cut(cyl(P['PinBoreD'], hx, hy, zr - 1, tube_top + 1))
+    rk, rb = P['PinCskD'] / 2, P['PinBoreD'] / 2
+    s = s.cut(Part.makeCone(rk + 0.3, rb, rk - rb + 0.3, V(hx, hy, zr - 0.3)))
+    s = s.cut(reset_icon())
     # screw holes with countersinks on the outside
     for hx, hy in P['Holes']:
         s = s.cut(cyl(P['ScrewClearD'], hx, hy, zr - 1, zs + 1))
@@ -740,12 +795,13 @@ def main():
     bat = battery()
     front = front_shell()
     rear = rear_cover()
+    icon = reset_icon()
     slider = build_slider()
     screws = [screw(hx, hy) for hx, hy in P['Holes']]
     plate_black, plate_blue = cradle()
     cups = {k: cup_shape(x, y) for k, (x, y) in cup_centres().items()}
 
-    for label, s in [('front shell', front), ('rear cover', rear), ('switch cover', slider),
+    for label, s in [('front shell', front), ('rear cover', rear), ('rear icon', icon), ('switch cover', slider),
                      ('cradle black', plate_black), ('cradle blue', plate_blue)]:
         check(label, s)
     print('CHECK case %.1f x %.1f x %.1f mm' % (2 * P['CaseX'], P['CaseY1'] - P['CaseY0'], P['TopZ'] - P['RearZ']))
@@ -754,6 +810,14 @@ def main():
         print('CHECK %s vs board and parts: overlap %.3f mm3' % (label, overlap(s, pcb_all)))
         print('CHECK %s vs glass: overlap %.3f mm3, vs battery %.3f' % (label, overlap(s, g), overlap(s, bat)))
     print('CHECK front shell vs rear cover: overlap %.3f mm3' % overlap(front, rear))
+    print('CHECK rear icon vs rear cover: overlap %.3f mm3, flush %s' % (
+        overlap(icon, rear), abs(icon.BoundBox.ZMin - rear.BoundBox.ZMin) < 1e-6))
+    hx, hy, plunger, _ = pin_geom()
+    clip = cyl(1.0, hx, hy, P['RearZ'] - 5, plunger + 0.3)
+    others = pcb.fuse([models] + [v for k, v in proxies.items() if not k.startswith('SW2')])
+    print('CHECK paperclip (1.0) up the BOOT hole: rear cover %.3f, battery %.3f, other parts %.3f mm3; '
+          'presses the button %.2f mm3' % (overlap(clip, rear), overlap(clip, bat), overlap(clip, others),
+                                           overlap(clip, proxies['SW2 BOOT button'])))
     print('CHECK switch cover vs shells: %.3f mm3' % overlap(slider, Part.makeCompound([front, rear])))
     case = Part.makeCompound([front, rear, slider])
     print('CHECK case in the cradle: overlap %.3f mm3' % overlap(case, Part.makeCompound([plate_black, plate_blue])))
@@ -805,6 +869,7 @@ def main():
     add('Battery', 'Battery', 'LiPo %dx%dx%d' % (P['BatT'], P['BatW'], P['BatL']), bat)
     add('Case', 'FrontShell', 'Front shell - print black', front)
     add('Case', 'RearCover', 'Rear cover - print black', rear)
+    add('Case', 'RearIcon', 'Rear cover BOOT icon - print white', icon)
     add('Case', 'SwitchCover', 'Switch cover - print blue', slider)
     for i, s in enumerate(screws, 1):
         add('Case', 'Screw%d' % i, 'M2 x 16 flat head self-tapping %d' % i, s)
@@ -818,23 +883,26 @@ def main():
         sheet.set('A%d' % i, k); sheet.set('B%d' % i, str(v)); sheet.set('C%d' % i, note)
     doc.recompute()
     doc.saveAs(os.path.join(HERE, 'DTT-v2.FCStd'))
-    Part.makeCompound([pcb, models, g, active, fpc, bat, front, rear, slider, plate_black, plate_blue] + screws
+    Part.makeCompound([pcb, models, g, active, fpc, bat, front, rear, icon, slider, plate_black, plate_blue] + screws
                       + list(cups.values()) + list(proxies.values())).exportStep(os.path.join(HERE, 'DTT-v2.step'))
-    for name, s in [('Front-Shell-Black', front), ('Rear-Cover-Black', rear), ('Switch-Cover-Blue', slider),
+    for name, s in [('Front-Shell-Black', front), ('Rear-Cover-Black', rear), ('Rear-Cover-White', icon),
+                    ('Switch-Cover-Blue', slider),
                     ('Cradle-Black', plate_black), ('Cradle-Blue', plate_blue)]:
         s.exportStep(os.path.join(PARTS, name + '.step'))
         mesh(s, os.path.join(PARTS, name + '.stl'), 0.02)
     # render meshes
     vis = {'pcb': (pcb, PCB), 'models': (models, METAL), 'glass': (g, GLASS), 'active': (active, SCREEN),
            'fpc': (fpc, (0.85, 0.6, 0.2)), 'battery': (bat, BATTERY), 'front': (front, BLACK), 'rear': (rear, BLACK),
+           'rear_icon': (icon, WHITE),
            'slider': (slider, BLUE), 'cradle_black': (plate_black, BLACK), 'cradle_blue': (plate_blue, BLUE),
            'screws': (Part.makeCompound(screws), (0.55, 0.55, 0.58)),
            'cups': (Part.makeCompound(list(cups.values())), CUP),
            'proxies': (Part.makeCompound(list(proxies.values())), (0.35, 0.35, 0.38))}
     for name, (s, col) in vis.items():
         mesh(s, os.path.join(BUILD, name + '.stl'), 0.05)
-    # sections for the renders: the half x <= 0, and the half y >= the switch actuator
-    secs = {'secx': box(-FAR, 0.0, -FAR, FAR, -FAR, FAR), 'secy': box(-FAR, FAR, P['ActY'], FAR, -FAR, FAR)}
+    # sections for the renders: the half x <= 0, the half y >= the switch actuator, and through the BOOT hole
+    secs = {'secx': box(-FAR, 0.0, -FAR, FAR, -FAR, FAR), 'secy': box(-FAR, FAR, P['ActY'], FAR, -FAR, FAR),
+            'secp': box(-FAR, FAR, P['Sw2XY'][1], FAR, -FAR, FAR)}
     for sname, half in secs.items():
         for name, (s, col) in vis.items():
             try:

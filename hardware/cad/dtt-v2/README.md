@@ -15,6 +15,10 @@ with a blue switch cover, and the cradle it slides into.
 | --- | --- | --- |
 | ![Section](images/DTT-v2-Section-Long.png) | ![Switch section](images/DTT-v2-Section-Switch.png) | ![Switch](images/DTT-v2-Switch-Side.png) |
 
+| BOOT hole | Through the BOOT hole | |
+| --- | --- | --- |
+| ![BOOT](images/Detail-Boot-Pin.png) | ![BOOT section](images/Section-Boot-Pin.png) | |
+
 | Cradle | Cradle, wall side | In the cradle |
 | --- | --- | --- |
 | ![Cradle](images/DTT-v2-Cradle.png) | ![Cradle rear](images/DTT-v2-Cradle-Rear.png) | ![In cradle](images/DTT-v2-In-Cradle-Side.png) |
@@ -24,8 +28,11 @@ with a blue switch cover, and the cradle it slides into.
 - The glass sits on a 0.5 mm foam gasket under the front shell bezel. The
   board screws up to the front shell with four M2 x 16 flat-head screws
   through the rear cover, countersunk flush.
-- The seam is at the back of the PCB, so USB-C, the PH6 port, the reset hole
-  and the switch window are all in the rear cover.
+- The seam is at the back of the PCB, so USB-C, the PH6 port and the switch
+  window are all in the rear cover.
+- BOOT is only for recovering from a bad firmware: push a paperclip into the
+  hole in the white arrow on the back and switch on while holding it. A tube
+  inside guides the clip onto the button.
 - The battery lies behind USB-C and the module, on two ribs in the rear cover.
 - The ToF looks out through a 3.6 mm countersunk window at the bottom right
   of the bezel.
@@ -46,7 +53,7 @@ with a blue switch cover, and the cradle it slides into.
 | Part | File | Colour | Orientation |
 | --- | --- | --- | --- |
 | Front shell | `parts/Front-Shell-Black.stl` | black | bezel face down |
-| Rear cover | `parts/Rear-Cover-Black.stl` | black | outer face down |
+| Rear cover | `parts/Rear-Cover-Black.stl` + `parts/Rear-Cover-White.stl` (BOOT icon) as one object | black + white | outer face down |
 | Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flange face down |
 | Cradle | `parts/Cradle-Black.stl` + `parts/Cradle-Blue.stl` as one object | black + blue | wall side down |
 
