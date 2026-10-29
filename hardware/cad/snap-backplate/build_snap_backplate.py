@@ -1399,5 +1399,5 @@ def render_double_double(doc, pic):
             moves={'SnapDDScrew': V(0, 0, -40), 'SnapCupD': V(0, 30, -40)}, turned=True, colours=grey)
 
 
-if __name__ == '__main__' or True:
+if not os.environ.get('SNAP_AS_LIBRARY'):   # set by builders that reuse this one, such as the jock mount
     DOCUMENT = main()
