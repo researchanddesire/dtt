@@ -6,6 +6,8 @@ from unittest.mock import patch
 from release_workflow import branch_configuration, main, tag_action
 
 PUBLISH_WORKFLOW = Path(__file__).resolve().parents[1] / "workflows" / "publish_firmware.yml"
+VERSION_ALLOCATOR = Path(__file__).with_name("allocate_version.sh")
+FIRMWARE_ROOT = Path(__file__).resolve().parents[2] / "software" / "firmware"
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
@@ -68,13 +70,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
             workflow.index("- name: Select track and build environment"),
             workflow.index("- name: Allocate and commit next version"),
         )
+        self.assertIn("run: bash .github/scripts/allocate_version.sh", workflow)
+        allocator = VERSION_ALLOCATOR.read_text()
+        self.assertIn('if [[ "$GITHUB_REF_NAME" != main ]]', allocator)
         self.assertIn(
-            '"$FIRMWARE_CONTROL_PLANE_BASE_URL/api/internal/firmware/v1/versions/next"',
-            workflow,
+            '"https://dashboard.researchanddesire.com/api/internal/firmware/v1/versions/next"',
+            allocator,
         )
 
     def test_insecure_lab_transport_is_isolated_from_release_environments(self):
-        configuration = Path("platformio.ini").read_text().splitlines()
+        configuration = (FIRMWARE_ROOT / "platformio.ini").read_text().splitlines()
         sections_with_lab_transport = set()
         section = ""
         for line in configuration:

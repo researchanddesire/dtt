@@ -6,8 +6,10 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 
 ## Layout
 
-- `software/` is the PlatformIO firmware project. Run `pio` there and follow
-  `software/AGENTS.md` for firmware rules.
+- `software/` holds all software. `software/firmware/` is the PlatformIO
+  firmware project: run `pio` there and follow `software/firmware/AGENTS.md`
+  for firmware rules. `software/scripts/` holds development, release and rig
+  tooling; `software/dev/` holds local development settings and services.
 - `hardware/` holds the CAD assembly, PCB source, and manufacturing outputs.
 - `assembly-docs/` (build guide, published by the docs hub), `docs/` (user
   guides), and `developer-docs/` (engineering) document the device.
@@ -19,7 +21,7 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 - Never force-push, rewrite, or delete `staging` or `main`; the docs hub orders
   files by commit date.
 - Persistent branches are lowercase `staging` and `main`. Fetch before branching.
-- The firmware directory is `software/` (except the harness copy in `software/scripts/hil/`). `FIRMWARE_PATHS` in `pr-firmware.yml` and `pr-target-policy.yml` and the `publish_firmware.yml` push paths define it; keep them in sync.
+- The firmware directory is `software/` (`firmware/`, `scripts/` and `dev/`, except the harness copy in `software/scripts/hil/`). `FIRMWARE_PATHS` in `pr-firmware.yml` and `pr-target-policy.yml` and the `publish_firmware.yml` push paths define it; keep them in sync.
 - Firmware changes enter `staging` first: branch from `origin/staging` and open the PR into `staging`. Promote with a same-repository `staging` → `main` PR.
 - A production fix may take firmware to `main` directly from a `fix/<issue>` branch (an owner prefix such as `AJ/fix/<issue>` also works) started from `origin/main`.
 - Changes outside the firmware directory (documentation, hardware, BOMs, workflows) may open their PR straight into `main`; they need no build or hardware checks. `PR target policy` enforces these rules.
@@ -76,7 +78,7 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
   group `rad-firmware-validation` allows only that exact ref, and
   `software/scripts/hil/reviewed-workflows.json` must match it.
 - The shared rig harness is installed from the LKBX repository's
-  `scripts/hil/`; keep DTT's `software/scripts/hil/` byte-identical to it.
+  `software/scripts/hil/`; keep DTT's `software/scripts/hil/` byte-identical to it.
 - Changing `hardware-run.yml` needs a new pin in all three places.
 
 ## Documentation
@@ -93,7 +95,7 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
   `bom.json` in the same commit as any `_bom/bom.csv` change, or the hub
   import fails.
 - `docs/` mirrors `simple-docs/content/dtt`; edit user-guide content upstream.
-  `sync-user-docs.yml` (via `scripts/sync_user_docs.py`) refreshes it and never
+  `sync-user-docs.yml` (via `software/scripts/sync_user_docs.py`) refreshes it and never
   writes `assembly-docs/`. Engineering pages belong in `developer-docs/docs/`.
 - Write concise descriptions of the design as it is. Omit change narratives
   and confidence/status properties from CAD models and product documentation.

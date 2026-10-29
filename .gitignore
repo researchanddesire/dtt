@@ -13,4 +13,4 @@ compile_commands.json
 
 # Local development display captures
 captures/
-software/test/report.json
+software/firmware/test/report.json

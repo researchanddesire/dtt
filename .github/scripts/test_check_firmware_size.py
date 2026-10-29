@@ -19,7 +19,7 @@ from check_firmware_size import (
 )
 
 
-FIRMWARE_ROOT = Path(__file__).resolve().parents[2] / "software"
+FIRMWARE_ROOT = Path(__file__).resolve().parents[2] / "software" / "firmware"
 APPROVED_PARTITION = FIRMWARE_ROOT / "partition-v2.csv"
 V1_PARTITION = FIRMWARE_ROOT / "partition-v1.csv"
 V2_PARTITION = FIRMWARE_ROOT / "partition-v2.csv"

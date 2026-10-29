@@ -2,6 +2,8 @@
 
 DTT is an ESP32-based training device: WiFi connectivity, vibration feedback, RGB LED indicators, and an OLED display. Users configure sessions via the RAD dashboard; the device runs patterns locally with real-time feedback and syncs session data back for analytics.
 
+Source paths below are relative to the PlatformIO project in `software/firmware/`.
+
 ## State machine
 
 Core logic is a custom Boost::SML-inspired state machine in `src/state/machine.h`. Supporting pieces live alongside it:
@@ -42,7 +44,7 @@ The device talks to the rad-app backend over HTTP (JSON). Key endpoints under `{
 - `POST .../v2/calibrate-toy` — calibration upload
 - `GET .../ota` — firmware update check
 
-Requests are keyed by `bubbleId` (device UUID). Each environment sets `RAD_SERVER` in `software/platformio.ini`.
+Requests are keyed by `bubbleId` (device UUID). Each environment sets `RAD_SERVER` in `software/firmware/platformio.ini`.
 
 ## WiFi provisioning
 

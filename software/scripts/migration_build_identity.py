@@ -38,4 +38,4 @@ def migration_build_identity(project_dir: Path) -> str:
 
 
 if __name__ == "__main__":
-    print(migration_build_identity(Path(__file__).resolve().parents[1]))
+    print(migration_build_identity(Path(__file__).resolve().parents[1] / "firmware"))

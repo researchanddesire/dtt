@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python hardware/pcb/kicad-rev4/217A_dttrainer_rev4/export_production.py --check
-      - run: python -m unittest discover -s scripts -p 'test_*.py'
+      - run: python -m unittest discover -s software/scripts -p 'test_sync_user_docs.py'
       - name: Scan source and history
         run: |
           curl --fail --location --output /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
