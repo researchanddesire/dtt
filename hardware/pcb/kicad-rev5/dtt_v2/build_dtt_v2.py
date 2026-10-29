@@ -237,7 +237,7 @@ two('C1', '10uF', 'C0805', 'C89827', P, 'VBUS', 'GND')
 part('U2', 'TP4054', 'SOT23-5', 'C32574', P, [
     ('1', 'CHRG', 'CHG_N'), ('2', 'GND', 'GND'), ('3', 'BAT', 'VBAT'),
     ('4', 'VCC', 'VBUS'), ('5', 'PROG', 'CHG_PROG')])
-two('R3', '2k', 'R0402', 'C5126028', P, 'CHG_PROG', 'GND')
+two('R3', '3.3k', 'R0402', 'C25890', P, 'CHG_PROG', 'GND')   # TP4054: 1000 V / R = 300 mA, 0.76C for the 702035
 two('R4', '10k', 'R0402', 'C25744', P, 'CHG_N', '+3V3')
 two('C2', '10uF', 'C0805', 'C89827', P, 'VBAT', 'GND')
 part('J2', 'Battery', 'PH2', 'C295747', P, [

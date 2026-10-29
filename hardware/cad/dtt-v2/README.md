@@ -82,8 +82,6 @@ python3 hardware/cad/dtt-v2/render_dtt_v2.py
 
 ## Open items
 
-- The battery isn't chosen yet; the case is drawn for a 702035. Each 1 mm
-  of battery thickness is 1 mm of device thickness.
 - Panel glass outline (36 x 52 mm) and FPC exit are assumed until a sample
   arrives.
 - The screws reach 2.5 mm into the front shell bosses. Check they hold.
