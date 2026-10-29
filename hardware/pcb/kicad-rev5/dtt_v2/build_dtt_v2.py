@@ -28,6 +28,9 @@ PARAMS = {
     'screen_w': 36.0,          # 2.0 in 240x320 module outline, assumed
     'screen_h': 52.0,
     'origin': (100.0, 100.0),  # board top-left in KiCad coordinates
+    # Case screws: M2 self-tapping through the board into the front shell, at
+    # the corners outside the screen glass and the S3 module.
+    'holes': [(3.0, 2.5), (35.0, 2.5), (3.0, 61.5), (35.0, 61.5)],
 }
 
 # Nets routed 0.4 mm wide.
@@ -55,7 +58,7 @@ STD = {
     'S3': ('RF_Module', 'ESP32-S3-WROOM-1'),
     'USBC': ('Connector_USB', 'USB_C_Receptacle_HRO_TYPE-C-31-M-12'),
     'PH2': ('Connector_JST', 'JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal'),
-    'PH6': ('Connector_JST', 'JST_PH_S6B-PH-K_1x06_P2.00mm_Horizontal'),
+    'PH6': ('Connector_JST', 'JST_PH_S6B-PH-SM4-TB_1x06-1MP_P2.00mm_Horizontal'),  # SMD: no pins through the front, under the glass
     'FPC21': ('Connector_FFC-FPC', 'TE_2-1734839-1_1x21-1MP_P0.5mm_Horizontal'),
     'TACT': ('Button_Switch_SMD', 'SW_Push_1P1T_XKB_TS-1187A'),
 }
@@ -152,7 +155,7 @@ PLACE = {'J1': (34.0, 36.0, 270, 'B'),
     'Q1': (18.5, 43.0, 0, 'B'),
     'R5': (18.5, 45.5, 0, 'B'),
     'D1': (23.5, 44.5, 0, 'B'),
-    'U3': (14.0, 37.0, 0, 'B'),
+    'U3': (14.3, 37.0, 0, 'B'),
     'C3': (14.5, 40.2, 0, 'B'),
     'C4': (19.0, 37.0, 90, 'B'),
     'C5': (22.0, 37.0, 90, 'B'),
@@ -177,31 +180,33 @@ PLACE = {'J1': (34.0, 36.0, 270, 'B'),
     'R13': (20.5, 54.0, 0, 'B'),
     'R14': (3.5, 13.0, 90, 'B'),
     'R15': (5.0, 13.0, 90, 'B'),
-    'U5': (19.0, 61.5, 0, 'F'),
-    'C10': (23.0, 61.5, 90, 'F'),
-    'C11': (24.5, 61.5, 90, 'F'),
-    'R16': (15.0, 61.5, 90, 'F'),
-    'R17': (13.5, 61.5, 90, 'F'),
-    'U6': (15.0, 49.0, 0, 'B'),
-    'C12': (15.0, 46.5, 0, 'B'),
-    'C13': (12.0, 50.5, 90, 'B'),
+    # ToF in the bottom right corner of the front, beside the screen FPC (which
+    # wraps round the bottom edge at x 13 to 25) and clear of the H2 screw boss.
+    'U5': (29.0, 61.7, 0, 'F'),
+    'C10': (28.3, 62.0, 90, 'B'),
+    'C11': (29.8, 62.0, 90, 'B'),
+    'R16': (31.3, 62.0, 90, 'B'),
+    'R17': (28.3, 60.0, 90, 'B'),
+    'U6': (15.3, 49.0, 0, 'B'),
+    'C12': (15.3, 46.5, 0, 'B'),
+    'C13': (14.0, 52.2, 90, 'B'),
     'U7': (20.0, 49.0, 0, 'B'),
     'C14': (20.0, 46.8, 0, 'B'),
     'C15': (22.5, 49.0, 90, 'B'),
-    'J4': (7.0, 45.0, 90, 'B'),
-    'F1': (12.5, 53.0, 0, 'B'),
-    'U8': (10.8, 41.0, 90, 'B'),
-    'U9': (10.8, 46.0, 90, 'B'),
-    'R18': (12.0, 28.0, 0, 'B'),
-    'Q3': (12.5, 31.0, 0, 'B'),
-    'R19': (15.5, 28.0, 0, 'B'),
-    'R20': (15.5, 29.5, 0, 'B'),
-    'Q4': (16.5, 32.5, 0, 'B'),
-    'R21': (20.0, 28.0, 0, 'B'),
-    'Q5': (20.5, 31.0, 0, 'B'),
-    'R22': (23.5, 28.0, 0, 'B'),
-    'R23': (23.5, 29.5, 0, 'B'),
-    'Q6': (24.5, 32.5, 0, 'B')}
+    'J4': (7.0, 35.5, 90, 'B'),   # SMD PH6 is 17 mm long: above J2, left of the output drivers
+    'F1': (11.8, 54.2, 0, 'B'),
+    'U8': (11.5, 46.5, 90, 'B'),
+    'U9': (11.5, 50.7, 90, 'B'),
+    'R18': (14.0, 28.0, 0, 'B'),
+    'Q3': (14.5, 31.0, 0, 'B'),
+    'R19': (17.5, 28.0, 0, 'B'),
+    'R20': (17.5, 29.5, 0, 'B'),
+    'Q4': (18.5, 32.5, 0, 'B'),
+    'R21': (22.0, 28.0, 0, 'B'),
+    'Q5': (22.5, 31.0, 0, 'B'),
+    'R22': (25.5, 28.0, 0, 'B'),
+    'R23': (25.5, 29.5, 0, 'B'),
+    'Q6': (26.5, 32.5, 0, 'B')}
 
 
 def part(ref, value, fp, lcsc, sheet, pins, dnp=False):
@@ -345,7 +350,7 @@ two('C15', '100nF', 'C0402', 'C56392', U, '+3V3', 'GND')
 
 # Accessory port -------------------------------------------------------------
 A = 'port'
-part('J4', 'PH6 accessory', 'PH6', 'C157920', A, [
+part('J4', 'PH6 accessory', 'PH6', 'TBD', A, [
     ('1', 'GND', 'GND'), ('2', 'VSYS', 'VSYS_PORT'), ('3', 'OUT1', 'OUT1'),
     ('4', 'OUT2', 'OUT2'), ('5', 'SDA', 'I2C_SDA'), ('6', 'SCL', 'I2C_SCL')])
 part('F1', '0.5A PTC', 'F0805', 'C269104', A, [('1', '1', 'VSYS'), ('2', '2', 'VSYS_PORT')])
@@ -420,6 +425,7 @@ def build_footprints():
     s1 = (REV4 / '217A_dttrainer_rev4.pretty' / 'S1.kicad_mod').read_text()
     s1 = s1.replace('(footprint "S1"', '(footprint "SW_SPDT_JS102011JAQN"', 1)
     (pretty / 'SW_SPDT_JS102011JAQN.kicad_mod').write_text(s1)
+    shutil.copy(KICAD_FP / 'MountingHole.pretty' / 'MountingHole_2.2mm_M2.kicad_mod', pretty)
     shutil.copy(KICAD_FP / 'TestPoint.pretty' / 'TestPoint_Pad_D1.0mm.kicad_mod',
                 pretty / 'TestPoint_Pad_1.0mm.kicad_mod')
     t = (pretty / 'TestPoint_Pad_1.0mm.kicad_mod').read_text()
@@ -623,6 +629,16 @@ def build_board():
         netinfo[name] = ni
 
     pretty = str(HERE / f'{LIB}.pretty')
+    for i, (x, y) in enumerate(PARAMS['holes'], 1):   # board-only: no symbol, not in the BOM
+        fp = pcbnew.FootprintLoad(pretty, 'MountingHole_2.2mm_M2')
+        fp.SetFPID(pcbnew.LIB_ID(LIB, 'MountingHole_2.2mm_M2'))
+        fp.SetReference(f'H{i}')
+        fp.SetValue('M2 case screw')
+        fp.SetAttributes(fp.GetAttributes() | pcbnew.FP_BOARD_ONLY | pcbnew.FP_EXCLUDE_FROM_BOM
+                         | pcbnew.FP_EXCLUDE_FROM_POS_FILES)
+        board.Add(fp)
+        fp.SetPosition(pcbnew.VECTOR2I(mm(ox + x), mm(oy + y)))
+        fp.Reference().SetLayer(pcbnew.F_Fab)
     for p in PARTS:
         fpname = fp_id(p).split(':', 1)[1]
         fp = pcbnew.FootprintLoad(pretty, fpname)
@@ -651,6 +667,9 @@ def build_board():
             elif n and n not in pinnet and p['ref'] == 'U4' and n == '41':
                 pad.SetNet(netinfo['GND'])
         fp.SetPath(pcbnew.KIID_PATH(f'/{uid("sheet", p["sheet"])}/{uid("sym", p["ref"])}'))
+        for z in fp.Zones():   # the S3 module's own antenna keepout: copper only, so the
+            z.SetDoNotAllowFootprints(False)   # case-screw holes may sit beside it
+            z.SetDoNotAllowPads(False)
 
     # Antenna keepout across the top strip, both layers.
     ka = pcbnew.ZONE(board)

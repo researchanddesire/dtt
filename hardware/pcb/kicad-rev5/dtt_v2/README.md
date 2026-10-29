@@ -2,8 +2,9 @@
 
 ESP32-S3 board for the DTT v2: 2.0 in touch screen, VL53L4CD time-of-flight
 sensor, LSM6DSO + LIS3MDL 9DOF IMU, side PH6 accessory port. No LEDs, button
-or headphone jack. 38 x 64 mm (rev 4 is 44 x 92 mm). LCSC numbers on every
-part except the screen connector.
+or headphone jack. 38 x 64 mm (rev 4 is 44 x 92 mm) with four M2 case-screw
+holes. LCSC numbers on every part except the screen connector and the PH6
+header. The [case and cradle](../../../cad/dtt-v2/) are built around it.
 
 Status: routed, KiCad 9 DRC clean. Not yet reviewed or fabbed.
 
@@ -59,3 +60,7 @@ module's schematic:
   top-contact for now), glass outline (36 x 52 mm assumed).
 - Backlight is 3.3 V through 10 R, so not full brightness.
 - SW1 reuses the rev 4 footprint with its tight locating holes.
+- J4 is the surface-mount S6B-PH-SM4-TB (no pins through the front under the
+  glass); confirm its LCSC number before ordering.
+- The ToF sits at the bottom right of the front face, beside the screen FPC,
+  looking through a window in the case bezel.
