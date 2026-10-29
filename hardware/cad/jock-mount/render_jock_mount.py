@@ -22,13 +22,14 @@ def part(name, colour):
 
 mount = [part('mount-black', BLACK), part('mount-blue', BLUE)]
 case = [part(n, c) for n, c in CASE_PARTS.items()]
-pad, band = [part('pad', PAD)], [part('band', BAND)]
+pad, band, skin = [part('pad', PAD)], [part('band', BAND)], [part('body', [0.86, 0.72, 0.64])]
 front, rear = [-0.55, -0.35, -1], [0.55, -0.35, 1]
 views = {
     'Jock-Mount-Hero': (front, mount + case + pad + band, 1.0),
     'Jock-Mount-Part': (front, mount, 1.0),
     'Jock-Mount-Rear': (rear, mount + pad, 1.0),
-    'Jock-Mount-End': ([0, -1, 0.0001], mount + case + pad + band, 1.0),  # looking down from the waist
+    'Jock-Mount-End': ([0, -1, 0.0001], mount + case + pad + band + skin, 1.0),  # looking down from the waist
+    'Jock-Mount-Side': ([-1, 0, 0.0001], mount + case + pad + skin, 1.0),  # from the wearer's right
 }
 scenes = [{'out': os.path.join(IMG, n + '.png'), 'size': [1200, 1200], 'background': BG,
            'camera': {'dir': d, 'up': [0, 0, 1] if d[1] == -1 else [0, 1, 0], 'zoom': z}, 'parts': p}

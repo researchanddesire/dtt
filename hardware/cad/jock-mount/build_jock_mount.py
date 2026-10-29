@@ -43,12 +43,14 @@ PARAMS = {
     'EarRim': (3.2, 'design: outer bar the band wraps round'),
     'EarR': (4.0, 'design: convex ear corners'),
     'EarBlendR': (5.0, 'design: concave blend from the ear into the plate'),
-    'BodyR': (120.0, 'assumed: radius of the lower belly across the hips; the back wraps it. Measure a few wearers'),
+    'BodyR': (120.0, 'assumed: radius of the pubic mound and lower belly across the hips; the back wraps it. Measure a few wearers'),
+    'BodyRLong': (300.0, 'assumed: radius of the mound from the penis base up to the belly (sagittal); the back wraps it too'),
+    'BodyApexY': (50.0, 'assumed: where the back touches the mound first, mid plate; above and below it the back curves away'),
     'PadT': (3.0, 'design: adhesive-backed EVA or neoprene foam, or a TPU 95A print of the pad'),
     'PadInset': (1.5, 'design: pad edge inside the plate edge, so the bed chamfer and the edge stay clean'),
-    'PadSlotClear': (1.5, 'design: pad kept back from the band slots'),
     'PadLeverClear': (1.0, 'design: pad notch round the lever and its slots, so the tab can still be pressed'),
     'PadNotchR': (2.0, 'design: notch corners'),
+    'RootEdgeR': (3.0, 'design: round along the back of the bottom edge, which sits on the base of the penis'),
 }
 J = {k: v for k, (v, _) in PARAMS.items()}
 PLATE_COLOUR, TOUCH_COLOUR = S.PLATE_COLOUR, S.TOUCH_COLOUR
@@ -111,21 +113,29 @@ def printed_part():
     # still flexes and has room to be pressed.
     fill = S.plan_face().translated(V(0, 0, -20)).extrude(V(0, 0, 20.01)).cut(body())
     fill = fill.cut(lever_keepout(0.5).extrude(V(0, 0, 40)))
+    ye = S.y_end()                                        # the back of the bottom edge, on the body
+    root = [e for e in fill.Edges if e.BoundBox.YMax < ye + 0.3 and e.BoundBox.ZMax < zr - 0.3]
+    fill = S.try_fillet(fill, root, (J['RootEdgeR'], J['RootEdgeR'] / 2), 'bottom edge, body side')
     part = base.fuse([plate, fill]).removeSplitter()
     return part.cut([rounded_rect(x0, x1, y0, y1, zr - 20, J['SlotR']).extrude(V(0, 0, t + 40))
                      for x0, x1, y0, y1 in slots]).removeSplitter()
 
 
+def _torus(r):
+    """The wearer's mound and belly, grown outwards by r: a torus about an axis along X, so the back curves
+    BodyR across the hips and BodyRLong from the penis base up, touching the plate rear at BodyApexY."""
+    R, Rl = J['BodyR'], J['BodyRLong']
+    c = V(S.P['DeviceCx'], J['BodyApexY'], S.z_rear() - Rl)
+    return Part.makeTorus(Rl - R, R + r, c, V(1, 0, 0))
+
+
 def body():
-    """The wearer's belly as a cylinder along Y, touching the plate rear on the centreline."""
-    zr = S.z_rear(); R = J['BodyR']
-    return Part.makeCylinder(R, 2 * S.FAR, V(S.P['DeviceCx'], -S.FAR, zr - R), V(0, 1, 0))
+    return _torus(0.0)
 
 
 def shell(z0, z1):
     """The space z0..z1 out from the body surface (measured along its normal)."""
-    zr = S.z_rear(); R = J['BodyR']; c = V(S.P['DeviceCx'], -S.FAR, zr - R)
-    return Part.makeCylinder(R + z1, 2 * S.FAR, c, V(0, 1, 0)).cut(Part.makeCylinder(R + z0, 2 * S.FAR, c, V(0, 1, 0)))
+    return _torus(z1).cut(_torus(z0))
 
 
 def lever_keepout(clear):
@@ -136,15 +146,11 @@ def lever_keepout(clear):
 
 
 def pad_face():
-    """The foam pad in plan: the rear outline inset, kept back from the band slots and notched round the
+    """The foam pad in plan: the plate outline inset, without the band ears, and notched round the
     lever. It is also the cutting template; on the curve the pad is about 2 % longer across, which the
     foam takes up."""
-    zr = S.z_rear(); _, slots = ears_and_slots(); c = J['PadSlotClear']
-    f = S.ENC.offset_face(outline(), -J['PadInset'])
-    cuts = [lever_keepout(J['PadLeverClear']).translated(V(0, 0, 30))]
-    cuts += [rounded_rect(x0 - c, x1 + c, y0 - c, y1 + c, zr, J['SlotR'] + c) for x0, x1, y0, y1 in slots]
-    for k in cuts:
-        f = f.cut(k)
+    f = S.ENC.offset_face(S.plan_face(), -J['PadInset'])   # under the plate only, not round the band ears
+    f = f.cut(lever_keepout(J['PadLeverClear']).translated(V(0, 0, 30)))
     assert len(f.Faces) == 1
     return f.Faces[0]
 
@@ -187,10 +193,16 @@ def checks(doc, printed, black, blue, foam):
             x1 - x0, y1 - y0, hole.common(foam).Volume, hole.common(printed).Volume))
     lever = box(S.P['LatchX0'], S.P['LatchX1'], S.P['LatchRootY'], S.FAR, zr - 10, zr)
     print('CHECK pad clear of the lever: overlap %.4f mm3' % lever.common(foam).Volume)
+    for y, what in ((S.y_end() + 1, 'bottom edge, on the penis base'), (J['BodyApexY'], 'apex'),
+                    (S.plate_top() - 1, 'lever tab, room to press')):
+        seg = Part.LineSegment(V(S.P['DeviceCx'], y, zr - 30), V(S.P['DeviceCx'], y, zr + 1)).toShape()
+        low = min(v.Point.z for v in seg.common(printed).Vertexes)
+        gap = body().distToShape(Part.Vertex(V(S.P['DeviceCx'], y, low)))[0]
+        print('CHECK centreline at Y %.0f (%s): back %.2f mm off the body' % (y, what, gap))
     eb = Part.makeCompound([doc.getObject(n).Shape for n in S.MODULE_PARTS]).BoundBox
-    bb = printed.BoundBox
-    print('CHECK worn: %.1f x %.1f mm, %.1f mm from the body to the case front (pad included)' % (
-        bb.XLength, bb.YLength, eb.ZMax - (zr - J['PadT'])))
+    bb = printed.optimalBoundingBox()   # tori give loose plain bounding boxes
+    print('CHECK worn: %.1f x %.1f x %.1f mm, %.1f mm from the body to the case front (pad included)' % (
+        bb.XLength, bb.YLength, bb.ZLength, eb.ZMax - (zr - J['PadT'])))
 
 
 def tagged(doc, name, label, shape, colour):
@@ -235,7 +247,9 @@ def main():
     pd = App.newDocument('JockPad'); pf = pd.addObject('Part::Feature', 'Pad')
     pf.Shape = Part.Compound(pad_face().translated(V(0, 0, -S.z_rear())).Wires)
     pd.recompute(); importDXF.export([pf], stem + '-Pad.dxf'); App.closeDocument(pd.Name)
-    for shape, name in ((black, 'mount-black'), (blue, 'mount-blue'), (foam, 'pad'), (band, 'band')):
+    cx = S.P['DeviceCx']                                  # a patch of the wearer, for the side preview
+    skin = shell(-J['PadT'] - 12, -J['PadT']).common(box(cx - 95, cx + 95, -45, 150, S.z_rear() - 45, S.z_rear()))
+    for shape, name in ((black, 'mount-black'), (blue, 'mount-blue'), (foam, 'pad'), (band, 'band'), (skin, 'body')):
         mesh(shape, os.path.join(BUILD, name + '.stl'))
     for n in S.MODULE_PARTS:
         mesh(doc.getObject(n).Shape, os.path.join(BUILD, n + '.stl'), fine=False)

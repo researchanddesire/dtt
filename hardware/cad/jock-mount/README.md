@@ -3,13 +3,15 @@
 The snap backplate's cradle, worn on a jockstrap waistband. The case sits on the
 pubic mound with the jack end down, so the distance sensor looks straight out
 over the base of the penis and measures the partner's head moving up and down.
-The back curves round the body.
+The back is curved to sit on the pubic mound: 120 mm across the hips and
+300 mm from the penis base up. It can be used to measure fellatio, or the
+wearer's own hand.
 
 ![Hero](images/Jock-Mount-Hero.png)
 
-| Mount | Body side | From the waist |
-| --- | --- | --- |
-| ![Part](images/Jock-Mount-Part.png) | ![Rear](images/Jock-Mount-Rear.png) | ![End](images/Jock-Mount-End.png) |
+| Mount | Body side | From the side | From the waist |
+| --- | --- | --- | --- |
+| ![Part](images/Jock-Mount-Part.png) | ![Rear](images/Jock-Mount-Rear.png) | ![Side](images/Jock-Mount-Side.png) | ![End](images/Jock-Mount-End.png) |
 
 ## Use
 
@@ -24,7 +26,9 @@ The back curves round the body.
 - **Mount:** rear face down, with tree supports under the curved back, at least
   4 walls. For two colours, load the `-Black` and `-Blue` STLs as one object.
 - **Pad:** cut 3 mm adhesive-backed EVA or neoprene foam with the `-Pad.dxf`
-  template, or print `-Pad.stl` flat in TPU 95A. It's optional.
+  template, or print `-Pad.stl` flat in TPU 95A. It's optional. It only covers
+  the back of the plate, not the band ears, so it can't peel where the band
+  wraps.
 
 The files are in
 [production-exports/cad/jock-mount](../../production-exports/cad/jock-mount/).
@@ -39,8 +43,8 @@ for the images.
 
 ## Check on a test print and a wearer
 
-- Body curve (`BodyR`, assumed 120 mm).
+- Body curve (`BodyR`, `BodyRLong` and `BodyApexY` are all assumed).
 - Band slot fit on a real jockstrap (`BandW`, `SlotT`).
-- Whether the sensor sees the head and not the shaft or the pouch at this
-  height. Try `BandY`, or wear it higher on the band.
+- Whether the sensor sees the head and not the shaft. An erect shaft angled up
+  could cross the beam.
 - Comfort with and without the pad (`PadT`).
