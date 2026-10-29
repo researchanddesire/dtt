@@ -41,8 +41,11 @@ PARAMS = {
     'ActiveBottom': (8.0, 'assumed: driver-IC border at the FPC end'),
     'FpcW': (13.0, 'assumed: tail into the 21-pin connector'),
     # ToF
-    'TofXY': ((10.0, 2.3), 'board: U5, front, bottom right'), 'TofBody': ((4.4, 2.4, 1.75), 'VL53L4CD'),
-    'TofHoleD': (3.6, 'design: window through the bezel; the 18 deg field needs 2.3 at the glass'),
+    'TofXY': ((10.0, 2.3), 'board: U5, front, bottom right'), 'TofBody': ((4.4, 2.4, 1.0), 'VL53L4CD datasheet: 4.4 x 2.4 x 1.0'),
+    'TofWin': ((5.4, 2.8), 'design: pill window at the bezel underside, long axis along the sensor'),
+    'TofWinTaper': (20.0, 'design: window walls open outward, deg'),
+    'TofApert': (1.3, 'estimate: emitter and receiver within 1.3 of the sensor centre, 0.3 radius'),
+    'TofCone': (12.0, 'design: checked half-angle, the 18 deg field (9 deg half) plus 3 deg margin'),
     # battery: rev 4 uses a 702035 LiPo; a 502035 drops the case by 2 mm
     'BatT': (7.0, 'rev 4 battery 702035'), 'BatW': (20.0, 'rev 4 battery'), 'BatL': (35.0, 'rev 4 battery'),
     'BatY0': (14.5, 'design: centred on the board length, clear of the FPC connector and the top end'),
@@ -417,6 +420,25 @@ def build_slider():
     return s.removeSplitter()
 
 
+def tof_window(z0, z1):
+    tx, ty = P['TofXY']
+    (L, W), g = P['TofWin'], math.tan(math.radians(P['TofWinTaper']))
+    za, zb = z0 - 0.3, z1 + 0.3
+    grow = lambda z: (z - z0) * g
+    pill = lambda z: rounded_rect(tx - L / 2 - grow(z), ty - W / 2 - grow(z), tx + L / 2 + grow(z),
+                                  ty + W / 2 + grow(z), W / 2 + grow(z), z).OuterWire
+    return Part.makeLoft([pill(za), pill(zb)], True)
+
+
+def tof_cones(height=4.0):
+    """The ToF emitter and receiver fields, as cones from the sensor top, for the clearance check."""
+    tx, ty = P['TofXY']
+    a, r = P['TofApert'], 0.3
+    z = P['TofBody'][2]
+    t = math.tan(math.radians(P['TofCone']))
+    return [Part.makeCone(r, r + height * t, height, V(tx + dx, ty, z)) for dx in (-a, a)]
+
+
 def front_shell():
     x, y0, y1 = P['CaseX'], P['CaseY0'], P['CaseY1']
     zt, zs, w = P['TopZ'], P['SeamZ'], P['Wall']
@@ -446,11 +468,8 @@ def front_shell():
     s = s.fuse(adds).removeSplitter()
     for hx, hy in P['Holes']:
         s = s.cut(cyl(P['PilotD'], hx, hy, -1.0, P['PilotDepth']))
-    # ToF window with a countersink
-    tx, ty = P['TofXY']
-    d = P['TofHoleD']
-    s = s.cut(cyl(d, tx, ty, plate_bottom - 1, zt + 1))
-    s = s.cut(Part.makeCone(d / 2, d / 2 + 0.7, 0.7, V(tx, ty, zt - 0.7 + 0.001)))
+    # ToF window: a pill slot whose walls open outward, wide enough that the bezel never clips the field
+    s = s.cut(tof_window(plate_bottom, zt))
     # lip joint: the rear cover's lip rises inside the front shell wall along the long sides
     lt, lh, lc = P['LipT'], P['LipH'], P['LipClear']
     for sx in (-1, 1):
@@ -810,6 +829,9 @@ def main():
         print('CHECK %s vs board and parts: overlap %.3f mm3' % (label, overlap(s, pcb_all)))
         print('CHECK %s vs glass: overlap %.3f mm3, vs battery %.3f' % (label, overlap(s, g), overlap(s, bat)))
     print('CHECK front shell vs rear cover: overlap %.3f mm3' % overlap(front, rear))
+    cones = Part.makeCompound(tof_cones())
+    print('CHECK ToF field (%.0f deg half-angle) vs front shell %.3f, glass %.3f mm3' % (
+        P['TofCone'], overlap(cones, front), overlap(cones, g)))
     print('CHECK rear icon vs rear cover: overlap %.3f mm3, flush %s' % (
         overlap(icon, rear), abs(icon.BoundBox.ZMin - rear.BoundBox.ZMin) < 1e-6))
     hx, hy, plunger, _ = pin_geom()

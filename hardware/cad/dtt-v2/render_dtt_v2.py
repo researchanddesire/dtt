@@ -57,6 +57,8 @@ def main():
         scene('DTT-v2-Section-Switch.png', CASE + INSIDE,
               {'dir': [0.25, 1.0, -0.55], 'up': [0, 0, 1], 'center': [0, 16, -5], 'zoom': 1.6}, (1400, 900),
               prefix='secy_'),
+        scene('Detail-ToF-Window.png', CASE + ['glass', 'active', 'pcb', 'models', 'proxies'],
+              {'dir': [-0.3, 0.45, -1.0], 'up': UP_Y, 'center': [10, 2.3, 3.0], 'zoom': 4.5}, (900, 700)),
         scene('Detail-Boot-Pin.png', CASE + ['screws'],
               {'dir': [0.3, -0.35, 1.0], 'up': UP_Y, 'center': [-14, 42.5, -13.5], 'zoom': 4.0}, (900, 800)),
         scene('Section-Boot-Pin.png', CASE + INSIDE,

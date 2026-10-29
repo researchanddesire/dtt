@@ -34,8 +34,9 @@ with a blue switch cover, and the cradle it slides into.
   hole in the white arrow on the back and switch on while holding it. A tube
   inside guides the clip onto the button.
 - The battery lies behind USB-C and the module, on two ribs in the rear cover.
-- The ToF looks out through a 3.6 mm countersunk window at the bottom right
-  of the bezel.
+- The ToF looks out through a pill-shaped window at the bottom right of the
+  bezel. Its walls open outward, so the bezel stays clear of the sensor's 18°
+  field out to about 26° off axis.
 - Cradle: 46 x 88 mm, no wider than the case needs. Slide the case in bottom
   end first, under the hood, until the lever clicks behind its top end. Press
   the blue tab toward the wall to release. The walls are low beside USB-C, the
@@ -81,9 +82,8 @@ python3 hardware/cad/dtt-v2/render_dtt_v2.py
 
 ## Open items
 
-- Thickness is set by the 7 mm battery behind USB-C. A 502035 (5 mm, 250 mAh)
-  makes the device 15.4 mm.
-- ToF sight line through the bezel window: check on the first print.
+- The battery isn't chosen yet; the case is drawn for a 702035. Each 1 mm
+  of battery thickness is 1 mm of device thickness.
 - Panel glass outline (36 x 52 mm) and FPC exit are assumed until a sample
   arrives.
 - The screws reach 2.5 mm into the front shell bosses. Check they hold.

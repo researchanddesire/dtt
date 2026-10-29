@@ -59,6 +59,8 @@ module's schematic:
 - Check on a panel sample: LEDA/LEDK order, FPC contact side (J3 is
   top-contact for now), glass outline (36 x 52 mm assumed).
 - Backlight is 3.3 V through 10 R, so not full brightness.
+- R3 sets the charge current: 2k gives 500 mA, above 1C for every cell that fits.
+  Size it for the chosen battery (about 0.8C).
 - SW1 reuses the rev 4 footprint with its tight locating holes.
 - J4 is the surface-mount S6B-PH-SM4-TB (no pins through the front under the
   glass); confirm its LCSC number before ordering.
