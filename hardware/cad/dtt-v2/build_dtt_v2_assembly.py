@@ -79,7 +79,7 @@ PARAMS = {
     'SliderClear': (0.15, 'design'), 'FlangeT': (0.7, 'design: between the switch body (X 18.5) and the wall'),
     'FlangeMargin': (0.9, 'design: flange past the window'),
     # cradle: plate the case slides into, held by lips over its top round, a hood over the bottom end and
-    # a release lever whose teeth catch the top end; three suction cups in keyholes
+    # a release lever whose teeth catch the top end; two suction cups in keyholes on the centreline
     'RestGap': (1.0, 'design: plate front to the case rear'), 'PlateT': (6.0, 'design'),
     'WallClear': (0.2, 'design'), 'RailT': (2.0, 'design'),
     'WallTopAbove': (1.2, 'design: wall top above the bezel'), 'HookEngage': (0.6, 'design: lip reach over the case'),
@@ -90,18 +90,22 @@ PARAMS = {
     'PortGapL': ((19.0, 38.0), 'design: left wall low over the PH6 port'),
     'SwoopY0': (50.0, 'design: wall top starts to fall'), 'SwoopY1': (63.0, 'design: wall reaches the plate'),
     'PlateTop': (83.0, 'design: 17 past the case top end, room for the press tab'),
-    'TopCupX': (24.0, 'design: upper cups either side of the lever'), 'TopCupDrop': (13.0, 'design'),
-    'LowCupY': (24.0, 'design: under the case'), 'TopSlot': (12.0, 'design'), 'LowSlot': (12.0, 'design'),
-    'WingWeb': (6.0, 'design'), 'FlareR': (12.0, 'design'), 'CornerR': (6.0, 'design'),
+    'LowCupY': (14.0, 'design: lower cup snap point; its disc ends 1.8 inside the plate bottom'),
+    'CupEntry': ((12.0, -12.0), 'design: entry offset from the snap, lower / upper cup. The lower cup slides down '
+                 'to lock and the upper one up, so on the wall the plate is held both ways without the clicks'),
+    'TongueX': (9.4, 'design: half width of the fixed tongue inside the lever that carries the upper cup '
+                '(entry 15.6 plus 1.6 webs)'),
+    'TongueTop': (72.0, 'design: tongue free end, just under the press tab'), 'TongueWeb': (1.6, 'design'),
+    'CornerR': (6.0, 'design'),
     'EdgeR': (1.0, 'design'), 'BedChamfer': (0.6, 'design'),
     'KeyEntryD': (15.6, 'rev 4'), 'KeySlotW': (8.9, 'rev 4'), 'KeySnapD': (8.4, 'rev 4'), 'KeySnapWrap': (190.0, 'rev 4'),
     'KeySnapLead': (1.5, 'rev 4'), 'KeyLandT': (2.4, 'rev 4'),
     'CupD': (35.0, 'rev 4'), 'CupDepth': (14.0, 'rev 4'), 'StemD': (15.0, 'rev 4'), 'StemLen': (3.0, 'rev 4'),
     'GrooveD': (8.5, 'rev 4'), 'GrooveH': (2.5, 'rev 4'), 'HeadT': (3.0, 'rev 4'), 'StemSeat': (0.1, 'rev 4'),
-    'LatchX': (13.0, 'design: lever half width'), 'LatchRootY': (44.0, 'design'), 'LatchSlot': (1.5, 'design'),
+    'LatchX': (15.3, 'design: lever half width; the arms run from the tongue slots out to here, 0.2 short of the ledges'), 'LatchRootY': (44.0, 'design'), 'LatchSlot': (1.5, 'design'),
     'LatchReliefD': (2.5, 'design'), 'LatchT': (2.0, 'design: flex zone, thinned from the front'),
     'LatchRootRamp': (6.0, 'design'), 'LatchFlexEndY': (62.0, 'design'),
-    'ToothX': (((-12.0, -7.0), (7.0, 12.0)), 'design: two teeth on the press tab'),
+    'ToothX': (((-15.0, -11.2), (11.2, 15.0)), 'design: a tooth on each lever arm'),
     'ToothRise': (3.0, 'design: catches the top end face above its rear chamfer'), 'ToothClear': (0.2, 'design'),
     'ToothFlat': (1.0, 'design'), 'RampAngle': (30.0, 'design'),
     'GripN': (4, 'design'), 'GripPitch': (2.0, 'design'), 'GripW': (1.0, 'design'), 'GripDepth': (0.9, 'design'),
@@ -473,25 +477,20 @@ def y_end():
 
 
 def cup_centres():
-    yt = P['PlateTop'] - P['TopCupDrop']
-    return {'UL': (-P['TopCupX'], yt), 'UR': (P['TopCupX'], yt), 'L': (0.0, P['LowCupY'])}
+    yu = P['TongueTop'] - P['TongueWeb'] - P['KeyEntryD'] / 2
+    return {'L': (0.0, P['LowCupY']), 'U': (0.0, yu)}
 
 
 def entry_centre(key):
     sx, sy = cup_centres()[key]
-    return sx, sy - (P['TopSlot'] if key != 'L' else P['LowSlot'])
+    return sx, sy + P['CupEntry'][0 if key == 'L' else 1]
 
 
 def plan_face():
     zr = z_rear()
     top = P['PlateTop']
     xl, xr = -outer_x(), outer_x()
-    re = P['KeyEntryD'] / 2 + P['WingWeb']
-    (ulx, uly), (urx, _) = entry_centre('UL'), entry_centre('UR')
-    t = 1.0
-    parts = [box(xl, xr, y_end(), top, zr, zr + t), box(ulx - re, urx + re, uly, top, zr, zr + t),
-             cyl(2 * re, ulx, uly, zr, zr + t), cyl(2 * re, urx, uly, zr, zr + t)]
-    return round_face(flat_face(parts, zr), P['FlareR'], P['CornerR'])
+    return round_face(flat_face([box(xl, xr, y_end(), top, zr, zr + 1.0)], zr), 0, P['CornerR'])
 
 
 def wall_profile(y):
@@ -602,8 +601,9 @@ def keyholes():
     yl = ym + P['KeySnapLead']
     for key, (sx, sy) in cup_centres().items():
         ex, ey = entry_centre(key)
-        slot = prism([(sx - w, ey), (sx + w, ey), (sx + w, sy - yl), (sx + m, sy - ym), (sx + m, sy),
-                      (sx - m, sy), (sx - m, sy - ym), (sx - w, sy - yl)], zr - 1, zf + 1)
+        d = 1 if ey < sy else -1                    # +1: the cup slides up into its snap, -1: down
+        slot = prism([(sx - w, ey), (sx + w, ey), (sx + w, sy - d * yl), (sx + m, sy - d * ym), (sx + m, sy),
+                      (sx - m, sy), (sx - m, sy - d * ym), (sx - w, sy - d * yl)], zr - 1, zf + 1)
         cut += [cyl(2 * re, sx, ey, zr - 1, zf + 1), cyl(2 * rp, sx, sy, zr - 1, zf + 1), slot,
                 cyl(2 * re, sx, sy, zl, zf + 1), box(sx - re, sx + re, ey, sy, zl, zf + 1)]
     return cut
@@ -635,20 +635,33 @@ def tooth_profile():
     z_r = P['RearZ'] - 0.5
     yr = yf + (zt - z_r) / math.tan(math.radians(P['RampAngle']))
     yb = yr + (z_r - zt0)
-    return [(ys, zt0), (ys, zt), (yf, zt), (yr, z_r), (yb, zt0)]
+    prof = [(ys, zt0), (ys, zt), (yf, zt), (yr, z_r), (yb, zt0)]
+    # the hinge's ramp back up to the plate front ends under the tooth: carry the tooth's foot down onto it
+    zh, ye, ramp = z_rear() + P['LatchT'], P['LatchFlexEndY'], P['LatchRootRamp']
+    if ys < ye + ramp:
+        zlow = max(zh, zh + (ys - ye) / ramp * (z_front() - zh)) - 0.1
+        prof = [(ys, zlow)] + prof[1:] + [(ye + ramp, zt0)]
+    return prof
 
 
 def latch_cut():
+    """The lever is a U: two arms from the root, joined by the press tab at the plate top edge. The fixed
+    tongue between the arms carries the upper cup, so the cup never rides on the lever."""
     zf, zr = z_front(), z_rear()
     g, y0, xh = P['LatchSlot'], P['LatchRootY'], P['LatchX']
+    xt, yt = P['TongueX'], P['TongueTop']
     rr = P['LatchReliefD'] / 2
     cuts = []
-    for xa in (-xh - g, xh):
+    for xa in (-xh - g, xh):                       # outer slots, open at the top edge
         cuts += [box(xa, xa + g, y0, FAR, zr - 1, zf + 1), cyl(2 * rr, xa + g / 2, y0, zr - 1, zf + 1)]
+    for xa in (-xt - g, xt):                       # tongue slots
+        cuts += [box(xa, xa + g, y0, yt + g, zr - 1, zf + 1), cyl(2 * rr, xa + g / 2, y0, zr - 1, zf + 1)]
+    cuts.append(box(-xt - g, xt + g, yt, yt + g, zr - 1, zf + 1))   # across the tongue end
     zt = zr + P['LatchT']
     ramp, ye = P['LatchRootRamp'], P['LatchFlexEndY']
-    cuts.append(prism_yz([(y0, zf), (y0 + ramp, zt), (ye, zt), (ye + ramp, zf), (ye + ramp, zf + 1), (y0, zf + 1)],
-                         -xh, xh))
+    hinge = [(y0, zf), (y0 + ramp, zt), (ye, zt), (ye + ramp, zf), (ye + ramp, zf + 1), (y0, zf + 1)]
+    for xa, xb in ((-xh, -xt - g), (xt + g, xh)):  # thin hinges in the arms only
+        cuts.append(prism_yz(hinge, xa, xb))
     y = max(y for y, _ in tooth_profile()) + 1.2
     r = P['GripW'] / 2
     zb = zf - P['GripDepth'] + r
@@ -664,7 +677,7 @@ def latch_teeth():
     teeth = []
     for xa, xb in P['ToothX']:
         t = prism_yz(prof, xa, xb)
-        sides = [e for e in t.Edges if abs(e.BoundBox.XMax - e.BoundBox.XMin) < 1e-6 and e.BoundBox.ZMax > prof[0][1] + 0.01]
+        sides = [e for e in t.Edges if abs(e.BoundBox.XMax - e.BoundBox.XMin) < 1e-6 and e.BoundBox.ZMax > z_front() + 0.01]
         teeth.append(try_fillet(t, sides, (0.5,), 'tooth'))
     return teeth
 
@@ -761,6 +774,9 @@ def main():
     print('CHECK lips: case lifted 0.5 mm meets them, %.1f mm3' % lift)
     for k, cup in cups.items():
         print('CHECK cup %s vs rear cover: %.3f mm3, gap %.2f' % (k, overlap(cup, rear), cup.distToShape(rear)[0]))
+    (lx, ly), (ux, uy) = cup_centres()['L'], cup_centres()['U']
+    print('CHECK cups: %.1f mm apart, %.1f mm between the discs; discs %.1f to %.1f in Y, plate %.1f to %.1f' % (
+        uy - ly, uy - ly - P['CupD'], ly - P['CupD'] / 2, uy + P['CupD'] / 2, y_end(), P['PlateTop']))
 
     if os.environ.get('DTT_CHECK_ONLY'):
         print('done (checks only)')

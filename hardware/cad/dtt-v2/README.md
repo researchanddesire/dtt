@@ -29,11 +29,17 @@ with a blue switch cover, and the cradle it slides into.
 - The battery lies behind USB-C and the module, on two ribs in the rear cover.
 - The ToF looks out through a 3.6 mm countersunk window at the bottom right
   of the bezel.
-- Cradle: slide the case in bottom end first, under the hood, until the lever
-  clicks behind its top end. Press the blue tab toward the wall to release.
-  Three suction cups click into the keyholes from behind. The walls are low
-  beside USB-C, the switch and the PH6 port; the switch grip rides in a groove
-  along the right wall on the way out.
+- Cradle: 46 x 88 mm, no wider than the case needs. Slide the case in bottom
+  end first, under the hood, until the lever clicks behind its top end. Press
+  the blue tab toward the wall to release. The walls are low beside USB-C, the
+  switch and the PH6 port; the switch grip rides in a groove along the right
+  wall on the way out.
+- Two suction cups sit in line down the middle, both hidden behind the
+  cradle. Fit them before the case: push each head through its round hole and
+  slide it into the small end until it clicks. The lower cup slides down and
+  the upper one up, so on the wall the cradle can't shift either way. The
+  upper cup sits on a fixed tongue inside the U-shaped lever, so pressing the
+  tab never pulls on it.
 
 ## Print
 
@@ -50,7 +56,7 @@ with a blue switch cover, and the cradle it slides into.
 | --- | --- |
 | 4 | M2 x 16 flat head self-tapping screw |
 | 1 | 702035 LiPo, 7 x 20 x 35 mm, 400 mAh, PH 2.0 plug |
-| 3 | Suction cup, 15 mm head on an 8.5 mm neck (as the rev 4 backplate) |
+| 2 | Suction cup, 35 mm, 15 mm head on an 8.5 mm neck (as the rev 4 backplate) |
 
 ## Source
 
