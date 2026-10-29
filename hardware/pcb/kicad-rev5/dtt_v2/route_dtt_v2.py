@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 PCB = HERE / 'dtt_v2.kicad_pcb'
 
 RES = 0.05                 # grid pitch, mm
+PAD = 1.0                  # grid margin around the board, mm
 MARGIN = 0.04              # extra clearance for grid rounding, mm
 CLEARANCE = 0.2
 EDGE_CLEARANCE = 0.3
@@ -58,10 +59,11 @@ def edt(mask):
 
 class Grid:
     def __init__(self, board):
+        # PAD of grid outside the board, so the straight edges are obstacles too.
         bb = board.GetBoardEdgesBoundingBox()
-        self.ox, self.oy = pcbnew.ToMM(bb.GetX()), pcbnew.ToMM(bb.GetY())
-        self.W = int(round(pcbnew.ToMM(bb.GetWidth()) / RES))
-        self.H = int(round(pcbnew.ToMM(bb.GetHeight()) / RES))
+        self.ox, self.oy = pcbnew.ToMM(bb.GetX()) - PAD, pcbnew.ToMM(bb.GetY()) - PAD
+        self.W = int(round((pcbnew.ToMM(bb.GetWidth()) + 2 * PAD) / RES))
+        self.H = int(round((pcbnew.ToMM(bb.GetHeight()) + 2 * PAD) / RES))
 
     def px(self, x, y):           # mm -> pixel coordinates (float)
         return ((x - self.ox) / RES - 0.5, (y - self.oy) / RES - 0.5)
@@ -206,14 +208,8 @@ class Router:
         self.width[code] = width
         pads = self.pads[code]
         bt, bv = self.hard(code, width)
-        if width > NARROW:
-            # Neck down to NARROW near the net's own pads (fine-pitch parts).
-            bn, _ = self.hard(code, NARROW)
-            near = np.stack([edt(m) < NECK for m in np.any(pads, axis=0)])
-            neck = bt & ~bn & near
-            bt &= ~neck
-        else:
-            neck = np.zeros_like(bt)
+        neck = self.neck_mask(code, width)
+        bt &= ~neck
         self.neck[code] = neck
         st, sv = self.soft_necked(code)
         cost = self.hist + pres * st
@@ -235,6 +231,27 @@ class Router:
                     connected.append(i)
                     tree |= pads[i]
         return paths
+
+    def neck_mask(self, code, width):
+        """Cells where a wide net may neck down to NARROW: near its own pads
+        (fine-pitch parts), where only the wide track would be blocked."""
+        bt, _ = self.hard(code, width)
+        if width <= NARROW:
+            return np.zeros_like(bt)
+        bn, _ = self.hard(code, NARROW)
+        near = np.stack([edt(m) < NECK for m in np.any(self.pads[code], axis=0)])
+        return bt & ~bn & near
+
+    def blocked_cells(self, code):
+        """Path cells of this net that sit on a hard obstacle."""
+        bt, bv = self.hard(code, self.width[code])
+        bt &= ~self.neck[code]
+        bad = []
+        for path in self.paths[code]:
+            for i, (l, x, y) in enumerate(path):
+                if bt[l, y, x] or (i and path[i - 1][0] != l and bv[y, x]):
+                    bad.append((l, x, y))
+        return bad
 
     def seg_width(self, code, l, x, y):
         return NARROW if self.neck[code][l, y, x] else self.width[code]
@@ -270,8 +287,7 @@ class Router:
                     bad.append((l, x, y))
         return bad
 
-    def negotiate(self, order, name, todo=None):
-        pres = PRES0
+    def negotiate(self, order, name, todo=None, pres=PRES0):
         todo = list(order if todo is None else todo)
         for rnd in range(ROUNDS):
             for c in todo:
@@ -355,9 +371,10 @@ def octilinear(p, q, diag_first):
     return out
 
 
-def drop_via_hops(path, free):
+def drop_via_hops(path, free, pinned):
     """Undo a short hop to the other layer and back (its two vias would sit
-    closer than the hole-to-hole rule) when the original layer is clear."""
+    closer than the hole-to-hole rule) when the original layer is clear and
+    no other path of the net branches off inside the hop."""
     path = list(path)
     changes = [k for k in range(1, len(path)) if path[k][0] != path[k - 1][0]]
     for a, b in zip(changes, changes[1:]):
@@ -366,10 +383,11 @@ def drop_via_hops(path, free):
             continue
         outer = path[a - 1][0]
         hop = path[a:b]
-        if path[b][0] == outer and all(free[outer, y, x] for _, x, y in hop):
+        if path[b][0] == outer and not (set(hop) & pinned) \
+                and all(free[outer, y, x] for _, x, y in hop):
             path[a:b] = [(outer, x, y) for _, x, y in hop]
             path = [p for k, p in enumerate(path) if k == 0 or p != path[k - 1]]
-            return drop_via_hops(path, free)
+            return drop_via_hops(path, free, pinned)
     return path
 
 
@@ -386,7 +404,7 @@ def smooth(r, code):
     pinned = {p[0] for p in r.paths[code]} | {p[-1] for p in r.paths[code]}
     new_paths = []
     for path in r.paths[code]:
-        path = drop_via_hops(path, free)
+        path = drop_via_hops(path, free, pinned)
         n = len(path)
         # end[i]: last index of the run (same layer, same neck state) holding i
         key = [(l, neck[l, y, x]) for l, x, y in path]
@@ -480,14 +498,23 @@ def main():
     name = lambda c: board.FindNet(c).GetNetname()
     gnd = board.FindNet('GND').GetNetCode()
     state = HERE / 'build' / 'route_state.pkl'
+    save = lambda: state.write_bytes(pickle.dumps((r.g.ox, r.g.oy, order, r.paths, r.width)))
     if '--reuse' in sys.argv and state.exists():
-        # Skip negotiation: reuse the last run's paths (same placement only).
-        order, r.paths, r.width, neck = pickle.loads(state.read_bytes())
-        r.neck = {c: np.unpackbits(v, count=2 * r.g.H * r.g.W).reshape(2, r.g.H, r.g.W)
-                  .astype(bool) for c, v in neck.items()}
+        # Skip negotiation: reuse the last run's paths (same placement only),
+        # re-routing only nets that now sit on an obstacle.
+        ox, oy, order, paths, r.width = pickle.loads(state.read_bytes())
+        dx, dy = int(round((ox - r.g.ox) / RES)), int(round((oy - r.g.oy) / RES))
+        r.paths = {c: [[(l, x + dx, y + dy) for l, x, y in p] for p in ps]
+                   for c, ps in paths.items()}
         for c in order:
+            r.neck[c] = r.neck_mask(c, r.width[c])
             r.copper[c] = r.footprint(c, r.paths[c])
-        ok = True
+        bad = [c for c in order if r.blocked_cells(c) or r.conflicts(c)]
+        print('re-routing', [name(c) for c in bad], flush=True)
+        # A continuation: start with the pressure a converging run has reached.
+        ok = r.negotiate(order, name, todo=bad, pres=PRES0 * PRES_GROW ** 12) if bad else True
+        if bad:
+            save()
     else:
         order = []
         for c, pads in r.pads.items():
@@ -501,8 +528,7 @@ def main():
         # GND last, as tracks as well as pours, so no pad relies on a pour island.
         order.append(gnd)
         ok = r.negotiate(order, name, todo=[gnd]) and ok
-        state.write_bytes(pickle.dumps((order, r.paths, r.width,
-                                        {c: np.packbits(r.neck[c]) for c in order})))
+        save()
     for _ in range(2):
         for c in order:
             smooth(r, c)

@@ -56,7 +56,7 @@ STD = {
     'USBC': ('Connector_USB', 'USB_C_Receptacle_HRO_TYPE-C-31-M-12'),
     'PH2': ('Connector_JST', 'JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal'),
     'PH6': ('Connector_JST', 'JST_PH_S6B-PH-K_1x06_P2.00mm_Horizontal'),
-    'FPC18': ('Connector_FFC-FPC', 'Hirose_FH12-18S-0.5SH_1x18-1MP_P0.50mm_Horizontal'),
+    'FPC21': ('Connector_FFC-FPC', 'TE_2-1734839-1_1x21-1MP_P0.5mm_Horizontal'),
     'TACT': ('Button_Switch_SMD', 'SW_Push_1P1T_XKB_TS-1187A'),
 }
 
@@ -264,7 +264,7 @@ S3_NETS = {
     7: 'TP_INT', 8: 'I2C_SDA', 9: 'I2C_SCL', 10: 'LCD_CS', 11: 'LCD_MOSI', 12: 'LCD_SCK',
     13: 'LCD_DC', 14: 'LCD_RST', 15: 'TP_RST', 16: 'TOF_XSHUT', 17: 'TOF_INT',
     18: None, 19: 'USB_DN', 20: 'USB_DP', 21: 'LCD_BL', 47: 'IMU_INT1', 48: 'MAG_DRDY',
-    38: 'OUT1_EN', 39: 'OUT2_EN', 0: 'BOOT', 43: 'UART_TX', 44: 'UART_RX',
+    38: 'OUT1_EN', 39: 'OUT2_EN', 40: 'LCD_TE', 0: 'BOOT', 43: 'UART_TX', 44: 'UART_RX',
 }
 S3_PINS = [(1, 'GND'), (2, '3V3'), (3, 'EN'), (4, 'IO4'), (5, 'IO5'), (6, 'IO6'), (7, 'IO7'),
            (8, 'IO15'), (9, 'IO16'), (10, 'IO17'), (11, 'IO18'), (12, 'IO8'), (13, 'IO19'),
@@ -287,44 +287,47 @@ def s3_net(name):
 
 part('U4', 'ESP32-S3-WROOM-1-N16R8', 'S3', 'C2913202', M,
      [(str(n), nm, s3_net(nm)) for n, nm in S3_PINS])
-two('C7', '22uF', 'C0805', '', M, '+3V3', 'GND')
+two('C7', '22uF', 'C0805', 'C45783', M, '+3V3', 'GND')
 two('C8', '100nF', 'C0402', 'C56392', M, '+3V3', 'GND')
 two('R10', '10k', 'R0402', 'C25744', M, '+3V3', 'EN')
 two('C9', '1uF', 'C0402', 'C52923', M, 'EN', 'GND')
 two('R11', '10k', 'R0402', 'C25744', M, '+3V3', 'BOOT')
-part('SW2', 'BOOT', 'TACT', '', M, [('1', '1', 'BOOT'), ('2', '2', 'GND')])
+part('SW2', 'BOOT', 'TACT', 'C318884', M, [('1', '1', 'BOOT'), ('2', '2', 'GND')])
 for i, net in enumerate(['UART_TX', 'UART_RX', 'EN']):
     part(f'TP{i + 1}', net, 'rev4:TP', '', M, [('1', '1', net)])
 
 # Screen, touch and sensors --------------------------------------------------
 U = 'ui'
-# Provisional 18-pin FPC pinout: replace with the chosen panel's datasheet order.
+# 2.0 in 240x320 IPS panel with CST816D touch, 21-pin 0.5 mm FPC (the bare
+# panel inside Waveshare's "2inch Capacitive Touch LCD"; pin order from that
+# module's schematic, connector L2). Confirm LEDA/LEDK on the sample.
 LCD = [('1', 'GND', 'GND'), ('2', 'LEDK', 'LCD_LEDK'), ('3', 'LEDA', 'LCD_LEDA'),
-       ('4', 'VCC', '+3V3'), ('5', 'GND', 'GND'), ('6', 'RESET', 'LCD_RST'),
-       ('7', 'DC', 'LCD_DC'), ('8', 'CS', 'LCD_CS'), ('9', 'SCK', 'LCD_SCK'),
-       ('10', 'MOSI', 'LCD_MOSI'), ('11', 'MISO', None), ('12', 'GND', 'GND'),
-       ('13', 'TP_RST', 'TP_RST'), ('14', 'TP_INT', 'TP_INT'), ('15', 'TP_SDA', 'I2C_SDA'),
-       ('16', 'TP_SCL', 'I2C_SCL'), ('17', 'TP_VCC', '+3V3'), ('18', 'GND', 'GND'),
+       ('4', 'GND', 'GND'), ('5', 'VCC', '+3V3'), ('6', 'VCC', '+3V3'),
+       ('7', 'GND', 'GND'), ('8', 'RESET', 'LCD_RST'), ('9', 'SCL', 'LCD_SCK'),
+       ('10', 'TE', 'LCD_TE'), ('11', 'SDA', 'LCD_MOSI'), ('12', 'RS', 'LCD_DC'),
+       ('13', 'CS', 'LCD_CS'), ('14', 'GND', 'GND'), ('15', 'TP_VDD', '+3V3'),
+       ('16', 'TP_RESET', 'TP_RST'), ('17', 'TP_INT', 'TP_INT'), ('18', 'TP_SDA', 'I2C_SDA'),
+       ('19', 'TP_SCL', 'I2C_SCL'), ('20', 'GND', 'GND'), ('21', 'GND', 'GND'),
        ('MP', 'MP', 'GND')]
-part('J3', 'LCD+CTP FPC 18P', 'FPC18', '', U, LCD)
-two('R12', '10R', 'R0402', '', U, '+3V3', 'LCD_LEDA')
+part('J3', 'LCD+CTP FPC 21P', 'FPC21', '', U, LCD)
+two('R12', '10R', 'R0402', 'C25077', U, '+3V3', 'LCD_LEDA')
 part('Q2', 'AO3400', 'SOT23', 'C2938367', U, [
     ('1', 'G', 'LCD_BL'), ('2', 'S', 'GND'), ('3', 'D', 'LCD_LEDK')])
 two('R13', '100k', 'R0402', 'C25741', U, 'LCD_BL', 'GND')
-two('R14', '4.7k', 'R0402', '', U, '+3V3', 'I2C_SDA')
-two('R15', '4.7k', 'R0402', '', U, '+3V3', 'I2C_SCL')
+two('R14', '4.7k', 'R0402', 'C25900', U, '+3V3', 'I2C_SDA')
+two('R15', '4.7k', 'R0402', 'C25900', U, '+3V3', 'I2C_SCL')
 # VL53L4CD, front face, below the screen
-part('U5', 'VL53L4CD', 'ST_VL53L4CD_LGA-12_4.4x2.4mm', '', U, [
+part('U5', 'VL53L4CD', 'ST_VL53L4CD_LGA-12_4.4x2.4mm', 'C3178291', U, [
     ('1', 'AVDDVCSEL', '+3V3'), ('2', 'AVSSVCSEL', 'GND'), ('3', 'GND', 'GND'),
     ('4', 'GND2', 'GND'), ('5', 'XSHUT', 'TOF_XSHUT'), ('6', 'GND3', 'GND'),
     ('7', 'GPIO1', 'TOF_INT'), ('8', 'DNC', None), ('9', 'SDA', 'I2C_SDA'),
     ('10', 'SCL', 'I2C_SCL'), ('11', 'AVDD', '+3V3'), ('12', 'GND4', 'GND')])
 two('C10', '100nF', 'C0402', 'C56392', U, '+3V3', 'GND')
-two('C11', '4.7uF', 'C0402', '', U, '+3V3', 'GND')
+two('C11', '4.7uF', 'C0402', 'C23733', U, '+3V3', 'GND')
 two('R16', '10k', 'R0402', 'C25744', U, '+3V3', 'TOF_INT')
 two('R17', '10k', 'R0402', 'C25744', U, '+3V3', 'TOF_XSHUT')
 # LSM6DSO accel + gyro, I2C address 0x6A
-part('U6', 'LSM6DSO', 'ST_LGA-14_2.5x3mm_P0.5mm', '', U, [
+part('U6', 'LSM6DSO', 'ST_LGA-14_2.5x3mm_P0.5mm', 'C2655100', U, [
     ('1', 'SDO/SA0', 'GND'), ('2', 'SDX', 'GND'), ('3', 'SCX', 'GND'),
     ('4', 'INT1', 'IMU_INT1'), ('5', 'VDDIO', '+3V3'), ('6', 'GND', 'GND'), ('7', 'GND', 'GND'),
     ('8', 'VDD', '+3V3'), ('9', 'INT2', None), ('10', 'OCS_AUX', None),
@@ -333,7 +336,7 @@ part('U6', 'LSM6DSO', 'ST_LGA-14_2.5x3mm_P0.5mm', '', U, [
 two('C12', '100nF', 'C0402', 'C56392', U, '+3V3', 'GND')
 two('C13', '100nF', 'C0402', 'C56392', U, '+3V3', 'GND')
 # LIS3MDL magnetometer, I2C address 0x1C
-part('U7', 'LIS3MDL', 'ST_LGA-12_2x2mm_P0.5mm', '', U, [
+part('U7', 'LIS3MDL', 'ST_LGA-12_2x2mm_P0.5mm', 'C478483', U, [
     ('1', 'SCL', 'I2C_SCL'), ('2', 'GND', 'GND'), ('3', 'GND', 'GND'), ('4', 'C1', 'MAG_C1'),
     ('5', 'VDD', '+3V3'), ('6', 'VDDIO', '+3V3'), ('7', 'INT', None), ('8', 'DRDY', 'MAG_DRDY'),
     ('9', 'SDO/SA1', 'GND'), ('10', 'CS', '+3V3'), ('11', 'SDA', 'I2C_SDA'), ('12', 'GND', 'GND')])
@@ -342,10 +345,10 @@ two('C15', '100nF', 'C0402', 'C56392', U, '+3V3', 'GND')
 
 # Accessory port -------------------------------------------------------------
 A = 'port'
-part('J4', 'PH6 accessory', 'PH6', '', A, [
+part('J4', 'PH6 accessory', 'PH6', 'C157920', A, [
     ('1', 'GND', 'GND'), ('2', 'VSYS', 'VSYS_PORT'), ('3', 'OUT1', 'OUT1'),
     ('4', 'OUT2', 'OUT2'), ('5', 'SDA', 'I2C_SDA'), ('6', 'SCL', 'I2C_SCL')])
-part('F1', '0.5A PTC', 'F0805', '', A, [('1', '1', 'VSYS'), ('2', '2', 'VSYS_PORT')])
+part('F1', '0.5A PTC', 'F0805', 'C269104', A, [('1', '1', 'VSYS'), ('2', '2', 'VSYS_PORT')])
 part('U8', 'USBLC6-2SC6', 'SOT23-6', 'C7519', A, [
     ('1', 'IO1', 'OUT1'), ('2', 'GND', 'GND'), ('3', 'IO2', 'OUT2'),
     ('4', 'IO2', 'OUT2'), ('5', 'VBUS', 'VSYS_PORT'), ('6', 'IO1', 'OUT1')])
@@ -356,11 +359,11 @@ part('U9', 'USBLC6-2SC6', 'SOT23-6', 'C7519', A, [
 for n, (q_lo, q_hi, rb, rpu, rlink) in enumerate(
         [('Q3', 'Q4', 'R18', 'R19', 'R20'), ('Q5', 'Q6', 'R21', 'R22', 'R23')], 1):
     en, mid, base = f'OUT{n}_EN', f'OUT{n}_N', f'OUT{n}_B'
-    two(rb, '1k', 'R0402', '', A, en, f'OUT{n}_LB')
+    two(rb, '1k', 'R0402', 'C11702', A, en, f'OUT{n}_LB')
     part(q_lo, 'BC817', 'SOT23', 'C8658', A, [
         ('1', 'B', f'OUT{n}_LB'), ('2', 'E', 'GND'), ('3', 'C', mid)])
     two(rpu, '10k', 'R0402', 'C25744', A, mid, '+3V3')
-    two(rlink, '1k', 'R0402', '', A, mid, base)
+    two(rlink, '1k', 'R0402', 'C11702', A, mid, base)
     part(q_hi, 'MMBT4403', 'SOT23', 'C78864', A, [
         ('1', 'B', base), ('2', 'E', '+3V3'), ('3', 'C', f'OUT{n}')])
 
@@ -536,7 +539,7 @@ def build_schematic(root_uuid):
         libs = ' '.join(lib_symbol(p) for p in parts)
         notes = ''
         if key == 'ui':
-            notes = (f'(text "J3 pinout is provisional: set it from the chosen 2.0 in ST7789 + CST816 panel datasheet."'
+            notes = (f'(text "J3: 2.0 in 240x320 IPS + CST816D panel, 21-pin 0.5 mm FPC, pin order from the Waveshare 2inch Capacitive Touch LCD schematic (L2). Verify LEDA/LEDK and FPC contact side on the sample."'
                      f' (at 50.8 25.4 0) (effects (font (size 2 2)) (justify left)) (uuid {uid("note", key)}))')
         if key == 'port':
             notes = (f'(text "PH6: 1 GND, 2 VSYS (PTC), 3 OUT1, 4 OUT2, 5 SDA, 6 SCL. TRRS adapter: tip GND, ring 1 OUT1, ring 2 OUT2."'
@@ -676,7 +679,7 @@ def build_board():
         z.SetNet(netinfo['GND'])
         z.SetMinThickness(mm(0.2))
         z.SetLocalClearance(mm(0.25))
-        z.SetPadConnection(pcbnew.ZONE_CONNECTION_THT_THERMAL)  # solid SMD, relieved THT
+        z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)   # assembled by machine: no reliefs
         z.SetZoneName(f'GND {"top" if layer == pcbnew.F_Cu else "bottom"}')
         o = z.Outline()
         o.NewOutline()
