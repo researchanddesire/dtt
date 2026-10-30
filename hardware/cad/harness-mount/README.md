@@ -19,12 +19,14 @@ buckle and the skin.
 
 Worn, on MakeHuman's CC0 average female body. `cloth_sim.py` drapes the
 panel and pulls the straps taut on it, which is where the strap slots come
-from; `render_on_body.py` draws the result. Worn this way the toy points
+from. The leg straps run jock style, in the leg crease and under the cheeks,
+kept 20 mm off the centre line so they frame the vulva or a cage rather than
+cross it. `render_on_body.py` draws the result. Worn this way the toy points
 about 14° down.
 
-| Front | Close | Low | Side | Back |
-| --- | --- | --- | --- | --- |
-| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Close](images/Harness-Mount-Ring-On-Body-Detail.png) | ![Low](images/Harness-Mount-Ring-On-Body-Low.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
+| Front | Close | Low | Below | Side | Back |
+| --- | --- | --- | --- | --- | --- |
+| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Close](images/Harness-Mount-Ring-On-Body-Detail.png) | ![Low](images/Harness-Mount-Ring-On-Body-Low.png) | ![Below](images/Harness-Mount-Ring-On-Body-Below.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
 
 ## Use
 

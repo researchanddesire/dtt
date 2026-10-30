@@ -207,9 +207,17 @@ def sim_panel(sim):
     return Mesh.Mesh([[V(*q) for q in f] for f in facets])
 
 
-def sim_path(m, pts, wrap_start=True, wrap_end=True):
-    """A strap path from cloth_sim.py as (point, normal), wrapped over its slot bar at either end."""
-    path = [(V(*q), normal_at(m, V(*q))) for q in pts]
+def sim_path(m, pts, wrap_start=True, wrap_end=True, nrm=None):
+    """A strap path from cloth_sim.py as (point, normal), wrapped over its slot bar at either end. nrm: the skin
+    normals the sim laid the strap on, smoothed along it, so the render twists the strap just as the sim did."""
+    if nrm is None:
+        path = [(V(*q), normal_at(m, V(*q))) for q in pts]
+    else:
+        nrm = np.array(nrm, float)
+        k = np.ones(9) / 9
+        sm = np.stack([np.convolve(np.pad(nrm[:, j], 4, mode='edge'), k, mode='valid') for j in range(3)], 1)
+        sm /= np.linalg.norm(sm, axis=1)[:, None] + 1e-12
+        path = [(V(*q), V(*n)) for q, n in zip(pts, sm)]
     def wrap(e, nxt):
         p, n = e; d = nxt[0] - p; d = d - n * d.dot(n); d.normalize()
         return [(p - d * 7 - n * 2, n), (p - d * 3 + n * 2.3, n), (p + n * 2.3, n)]
@@ -224,7 +232,7 @@ def rig(m, sim):
     """All the straps and hardware from the cloth sim, as {name: (shape, colour)}; strap lengths go to
     LENGTHS."""
     metal, black, plastic = [], [], []
-    bp = sim_path(m, sim['waist'])
+    bp = sim_path(m, sim['waist'], nrm=sim.get('waist_n'))
     total = length(bp)
     black.append(strip(bp))
     for d0, d1, sign in ((4, 74, 1), (total - 74, total - 4, -1)):          # ends back through a slide
@@ -242,7 +250,7 @@ def rig(m, sim):
         up = V(0, 1, 0) - n * n.y; up.normalize()
         over = STRAP_T + 0.6                                             # on the belt's outer face
         # the leg strap, from its slot round the leg, up through its slide and looped round the belt
-        lp = sim_path(m, leg[:-3], wrap_end=False) + [(p - up * 13 + n * over, n), (p + n * over, n),
+        lp = sim_path(m, leg[:-3], wrap_end=False, nrm=sim['legs_n'][k][:-3] if 'legs_n' in sim else None) + [(p - up * 13 + n * over, n), (p + n * over, n),
                                                        (p + up * 11 + n * over, n), (p + up * 15 + n * 0.2, up)]
         black.append(strip(lp))
         L = length(lp)
@@ -349,6 +357,7 @@ def main():
     shoot(src, pic + '-Low.png', App.Rotation(V(0, 1, 0), 35).multiply(App.Rotation(V(1, 0, 0), 30)))
     shoot(src, pic + '-Detail.png', App.Rotation(V(0, 1, 0), 22).multiply(App.Rotation(V(1, 0, 0), 14)),
           focus=(V(AX, 25, 0), 250))
+    shoot(src, pic + '-Below.png', App.Rotation(V(1, 0, 0), 55), focus=(V(AX, -140, -60), 260))   # the crotch
     shoot(src, pic + '-Back.png', App.Rotation(V(0, 1, 0), 28).multiply(App.Rotation(V(1, 0, 0), -8)), turned=True)
     App.closeDocument(src.Name)
 

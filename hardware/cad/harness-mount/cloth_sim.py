@@ -9,7 +9,9 @@ Position-based dynamics in device coordinates (as render_on_body.py, mm):
   bends stiffly, and drapes under gravity onto the body. Under the core it is screwed down, so pinned.
 - the straps are chains that shrink until taut, so they lie in their natural, shortest line over the
   body and the panel. The belt's buckle is pinned at the back, at hip height; each leg strap's back end
-  rides on the belt where its loop goes round it. The front end of every strap slides freely along the
+  is fixed to the belt where its loop goes round it. The leg straps slide freely on the skin, as tension
+  and movement leave them, so they ride up into the leg crease; ZONE keeps them, edges included, off the
+  vulva or a caged penis, so they frame it rather than cross it. The front end of every strap slides freely along the
   line of the slot bars round the core and settles where the strap pulls square to it: where the slot
   belongs (SIM_FREE=1). Otherwise the ends are held at the builder's slot bars, for the renders.
 
@@ -37,9 +39,12 @@ Z_REAR, PAD_T = SB.z_rear(), H['PadT']
 TILT, BODY_AXIS = 14.0, (-8.0, 117.0)
 BODY = os.path.join(HERE, 'reference', 'body-female-lower.obj')
 STRAP_T, STRAP_W = 1.6, 25.4
-KEEP_OUT_X, KEEP_OUT_Y, KEEP_OUT_Z = 28.0, -90.0, -85.0   # no straps within X of the centre line, below Y and in
-                                       # front of Z: the vulva, or a chastity cage. The mons ends at about y -90;
-                                       # behind z -85 is the perineum, where the leg straps may cross to the buttock crease
+ZONE = [   # (centre line as (y, z) on the body's midline, radius): no strap, edges included, inside these
+    ([(-90, -31), (-100, -36), (-110, -44), (-120, -60), (-125, -80), (-128, -100), (-131, -118), (-128, -135),
+      (-121, -150)], 20.0),                       # vulva, perineum and anus: along the skin, 20 mm either side
+    ([(-98, -34), (-170, -30)], 22.0),             # a caged penis, hanging from the pubic bone
+    ([(-105, -48), (-150, -60)], 15.0),            # and the scrotum behind it, between the thighs
+]
 FREE = bool(os.environ.get('SIM_FREE'))
 OUT = os.path.join(HERE, 'harness-sim-free.json' if FREE else 'harness-sim.json')
 
@@ -54,7 +59,9 @@ BAR = B['SLOT_U'][1] + H['SlotT'] + H['SlotBarW'] / 2   # slot bar centre past t
 GRAVITY = 0.05         # of g on the panel: leather on foam is light for how stiff it is, and the straps hold it
 PRESS = 2000.0         # mm/s2 pressing the loose panel toward the skin
 FRICTION = 0.9         # of the panel's slip along the skin taken out each step
-STRAP_FRICTION = float(os.environ.get('SIM_STRAP_FRICTION', 0.5))   # the straps' (0: they slide to the shortest line)
+STRAP_FRICTION = float(os.environ.get('SIM_STRAP_FRICTION', 0.5))   # the belt's, on the hips
+LEG_FRICTION = float(os.environ.get('SIM_LEG_FRICTION', 0.0))       # the leg straps': none, so tension and movement
+                                                                    # pull them to their shortest line
 STEPS, ITERS, DT = int(os.environ.get("SIM_STEPS", 300)), 12, 0.01
 
 
@@ -219,13 +226,47 @@ def collide(x, w, tree, sp, sn, off):
     return hit
 
 
-def keep_out(x, mask):
-    """No strap over the vulva, or a caged penis: below KEEP_OUT_Y, strap centres stay KEEP_OUT_X plus half
-    a strap width out from the centre line, in front of KEEP_OUT_Z."""
-    lim = KEEP_OUT_X + STRAP_W / 2
-    dx = x[:, 0] - AX
-    bad = mask & (x[:, 1] < KEEP_OUT_Y) & (x[:, 2] > KEEP_OUT_Z) & (np.abs(dx) < lim)
-    x[bad, 0] = AX + np.where(dx[bad] >= 0, lim, -lim)
+ZONE_AXES = [(np.array([(AX, y, z) for y, z in line], float), r) for line, r in ZONE]
+
+
+def zone_dist(q, axis):
+    """Distance from each q to a centre line, and the unit direction away from it."""
+    a, b = axis[:-1], axis[1:]
+    ab = b - a
+    t = np.clip(((q[:, None] - a[None]) * ab[None]).sum(2) / ((ab * ab).sum(1)[None] + 1e-12), 0, 1)
+    c = a[None] + ab[None] * t[..., None]
+    d = np.linalg.norm(q[:, None] - c, axis=2)
+    k = d.argmin(1); c = c[np.arange(len(q)), k]; d = d[np.arange(len(q)), k]
+    return d, (q - c) / (d[:, None] + 1e-12)
+
+
+def across(x, c, tree, sn):
+    """Unit vector across the strap at each node of chain c, in the skin's plane."""
+    p = x[c]
+    t = np.gradient(p, axis=0); t /= np.linalg.norm(t, axis=1)[:, None] + 1e-12
+    d, i = tree.query(p)
+    b = np.cross(t, sn[i]); return b / (np.linalg.norm(b, axis=1)[:, None] + 1e-12)
+
+
+def keep_out(x, chains, w, tree, sn):
+    """No strap over the vulva, perineum or anus, or a caged penis and scrotum (ZONE): where the strap's centre
+    or either edge is inside, push the strap straight out from the zone's centre line."""
+    for c in chains:
+        b = across(x, c, tree, sn)
+        free = w[c] > 0
+        for axis, r in ZONE_AXES:
+            for sgn in (0, 1, -1):
+                q = x[c] + b * (sgn * STRAP_W / 2)
+                d, u = zone_dist(q, axis)
+                pen = np.where(free, r + (STRAP_T / 2 if sgn == 0 else 0) - d, 0)
+                x[c] += u * np.maximum(pen, 0)[:, None]
+
+
+def zone_clearance(x, c, tree, sn):
+    """The strap's closest approach, edges included, to the zone: mm outside it (negative inside)."""
+    b = across(x, c, tree, sn)
+    return min((zone_dist(x[c] + b * (sgn * STRAP_W / 2), axis)[0] - r).min()
+               for axis, r in ZONE_AXES for sgn in (0, 1, -1))
 
 
 def ribbon_edges(x, chains, w, tree, sp, sn):
@@ -234,9 +275,8 @@ def ribbon_edges(x, chains, w, tree, sp, sn):
     off = STRAP_T / 2 + 0.3
     for c in chains:
         p = x[c]
-        t = np.gradient(p, axis=0); t /= np.linalg.norm(t, axis=1)[:, None] + 1e-12
         d, i = tree.query(p); n = sn[i]
-        b = np.cross(t, n); b /= np.linalg.norm(b, axis=1)[:, None] + 1e-12
+        b = across(x, c, tree, sn)
         lift = np.zeros(len(c))
         for sgn in (1, -1):
             e = p + b * (sgn * STRAP_W / 2)
@@ -315,6 +355,7 @@ def main():
     for c in chains[1:]:
         w[c[-1]] = 0
     gravity = np.where(strap[:, None] | (w[:, None] == 0), 0, grav[None])   # pinned points stay put
+    mu = np.where(strap, STRAP_FRICTION, FRICTION); mu[off[2]:] = LEG_FRICTION
     pidx = np.arange(len(px)); ptree_every = 4
 
     v = np.zeros_like(x)
@@ -333,7 +374,7 @@ def main():
                 x[i] = slide(pull, line, mask)
             for k in range(2):   # each leg strap's loop sits on the belt
                 x[chains[1 + k][-1]] = x[chains[0][leg_belt[k]]]
-            keep_out(x, strap & (w > 0))
+            keep_out(x, chains[1:], w, tree, sn)
             touch = collide(x, w, tree, sp, sn, offs)
             ribbon_edges(x, chains, w, tree, sp, sn)
             # straps over the panel ride on its front
@@ -352,7 +393,7 @@ def main():
         # friction: leather on skin holds where it's pressed, so drop most of the sliding along the skin
         d, i = tree.query(x); n = sn[i]
         dx = x - x0; slip = dx - n * (dx * n).sum(1)[:, None]
-        x[touch] -= slip[touch] * np.where(strap, STRAP_FRICTION, FRICTION)[touch][:, None]
+        x[touch] -= slip[touch] * mu[touch][:, None]
         v = (x - x0) / DT * 0.96
         v[w == 0] = 0
         if step % 100 == 0 or step == STEPS - 1:
@@ -372,6 +413,8 @@ def main():
     for k, c in enumerate(chains):
         L = np.linalg.norm(np.diff(x[c], axis=0), axis=1).sum()
         print('SIM strap %d length %.0f mm' % (k, L))
+    for k, c in enumerate(chains[1:]):
+        print('SIM leg strap %d clears the vulva/cage zone by %.1f mm' % (k, zone_clearance(x, c, tree, sn)))
     for e in res['ends']:
         print('SIM END x %.1f y %.1f, pulling (%.2f, %.2f)' % (e['x'], e['y'], e['dir'][0], e['dir'][1]))
 

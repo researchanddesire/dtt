@@ -50,7 +50,7 @@ PARAMS = {
     'SlotBarW': (4.5, 'design: the bar the strap wraps, outboard of the slot'),
     'SlotTunnel': (2.5, 'design: gap under the bar for the strap, over the panel front'),
     'WaistSlotUp': (10.0, 'sim: waist slot tilt, deg up (cloth_sim.py: the belt leaves the core 3 to 15 deg up)'),
-    'LegSlotDir': (-57.0, 'sim: leg slots on the lobe this many deg below sideways, pointing out from the toy axis (cloth_sim.py, with no straps over the vulva or a cage: the leg straps settle there, pulling straight out)'),
+    'LegSlotDir': (-62.0, 'sim: leg slots on the lobe this many deg below sideways, pointing out from the toy axis (cloth_sim.py: the leg straps, kept off the vulva or a cage, settle there and pull straight out)'),
     # ring interface (strap-on O-ring standard)
     'SocketD': (50.0, 'design: one socket for every ring; a 1.75 in ring keeps a 2.8 mm wall'),
     'SocketClear': (0.2, 'design: radial clearance of the ring in its socket'),
