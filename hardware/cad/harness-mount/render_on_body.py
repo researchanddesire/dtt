@@ -17,7 +17,7 @@ SOURCE = os.path.join(HERE, 'DTT-Harness-Mount-Ring.FCStd')
 
 AX, AY = 21.0, -33.8          # toy axis of the ring version (build_harness_mount.axis())
 Z_REAR, PAD_T = -15.1, 5.0    # flat plate rear and pad thickness
-PAD_RX, PAD_RUP, PAD_RDOWN = 120.0, 1500.0, 90.0
+PAD_RX, PAD_RUP, PAD_RDOWN = 120.0, 1500.0, 65.0
 WAIST = (32.0, 84.0)          # waist slot x offset from the axis, y
 LEG_R, LEG_DEG = 37.0, 38.0
 STRAP_W, STRAP_T = 25.4, 1.6
@@ -40,9 +40,8 @@ def rear_z(x, y):
 # ---------------------------------------------------------------- dummy
 
 # (dy from the toy axis, half width, half depth, front z); between -60 and 150 the front follows the pad
-ANCHORS = [(-130, 40, 28, -170), (-120, 100, 65, -140), (-105, 140, 88, -105), (-85, 158, 100, -72),
-           (-60, 168, 104, None), (-30, 175, 112, None), (0, 176, 113, None), (60, 168, 110, None),
-           (120, 155, 104, None), (150, 150, 101, None), (200, 140, 98, -35), (250, 146, 101, -37)]
+ANCHORS = [(-60, 160, 100, None), (-30, 175, 112, None), (0, 176, 113, None), (60, 168, 110, None),
+           (120, 155, 104, None), (150, 150, 101, None), (170, 140, 98, -35), (220, 146, 101, -37)]
 
 
 def front_z(dy):
@@ -62,7 +61,7 @@ def profile(dy):
 
 def sections(grow=0.0):
     """Evenly and widely spaced: a smooth loft through close or uneven sections overshoots."""
-    return [(AY + dy, a + grow, b + grow, zf + grow) for dy in range(-90, 241, 30)
+    return [(AY + dy, a + grow, b + grow, zf + grow) for dy in range(-60, 211, 30)
             for a, b, zf in [profile(dy)]]
 
 
@@ -104,7 +103,7 @@ def centre_z(y):
 
 
 def thigh(s, grow=0.0):
-    top = V(AX + s * 84, AY + 10, -150); d = V(s * 0.08, -1, 0); d.normalize()
+    top = V(AX + s * 84, AY + 40, -150); d = V(s * 0.08, -1, 0); d.normalize()
     return Part.makeCone(74 + grow, 54 + grow, 450, top, d), top, d
 
 
@@ -216,12 +215,12 @@ def leg_strap(body, s):
     a = math.radians(LEG_DEG)
     sx, sy = AX + s * LEG_R * math.sin(a), AY - LEG_R * math.cos(a)
     rays = [(V(sx, sy, 200), V(0, 0, -1), False)]
-    rays += [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(23, -85), (23, -105), (23, -125)]]
+    rays += [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(23, -80), (23, -95)]]
     y0, a, b, zf = sections()[0]
     for phi, x in [(55, 22), (78, 22), (100, 22), (125, 26), (150, 40)]:      # under the pelvis, between the legs
         f = math.radians(phi)
         rays.append((V(AX + s * x, y0, zf - b), V(0, -math.sin(f), math.cos(f)), True))
-    for x, y in [(40, -140), (50, -95), (56, -40), (56, 15), (54, 70)]:
+    for x, y in [(40, -110), (50, -65), (56, -10), (56, 40), (54, 70)]:
         rays.append((V(AX + s * x, y, centre_z(y)), V(s * 0.3, 0, -1), True))
     return strip(on_surface(body, rays))
 

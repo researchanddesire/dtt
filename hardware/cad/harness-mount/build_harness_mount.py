@@ -66,7 +66,7 @@ PARAMS = {
     'PadT': (5.0, 'design: even pad thickness behind the plate'),
     'PadRX': (120.0, 'estimate: rear face curve across the hips; the waist wings sweep back about 8 mm'),
     'PadRUp': (1500.0, 'estimate: up the lower belly, for the mons standing proud of it; about 6 mm at the top'),
-    'PadRDown': (90.0, 'estimate: curving back between the legs below the toy; the leg tabs sweep back about 10 mm'),
+    'PadRDown': (65.0, 'estimate: curling back between the legs below the toy, worn low with the ring over the pubic bone'),
     'ShellEdgeR': (2.0, 'design: rounded outer edges of the curved wings, front and back'),
     'PadEdgeR': (2.0, 'design: rounded pad edges'),
     'PadBaseHole': (68.0, 'design: the pad stops short of the toy lobe in the ring version, so the flared base sits on the plate'),
