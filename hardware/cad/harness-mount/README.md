@@ -19,9 +19,9 @@ with the waist and leg webbing sewn to its hip ears and tip.
 Worn, on MakeHuman's CC0 average female body (`render_on_body.py`). The panel
 curve is fitted to it; worn this way the toy points about 14° down.
 
-| Front | Side | Back |
-| --- | --- | --- |
-| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
+| Front | Low | Side | Back |
+| --- | --- | --- | --- |
+| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Low](images/Harness-Mount-Ring-On-Body-Low.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
 
 ## Use
 
@@ -33,7 +33,7 @@ curve is fitted to it; worn this way the toy points about 14° down.
   thread the toy on from the front.
 - **Panel:** 2 mm leather (or neoprene) over about 3 mm foam, lined, cut to
   the `-Panel` outline. Sew 1 in (25 mm) webbing to the hip ears (waist) and
-  the tip (two jock-style leg straps). Four 5 mm Chicago screws join it to the
+  the lower sides (two jock-style leg straps, in the leg creases, clear of the vulva). Four 5 mm Chicago screws join it to the
   core; in the ring version the ring flange clamps it too.
 - **DTT:** slides in and releases as on the snap backplate. Use a right-angle
   3.5 mm plug with the O-ring version.

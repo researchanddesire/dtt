@@ -138,8 +138,9 @@ def belt(m, panel):
 
 
 # leg strap waypoints (x out from the toy axis, y, z), between them the shortest path over the skin
-LEG_PATH = [(12, -110, -45), (10, -136, -110), (18, -150, -125), (40, -158, -140), (65, -130, -190),
-            (76, -40, -215), (70, 40, -200), (66, 80, -195)]
+# in the leg crease beside the vulva, round the top of the inner thigh into the cheek's fold
+LEG_PATH = [(36, -88, -22), (30, -108, -32), (23, -128, -45), (17, -148, -70), (20, -160, -110),
+            (40, -160, -140), (65, -130, -190), (76, -40, -215), (70, 40, -200), (66, 80, -195)]
 
 
 def surface_path(m, targets):
@@ -181,9 +182,9 @@ def surface_path(m, targets):
 
 
 def leg_strap(m, panel, s):
-    """Sewn onto the front of the panel tip, down the crease at the top of the inner thigh, under the cheek
-    in its fold and up the outside of the back to the belt, jockstrap style."""
-    front = on_surface(m, panel, [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(14, -62), (17, -72)]])
+    """Sewn onto the front of the panel's lower side, down the leg crease, round the top of the inner thigh,
+    under the cheek in its fold and up the outside of the back to the belt, jockstrap style."""
+    front = on_surface(m, panel, [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(32, -40), (34, -56)]])
     return strip(front + surface_path(m, [V(AX + s * x, y, z) for x, y, z in LEG_PATH]))
 
 
@@ -273,6 +274,7 @@ def main():
     pic = 'Harness-Mount-Ring-On-Body'
     shoot(src, pic + '-Front.png', App.Rotation(V(0, 1, 0), 28).multiply(App.Rotation(V(1, 0, 0), -8)))
     shoot(src, pic + '-Side.png', App.Rotation(V(0, 1, 0), 90).multiply(App.Rotation(V(1, 0, 0), -4)))
+    shoot(src, pic + '-Low.png', App.Rotation(V(0, 1, 0), 35).multiply(App.Rotation(V(1, 0, 0), 30)))
     shoot(src, pic + '-Back.png', App.Rotation(V(0, 1, 0), 28).multiply(App.Rotation(V(1, 0, 0), -8)), turned=True)
     App.closeDocument(src.Name)
 
