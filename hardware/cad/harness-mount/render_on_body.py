@@ -26,6 +26,7 @@ TILT = 14.0                   # harness tilt on the body, deg: the top lies back
 BODY_AXIS = (-8.0, 117.0)     # body (y, front z) under the toy axis in the mesh frame: over the pubic bone
 WAIST = (62.0, 84.0)          # panel hip ear x offset from the axis, y
 STRAP_W, STRAP_T = 25.4, 1.6
+LEG_W = 20.0                  # leg straps: 3/4 in elastic
 
 SKIN = (0.80, 0.74, 0.69)     # plain mannequin
 WEBBING = (0.07, 0.07, 0.08)
@@ -49,6 +50,30 @@ def centre_z(m, y, half=60.0):
     """Middle of the torso's depth at height y."""
     zs = [p.z for p in m.Points if abs(p.y - y) < 8 and abs(p.x - AX) < half]
     return (min(zs) + max(zs)) / 2
+
+
+# ---------------------------------------------------------------- panel
+
+def plan_prism(wire, z0=-400.0, h=800.0):
+    pts = [V(q.x, q.y, z0) for q in wire.discretize(240)]
+    return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(V(0, 0, h))
+
+
+def draped(m, pad):
+    """The soft panel as it lies on the body: the builder's panel outline and holes, but its back on the
+    skin instead of on the builder's fitted curve (leather and foam follow the body)."""
+    rear = max(pad.Faces, key=lambda f: f.Area if f.normalAt(*f.Surface.parameter(f.CenterOfMass)).z < -0.5 else 0)
+    bb = pad.BoundBox
+    xs = [bb.XMin - 6 + 6 * i for i in range(int(bb.XLength / 6) + 3)]
+    ys = [bb.YMin - 6 + 6 * j for j in range(int(bb.YLength / 6) + 3)]
+    sheet = Part.BSplineSurface()
+    sheet.interpolate([[V(x, y, hit(m, None, V(x, y, 300), V(0, 0, -1)).z + 0.3) for y in ys] for x in xs])
+    layer = sheet.toShape().extrude(V(0, 0, PAD_T))
+    out = layer.common(plan_prism(rear.OuterWire))
+    for w in rear.Wires:
+        if not w.isSame(rear.OuterWire):
+            out = out.cut(plan_prism(w))
+    return out
 
 
 # ---------------------------------------------------------------- straps
@@ -174,6 +199,8 @@ def surface_path(m, targets):
         while seg[-1] != a:
             seg.append(prev[seg[-1]])
         route += seg[::-1][1:]
+    for i in route:   # normals averaged over an 18 mm patch, so a strap across a crease doesn't flip about
+        n = vn[((pts - pts[i]) ** 2).sum(1) < 18.0 ** 2].sum(0); vn[i] = n / np.linalg.norm(n)
     out, last = [], None   # every 20 mm or so, so the spline smooths the zigzag along the edges
     for i in route:
         if last is None or np.linalg.norm(pts[i] - pts[last]) > 20 or i == route[-1]:
@@ -184,8 +211,8 @@ def surface_path(m, targets):
 def leg_strap(m, panel, s):
     """Sewn onto the front of the panel's lower side, down the leg crease, round the top of the inner thigh,
     under the cheek in its fold and up the outside of the back to the belt, jockstrap style."""
-    front = on_surface(m, panel, [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(32, -40), (34, -56)]])
-    return strip(front + surface_path(m, [V(AX + s * x, y, z) for x, y, z in LEG_PATH]))
+    front = on_surface(m, panel, [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(36, -44), (36, -58)]])
+    return strip(front + surface_path(m, [V(AX + s * x, y, z) for x, y, z in LEG_PATH]), width=LEG_W)
 
 
 def buckle(m, panel):
@@ -226,7 +253,7 @@ def scene(src, turn=None):
         return o
 
     for o in src.Objects:
-        if o.TypeId.startswith('Part::') and visible(o) and not o.Shape.isNull() and o.Name not in ('HarnessPins',):
+        if o.TypeId.startswith('Part::') and visible(o) and not o.Shape.isNull() and o.Name not in ('HarnessPins', 'HarnessPad'):
             add(o.Name, o.Shape, like=o,
                 colour=(0.62, 0.63, 0.67) if o.Name in ('SnapDDScrew', 'SnapDoubleDouble') else None)
     for n, (shape, col) in PARTS.items():
@@ -264,9 +291,10 @@ def main():
     pv.SetUnsigned('BackgroundColor3', rgb(0.70, 0.71, 0.75))
 
     src = App.openDocument(SOURCE)
-    panel = src.getObject('HarnessPad').Shape
     MESH = body()
+    panel = draped(MESH, src.getObject('HarnessPad').Shape)
     PARTS = {
+        'Panel': (panel, tuple(src.getObject('HarnessPad').ViewObject.ShapeColor[:3])),
         'WaistBelt': (belt(MESH, panel), WEBBING),
         'LegStraps': (Part.makeCompound([leg_strap(MESH, panel, s) for s in (-1, 1)]), WEBBING),
         'Buckle': (buckle(MESH, panel), HARDWARE),

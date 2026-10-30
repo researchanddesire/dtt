@@ -93,15 +93,15 @@ def lobe_r():
 
 # panel outline (x from the centreline, y), right half, top to bottom; mirrored for the left
 PANEL = [(0, 118), (30, 117), (50, 109), (62, 92), (62, 74), (54, 52), (46, 25), (46, -10), (47, -35),
-         (41, -58), (26, -74)]
+         (44, -54), (32, -66)]
 
 
 def panel_face():
     """The soft panel in plan: a rounded shield, ears at the hips for the waist straps, narrowing round
-    the toy to a round tip between the legs for the leg straps."""
+    the toy to a short round bottom, its corners for the leg straps."""
     cx = P['DeviceCx']; zr = SB.z_rear()
     pts = [V(cx + x, y, zr) for x, y in PANEL] + [V(cx - x, y, zr) for x, y in reversed(PANEL[1:])]
-    pts.insert(len(PANEL), V(cx, -80, zr))
+    pts.insert(len(PANEL), V(cx, -71, zr))
     c = Part.BSplineCurve(); c.interpolate(pts, PeriodicFlag=True)
     return Part.Face(Part.Wire(c.toShape()))
 

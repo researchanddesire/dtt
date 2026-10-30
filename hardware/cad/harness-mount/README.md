@@ -33,7 +33,8 @@ curve is fitted to it; worn this way the toy points about 14° down.
   thread the toy on from the front.
 - **Panel:** 2 mm leather (or neoprene) over about 3 mm foam, lined, cut to
   the `-Panel` outline. Sew 1 in (25 mm) webbing to the hip ears (waist) and
-  the lower sides (two jock-style leg straps, in the leg creases, clear of the vulva). Four 5 mm Chicago screws join it to the
+  the lower corners (two 3/4 in elastic jock-style leg straps, in the leg
+  creases, clear of the vulva). Four 5 mm Chicago screws join it to the
   core; in the ring version the ring flange clamps it too.
 - **DTT:** slides in and releases as on the snap backplate. Use a right-angle
   3.5 mm plug with the O-ring version.
