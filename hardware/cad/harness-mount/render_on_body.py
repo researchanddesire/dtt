@@ -1,4 +1,6 @@
-"""Renders the O-ring harness mount worn on a reference body, with its straps and hardware as BUILD.md lists. Run under the FreeCAD GUI after build_harness_mount.py:
+"""Renders the O-ring harness mount worn on a reference body, with its straps and hardware as BUILD.md lists.
+The panel and straps lie as cloth_sim.py settled them. Run under the FreeCAD GUI after build_harness_mount.py
+and cloth_sim.py:
 
     xvfb-run -a freecad render_on_body.FCMacro   (a macro that execs this file)
 
@@ -6,7 +8,7 @@ The body is reference/body-female-lower.obj: the MakeHuman CC0 average young fem
 reference/make_body.py). The panel's curve was fitted to it with the harness tilted TILT deg, so it lies
 on the lower belly and the mons; the toy then points that much below level when standing."""
 
-import math, os
+import json, math, os
 import numpy as np
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -18,6 +20,7 @@ HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 IMAGES = os.path.join(HERE, 'images')
 SOURCE = os.path.join(HERE, 'DTT-Harness-Mount-Ring.FCStd')
 BODY = os.path.join(HERE, 'reference', 'body-female-lower.obj')
+SIM = os.path.join(HERE, 'harness-sim.json')   # the panel and straps as cloth_sim.py settled them
 
 AX, AY = 21.0, -33.8          # toy axis of the ring version (build_harness_mount.axis())
 Z_REAR, PAD_T = -15.1, 5.0    # flat core rear and panel thickness
@@ -43,86 +46,7 @@ def body():
     return m
 
 
-def centre_z(m, y, half=60.0):
-    """Middle of the torso's depth at height y."""
-    zs = [p.z for p in m.Points if abs(p.y - y) < 8 and abs(p.x - AX) < half]
-    return (min(zs) + max(zs)) / 2
-
-
-# ---------------------------------------------------------------- panel
-
-def plan_prism(wire, z0=-400.0, h=800.0):
-    pts = [V(q.x, q.y, z0) for q in wire.discretize(240)]
-    return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(V(0, 0, h))
-
-
-def draped(m, pad):
-    """The soft panel as it lies on the body: the builder's panel outline and holes, but its back on the
-    skin instead of on the builder's fitted curve (leather and foam follow the body)."""
-    rear = max(pad.Faces, key=lambda f: f.Area if f.normalAt(*f.Surface.parameter(f.CenterOfMass)).z < -0.5 else 0)
-    plan = plan_prism(rear.OuterWire)
-    bb = plan.BoundBox; bb = App.BoundBox(bb.XMin, bb.YMin, 0, bb.XMax, bb.YMax, 0)
-    xs = [bb.XMin - 6 + 6 * i for i in range(int(bb.XLength / 6) + 3)]
-    ys = [bb.YMin - 6 + 6 * j for j in range(int(bb.YLength / 6) + 3)]
-    sheet = Part.BSplineSurface()
-    def skin(x, y):   # outside the plan, between the legs, held up so the sheet doesn't ripple
-        ts = [t for t in ray_mesh(m, V(x, y, 300), V(0, 0, -1)) if t > 0]
-        z = 300 - min(ts) if ts else -1e9
-        return z if plan.isInside(V(x, y, 0), 0.5, True) else max(z, -55.0)
-    zs = np.array([[skin(x, y) for y in ys] for x in xs])
-    pad_ = np.pad(zs, 1, mode='edge')   # one 3 x 3 smoothing pass: the leather bridges the mesh's facets
-    zs = sum(pad_[1 + i:1 + i + len(xs), 1 + j:1 + j + len(ys)] for i in (-1, 0, 1) for j in (-1, 0, 1)) / 9
-    sheet.interpolate([[V(x, y, zs[a, b] + 0.3) for b, y in enumerate(ys)] for a, x in enumerate(xs)])
-    layer = sheet.toShape().extrude(V(0, 0, PAD_T))
-    out = layer.common(plan)
-    for w in rear.Wires:
-        if not w.isSame(rear.OuterWire):
-            out = out.cut(plan_prism(w))
-    return out
-
-
 # ---------------------------------------------------------------- straps
-
-TRIS = {}
-
-
-def ray_mesh(m, o, d):
-    """Distances along the ray to every crossing with the mesh, both ways through the facets."""
-    if id(m) not in TRIS:
-        TRIS[id(m)] = np.array([[tuple(p) for p in f.Points] for f in m.Facets])
-    tri = TRIS[id(m)]; a, b, c = tri[:, 0], tri[:, 1], tri[:, 2]
-    o, d = np.array(tuple(o)), np.array(tuple(d))
-    e1, e2 = b - a, c - a
-    pv = np.cross(d, e2); det = (e1 * pv).sum(1)
-    ok = np.abs(det) > 1e-12; inv = 1.0 / np.where(ok, det, 1.0)
-    tv = o - a; u = (tv * pv).sum(1) * inv
-    qv = np.cross(tv, e1); v = (qv * d).sum(1) * inv; t = (e2 * qv).sum(1) * inv
-    return t[ok & (u >= 0) & (v >= 0) & (u + v <= 1)]
-
-
-def hit(m, panel, o, d):
-    """First crossing of the ray o + t d with the body mesh or (for rays from outside) the panel."""
-    d = V(d); d.normalize()
-    ts = list(ray_mesh(m, o, d))
-    if panel is not None:
-        line = Part.LineSegment(o, o + d * 700).toShape()
-        ts += [(v.Point - o).dot(d) for v in line.section(panel).Vertexes]
-    ts = sorted(t for t in ts if t > 1e-3)
-    if not ts:
-        raise RuntimeError('ray missed: %s %s' % (o, d))
-    return o + d * ts[0]
-
-
-def on_surface(m, panel, rays):
-    """(point, outward normal) STRAP_T/2 off the surface, from (origin, direction, inside?) rays."""
-    out = []
-    for o, d, ins in rays:
-        d = V(d); d.normalize()
-        p = hit(m, None if ins else panel, o, d)
-        n = d if ins else d * -1
-        out.append((p + n * (STRAP_T / 2 + 0.6), n))
-    return out
-
 
 def strip(path, width=STRAP_W, align=None, step=5.0, thick=STRAP_T, soft=False):
     """Webbing along a list of (point, surface normal): thin sections laid on the surface every step mm
@@ -180,57 +104,6 @@ def normal_at(m, p, r=18.0):
     pts, vn, _ = normals(m)
     n = vn[((pts - np.array(tuple(p))) ** 2).sum(1) < r * r].sum(0)
     return V(*(n / np.linalg.norm(n)))
-
-
-def skin(m, x, y, lift=STRAP_T / 2 + 0.6, panel=None):
-    """(point, normal) on the front of the body (or the panel) at x, y, lifted off it."""
-    p = hit(m, panel, V(x, y, 300), V(0, 0, -1))
-    n = normal_at(m, p)
-    return p + n * lift, n
-
-
-def surface_path(m, targets):
-    """Shortest path along the mesh edges through the vertices nearest the targets, as (point, normal)."""
-    import heapq
-    pts, vn, tri = normals(m)
-    if 'nbr' not in NORMALS:
-        nbr = [set() for _ in pts]
-        for t in tri:
-            for i in range(3):
-                nbr[t[i]].add(t[i - 1]); nbr[t[i - 1]].add(t[i])
-        NORMALS['nbr'] = nbr
-    nbr = NORMALS['nbr']
-    ids = [int(np.argmin(((pts - np.array(tuple(t))) ** 2).sum(1))) for t in targets]
-    route = [ids[0]]
-    for a, b in zip(ids, ids[1:]):
-        dist, prev, q = {a: 0.0}, {}, [(0.0, a)]
-        while q:
-            d, i = heapq.heappop(q)
-            if i == b:
-                break
-            if d > dist[i]:
-                continue
-            for j in nbr[i]:
-                nd = d + np.linalg.norm(pts[i] - pts[j])
-                if nd < dist.get(j, 1e18):
-                    dist[j] = nd; prev[j] = i; heapq.heappush(q, (nd, j))
-        seg = [b]
-        while seg[-1] != a:
-            seg.append(prev[seg[-1]])
-        route += seg[::-1][1:]
-    out, last = [], None   # every 28 mm or so, so the spline smooths the zigzag along the edges
-    for i in route:
-        if last is None or np.linalg.norm(pts[i] - pts[last]) > 28 or i == route[-1]:
-            q = V(*pts[i]); n = normal_at(m, q); out.append((q + n * (STRAP_T / 2 + 0.6), n)); last = i
-    return out
-
-
-def to_skin(m, q, lift):
-    """The nearest point on the skin to q, lifted off it, and the normal there."""
-    pts, _, _ = normals(m)
-    v = V(*pts[int(np.argmin(((pts - np.array(tuple(q))) ** 2).sum(1)))])
-    n = normal_at(m, v)
-    return v + n * lift, n
 
 
 def length(path):
@@ -307,47 +180,51 @@ def place(shape, p, t, n):
 # Legs: 1 in elastic, sewn round the lower bar, down the leg crease, under the cheek, up to a slide and round
 # the belt in a sewn loop that slides along it, jockstrap style.
 
-WAIST_BAR = (38.0, 95.0, 1.0, 0.0)     # strap bars on the printed core: (x out from the axis, y, direction
-LEG_BAR = (20.0, -70.8, 0.0, -1.0)    # out); as slot_bars() in the builder prints them
-BACK_RING_X = 66.0                    # where the leg straps loop round the belt, x out from the centre back
-LEG_PATH = [(30, -108, -32), (23, -128, -45), (17, -148, -70), (20, -160, -110),
-            (40, -160, -140), (65, -130, -190), (76, -40, -215)]
 LENGTHS = {}
 
 
-def slot_strap(m, panel, core, s, bar, reach):
-    """A strap from its bar on the core: up out of the slot, over the bar and out along the panel front
-    to reach mm past the bar. Returns the path and its end (point, t, n)."""
-    x, y, dx, dy = bar
-    d = V(s * dx, dy, 0); d.normalize()
-    top = hit(m, core.fuse(panel), V(AX + s * x, y, 300), V(0, 0, -1))
-    n = normal_at(m, top)
-    lift = STRAP_T / 2 + 0.3
-    path = [(top - d * 7 - n * 2, n), (top - d * 3 + n * lift, n), (top + n * lift, n), (top + d * 3 + n * lift, n)]
-    for u in range(9, int(reach) + 1, 5):
-        q = V(AX + s * x, y, 0) + d * u
-        p, nn = skin(m, q.x, q.y, lift + 0.3, panel)
-        path.append((p, nn))
-    t = path[-1][0] - path[-2][0]; t.normalize()
-    return path, (path[-1][0], t, path[-1][1])
+def sim_panel(sim):
+    """The panel as cloth_sim.py left it: its mid-surface thickened to PAD_T, as a closed mesh."""
+    x = np.array(sim['panel']['points']); tri = np.array(sim['panel']['triangles'])
+    fn = np.cross(x[tri[:, 1]] - x[tri[:, 0]], x[tri[:, 2]] - x[tri[:, 0]])
+    vn = np.zeros_like(x)
+    for k in range(3):
+        np.add.at(vn, tri[:, k], fn)
+    vn /= np.linalg.norm(vn, axis=1)[:, None] + 1e-12
+    if vn[:, 2].sum() < 0:
+        vn, tri = -vn, tri[:, ::-1]
+    top, bot = x + vn * PAD_T / 2, x - vn * PAD_T / 2
+    facets = [[top[a], top[b], top[c]] for a, b, c in tri] + [[bot[a], bot[c], bot[b]] for a, b, c in tri]
+    count = {}
+    for t in tri:
+        for k in range(3):
+            e = (t[k], t[(k + 1) % 3]); count[tuple(sorted(e))] = count.get(tuple(sorted(e)), 0) + 1
+    for t in tri:   # the cut edge: walls round each edge used by one triangle
+        for k in range(3):
+            a, b = t[k], t[(k + 1) % 3]
+            if count[tuple(sorted((a, b)))] == 1:
+                facets += [[top[a], bot[a], bot[b]], [top[a], bot[b], top[b]]]
+    return Mesh.Mesh([[V(*q) for q in f] for f in facets])
 
 
-def belt(m, panel, tips):
-    """Round the back from one hip slot to the other, at the slots' height."""
-    y = WAIST_BAR[1]; zc = centre_z(m, y, 120)
-    rays = [(V(AX, y, zc), V(math.sin(math.radians(a)), 0, math.cos(math.radians(a))), True)
-            for a in range(60, 301, 4)]
-    path = [q for q in on_surface(m, None, rays) if abs(q[0].x - AX) > abs(tips[1][0].x - AX) + 6 or q[0].z < zc]
-    path.sort(key=lambda q: math.atan2(q[0].x - AX, q[0].z - zc) % (2 * math.pi))
+def sim_path(m, pts, wrap_start=True, wrap_end=True):
+    """A strap path from cloth_sim.py as (point, normal), wrapped over its slot bar at either end."""
+    path = [(V(*q), normal_at(m, V(*q))) for q in pts]
+    def wrap(e, nxt):
+        p, n = e; d = nxt[0] - p; d = d - n * d.dot(n); d.normalize()
+        return [(p - d * 7 - n * 2, n), (p - d * 3 + n * 2.3, n), (p + n * 2.3, n)]
+    if wrap_start:
+        path = wrap(path[0], path[2]) + path[2:]
+    if wrap_end:
+        path = path[:-2] + wrap(path[-1], path[-3])[::-1]
     return path
 
 
-def rig(m, panel, core):
-    """All the straps and hardware, as {name: (shape, colour)}; strap lengths go to LENGTHS."""
+def rig(m, sim):
+    """All the straps and hardware from the cloth sim, as {name: (shape, colour)}; strap lengths go to
+    LENGTHS."""
     metal, black, plastic = [], [], []
-    hips = [slot_strap(m, panel, core, s, WAIST_BAR, 58) for s in (1, -1)]
-    legs = [slot_strap(m, panel, core, s, LEG_BAR, 14) for s in (1, -1)]
-    bp = hips[0][0] + belt(m, panel, [hips[0][1], hips[1][1]]) + hips[1][0][::-1]
+    bp = sim_path(m, sim['waist'])
     total = length(bp)
     black.append(strip(bp))
     for d0, d1, sign in ((4, 74, 1), (total - 74, total - 4, -1)):          # ends back through a slide
@@ -355,23 +232,18 @@ def rig(m, panel, core):
         black.append(strip(tail))
         p, t, n = along(bp, d0 + 52 if sign > 0 else d1 - 52)
         metal.append(place(tri_glide(), p + n * (2 * STRAP_T + 1.0), t, n))
-    zc = centre_z(m, WAIST_BAR[1], 120)
-    mid = min(range(len(bp)), key=lambda i: abs(bp[i][0].x - AX) + (0 if bp[i][0].z < zc else 1e3))
-    dm = length(bp[:mid + 1])
+    near = lambda q: min(range(len(bp)), key=lambda i: (bp[i][0] - V(*q)).Length)
+    dm = length(bp[:near(sim['waist'][sim['buckle']]) + 1])
     p, t, n = along(bp, dm)
     plastic.append(place(side_release(), p + n * 2.5, t, n))
     LENGTHS['waist (each side, slot to buckle, + 150 to adjust)'] = round(dm + 150)
-    for k, s in enumerate((1, -1)):
-        i = min(range(len(bp)), key=lambda i: abs(bp[i][0].x - (AX + s * BACK_RING_X)) + (0 if bp[i][0].z < zc else 1e3))
-        p, t, n = along(bp, length(bp[:i + 1]))
+    for k, leg in enumerate(sim['legs']):
+        p, t, n = along(bp, length(bp[:near(sim['waist'][sim['leg_belt'][k]]) + 1]))
         up = V(0, 1, 0) - n * n.y; up.normalize()
-        # the leg strap, from its slot round the leg, up through its slide and looped round the belt
-        front, (tip, tt, tn) = legs[k]
-        under, _ = to_skin(m, p - up * 20 - n * 2, 0.0)
-        back = surface_path(m, [V(AX + s * x, y, z) for x, y, z in LEG_PATH] + [under])
         over = STRAP_T + 0.6                                             # on the belt's outer face
-        lp = front + back + [(p - up * 13 + n * over, n), (p + n * over, n),
-                                                  (p + up * 11 + n * over, n), (p + up * 15 + n * 0.2, up)]
+        # the leg strap, from its slot round the leg, up through its slide and looped round the belt
+        lp = sim_path(m, leg[:-3], wrap_end=False) + [(p - up * 13 + n * over, n), (p + n * over, n),
+                                                       (p + up * 11 + n * over, n), (p + up * 15 + n * 0.2, up)]
         black.append(strip(lp))
         L = length(lp)
         black.append(strip(part(lp, 4, 30, STRAP_T + 0.2)))                 # sewn back on itself at the slot
@@ -416,7 +288,14 @@ def scene(src, turn=None):
             add(o.Name, o.Shape, like=o, colour=DIFFUSER if o.Name == 'Diffuser' else
                 (0.62, 0.63, 0.67) if o.Name in ('SnapDDScrew', 'SnapDoubleDouble') else None)
     for n, (shape, col) in PARTS.items():
-        add(n, shape, col)
+        if isinstance(shape, Mesh.Mesh):
+            mm = shape.copy()
+            if turn is not None:
+                mm.transform(turn)
+            o = tmp.addObject('Mesh::Feature', n); o.Mesh = mm
+            o.ViewObject.ShapeColor = col; o.ViewObject.CreaseAngle = 60.0
+        else:
+            add(n, shape, col)
     m = MESH.copy()
     if turn is not None:
         m.transform(turn)
@@ -457,10 +336,11 @@ def main():
 
     src = App.openDocument(SOURCE)
     MESH = body()
-    panel = draped(MESH, src.getObject('HarnessPad').Shape)
+    with open(SIM) as f:
+        sim = json.load(f)
     LEATHER = tuple(src.getObject('HarnessPad').ViewObject.ShapeColor[:3])
-    PARTS = {'Panel': (panel, LEATHER)}
-    PARTS.update(rig(MESH, panel, src.getObject('SnapBackplatePrinted').Shape))
+    PARTS = {'Panel': (sim_panel(sim), LEATHER)}
+    PARTS.update(rig(MESH, sim))
     with open(os.environ.get('HARNESS_LENGTHS', os.devnull), 'w') as f:   # for the cut list
         f.writelines('%s: %d mm\n' % kv for kv in LENGTHS.items())
     pic = 'Harness-Mount-Ring-On-Body'

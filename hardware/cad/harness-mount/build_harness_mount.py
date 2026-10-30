@@ -43,13 +43,14 @@ PARAMS = {
     # straps
     'StrapW': (25.4, 'design: 1 in webbing, the common harness strap; 25 mm webbing fits too'),
     'WaistTabX': (88.0, 'design: hip corners of the V panel; the waist straps run over them'),
-    'WaistTabY': (95.0, 'design: waist straps across the top of the V, level with the upper case'),
+    'WaistTabY': (104.0, 'sim: waist slots high on the case sides (cloth_sim.py: the belt settles at y 107, pulling level)'),
     'SlotW': (26.5, 'design: strap slot length, for 1 in webbing or elastic'),
     'SlotT': (5.5, 'design: strap slot width, for a doubled strap end'),
     'SlotTabT': (5.5, 'design: strap tab height off the panel front'),
     'SlotBarW': (4.5, 'design: the bar the strap wraps, outboard of the slot'),
     'SlotTunnel': (2.5, 'design: gap under the bar for the strap, over the panel front'),
-    'LegSlotX': (20.0, 'design: leg slots this far either side of the toy axis, under the lobe, pointing down the leg crease'),
+    'WaistSlotUp': (0.0, 'sim: waist slot tilt, deg up (cloth_sim.py: the belt leaves the core level, 3 deg up)'),
+    'LegSlotX': (15.5, 'sim: leg slots side by side under the lobe, pointing down (cloth_sim.py: both legs settle 6 mm either side of the centre, pulling straight down)'),
     # ring interface (strap-on O-ring standard)
     'SocketD': (50.0, 'design: one socket for every ring; a 1.75 in ring keeps a 2.8 mm wall'),
     'SocketClear': (0.2, 'design: radial clearance of the ring in its socket'),
@@ -98,7 +99,7 @@ def lobe_r():
 
 
 # panel outline (x from the centreline, y), right half, top to bottom; mirrored for the left
-PANEL = [(0, 120), (46, 120), (80, 116), (94, 106), (90, 90), (68, 52), (58, 14), (58, -20), (56, -48),
+PANEL = [(0, 128), (46, 128), (80, 124), (94, 112), (90, 92), (68, 52), (58, 14), (58, -20), (56, -48),
          (48, -68), (38, -80)]
 
 
@@ -130,7 +131,7 @@ def rear_surface():
     """The rear face as a B-spline sheet over the whole plate."""
     ax, ay = axis()
     xs = [ax - 102 + 6 * i for i in range(35)]
-    ys = [ay - 60 + 6 * j for j in range(int((SB.plate_top() + 70 - ay) / 6) + 1)]
+    ys = [ay - 60 + 6 * j for j in range(int((SB.plate_top() + 90 - ay) / 6) + 1)]
     s = Part.BSplineSurface()
     s.interpolate([[V(x, y, rear_z(x, y)) for y in ys] for x in xs])
     return s.toShape()
@@ -167,11 +168,13 @@ def slot_frames():
     waist slots on the sides of the upper case and the leg slots on the lobe round the toy."""
     cx = P['DeviceCx']; ax, ay = axis(); wire = core_face().OuterWire; out = []
     for s in (1, -1):
-        for o, d in ((V(cx, H['WaistTabY'], 0), V(s, 0, 0)), (V(ax + s * H['LegSlotX'], ay, 0), V(0, -1, 0))):
+        up = math.radians(H['WaistSlotUp'])
+        for o, d, tilt in ((V(cx, H['WaistTabY'], 0), V(s, 0, 0), V(s * math.cos(up), math.sin(up), 0)),
+                           (V(ax + s * H['LegSlotX'], ay, 0), V(0, -1, 0), V(0, -1, 0))):
             o.z = SB.z_rear()
             hits = Part.LineSegment(o, o + d * 200).toShape().section(wire).Vertexes
             e = max((v.Point for v in hits), key=lambda q: (q - o).Length)
-            out.append((e, d))
+            out.append((e, tilt))
     return out
 
 
@@ -525,4 +528,5 @@ def main():
     return [build(m.strip()) for m in os.environ.get('HARNESS_VARIANTS', 'ring,thread').split(',')]
 
 
-DOCUMENT = main()
+if not os.environ.get('HARNESS_NO_MAIN'):   # cloth_sim.py borrows the geometry without building
+    DOCUMENT = main()

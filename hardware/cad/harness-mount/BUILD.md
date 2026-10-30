@@ -20,10 +20,11 @@ Use the `-Pattern.svg` (print it at 100% and check the 50 mm line) or the
 | Foam | 3 mm closed-cell foam (EVA or neoprene) | 1 | pattern |
 | Lining | 1 mm garment leather, suede or neoprene | 1 | pattern |
 | Waist strap | 1 in nylon webbing | 2 | 490 mm |
-| Leg strap | 1 in firm elastic | 2 | 730 mm |
+| Leg strap | 1 in firm elastic | 2 | 710 mm |
 
-The strap lengths fit the reference body. For a different size, add or take
-off half the difference in hip measurement on each waist strap.
+The slot positions and strap lengths come from a cloth sim of the panel and
+straps on the reference body ([cloth_sim.py](cloth_sim.py)). For a different
+size, add or take off half the difference in hip measurement on each waist strap.
 
 ## Hardware
 
@@ -50,7 +51,9 @@ off half the difference in hip measurement on each waist strap.
    cut ends.
 5. **Leg straps:** take one end under a bottom slot's bar, up through the slot
    and sew it 30 mm back on itself. Thread the other end through a slide,
-   round the waist strap at the back and back through the slide.
+   round the waist strap 120 mm from the buckle and back through the slide.
+   Bar-tack the loop to the waist strap so it can't slide in toward the
+   buckle; there it would pull the strap into a thong.
 
 ## Wear
 

@@ -17,8 +17,10 @@ It sits on a padded leather panel curved to the pubic mound. The straps
 thread through slots printed on the core, so the foam is between every
 buckle and the skin.
 
-Worn, on MakeHuman's CC0 average female body (`render_on_body.py`). The panel
-curve is fitted to it; worn this way the toy points about 14° down.
+Worn, on MakeHuman's CC0 average female body. `cloth_sim.py` drapes the
+panel and pulls the straps taut on it, which is where the strap slots come
+from; `render_on_body.py` draws the result. Worn this way the toy points
+about 14° down.
 
 | Front | Close | Low | Side | Back |
 | --- | --- | --- | --- | --- |
