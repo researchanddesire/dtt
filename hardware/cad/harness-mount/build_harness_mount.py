@@ -69,8 +69,7 @@ PARAMS = {
     'PadRDown': (90.0, 'estimate: curving back between the legs below the toy; the leg tabs sweep back about 10 mm'),
     'ShellEdgeR': (2.0, 'design: rounded outer edges of the curved wings, front and back'),
     'PadEdgeR': (2.0, 'design: rounded pad edges'),
-    'PadSlotClear': (1.5, 'design: pad hole round each strap slot'),
-    'PadBaseHole': (62.0, 'design: hole round the toy axis for the flared base (ring version), inside the plate lobe so the pad stays one piece'),
+    'PadBaseHole': (68.0, 'design: the pad stops short of the toy lobe in the ring version, so the flared base sits on the plate'),
     'PegD': (4.0, 'design: loose TPU pins join the pad to the plate, so both keep a flat face to print on'),
     'PegH': (7.6, 'design: pin length, 0.4 short of the two holes'),
     'PadPegH': (3.5, 'design: pin hole depth in the pad, leaving 1.5 mm of pad behind it'),
@@ -104,7 +103,7 @@ def slots():
     cx = P['DeviceCx']; ax, ay = axis(); r, a = H['LegSlotR'], math.radians(H['LegSlotDeg'])
     out = [(cx - H['WaistSlotDX'], H['WaistSlotY'], 0.0), (cx + H['WaistSlotDX'], H['WaistSlotY'], 0.0)]
     for s in (-1, 1):   # tangent to the circle, so the long axis is square to the strap pull
-        out.append((ax + s * r * math.sin(a), ay - r * math.cos(a), 90.0 - s * H['LegSlotDeg']))
+        out.append((ax + s * r * math.sin(a), ay - r * math.cos(a), 90.0 + s * H['LegSlotDeg']))
     return out
 
 
@@ -206,8 +205,8 @@ def shell():
 
 
 def pad_plan():
-    """The plate outline without the strap wings, kept clear of the slots, the lever and (ring) the toy base."""
-    return Part.Face(plan_face().OuterWire)
+    """The flat core only: the pad stays off the strap wings and leg tabs, where the webbing would peel it."""
+    return core_face()
 
 
 def pad():
@@ -220,9 +219,7 @@ def pad():
     edges = [e for e in blank.Edges if not (e.BoundBox.XLength < 1e-3 and e.BoundBox.YLength < 1e-3)
              and min(f.normalAt(0, 0).z ** 2 for f in blank.ancestorsOfType(e, Part.Face)) < 0.5]
     blank = SB.try_fillet(blank, edges, (H['PadEdgeR'], H['PadEdgeR'] * 0.5), 'pad edges')
-    c = H['PadSlotClear']
     cuts = [lever_zone(-100, 100).cut(box(-500, 500, -500, P['LatchRootY'] - 20, -100, 100))]
-    cuts += [stadium(x, y, deg, H['SlotLen'] + 2 * c, H['SlotT'] + 2 * c, -100, 100) for x, y, deg in slots()]
     if MODE == 'ring':
         ax, ay = axis(); cuts.append(cyl(H['PadBaseHole'] / 2, ax, ay, -100, 100))
     cuts += [cyl(H['PegHoleD'] / 2, x, y, rear_z(x, y) - H['PadPegH'], 50) for x, y in pegs()]
@@ -352,6 +349,7 @@ def checks(doc, printed, toy, extra):
     print('CHECK pad valid %s, solids %d, %.1f cm3, %.1f mm thick, reaching %.1f mm behind the flat rear; overlap with the plate %.4f, with the %s %.4f, with the pins %.4f mm3' % (
         pd.isValid(), len(pd.Solids), pd.Volume / 1000, H['PadT'], zr - pb.ZMin, pd_.common(printed).Volume, 'ring' if MODE == 'ring' else 'screw', pd_.common(extra).Volume,
         pd.common(Part.makeCompound(pins())).Volume))
+    print('CHECK pad to the strap slots: gap %.2f mm' % min(pd.distToShape(c)[0] for c in slot_cuts()))
     lever = box(P['LatchX0'], P['LatchX1'], P['LatchRootY'] + 10, SB.plate_top(), zr - 6.3, zr - 0.01)
     print('CHECK room behind the lever pressed 6.3 mm: overlap %.4f mm3 with the plate, %.4f with the pad' % (
         lever.common(printed).Volume, lever.common(pd).Volume))

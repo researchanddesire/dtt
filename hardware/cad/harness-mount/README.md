@@ -13,8 +13,9 @@ right under its jack end, in front of the distance sensor. Two toy interfaces.
 
 The plate stays flat only under the DTT and round the toy. Everywhere else its
 rear curves to sit over the pubic mound: the waist wings sweep about 11 mm
-back round the hips, the top 7 mm up the belly, and the leg tabs about 24 mm
-back between the legs. A 5 mm TPU pad follows the curve on the body side.
+back round the hips, the top 7 mm up the belly, and the leg tabs about 13 mm
+back between the legs. A 5 mm TPU pad follows the curve under the middle of
+the plate, clear of the strap slots so the webbing can't peel it.
 
 ## Use
 
