@@ -17,7 +17,7 @@ end and the lever are up.
 Device coordinates as in the snap backplate: X across, Y along (USB-C end at +Y, worn up), Z out of the
 front face; the body is at -Z and the part prints rear face down.
 """
-import os, sys
+import math, os, sys
 import FreeCAD as App
 import Part
 
@@ -51,6 +51,7 @@ PARAMS = {
     'PadLeverClear': (1.0, 'design: pad notch round the lever and its slots, so the tab can still be pressed'),
     'PadNotchR': (2.0, 'design: notch corners'),
     'RootEdgeR': (3.0, 'design: round along the back of the bottom edge, which sits on the base of the penis'),
+    'Tilt': (15.0, 'design (Lucy): the cradle leans out at the bottom so the sensor beam points this far up, over an erect shaft'),
 }
 J = {k: v for k, (v, _) in PARAMS.items()}
 PLATE_COLOUR, TOUCH_COLOUR = S.PLATE_COLOUR, S.TOUCH_COLOUR
@@ -93,12 +94,27 @@ def outline():
     return S.round_face(S.flat_face(plan, zr), J['EarBlendR'], J['EarR'])
 
 
-def printed_part():
+def pivot():
+    """The cradle tilts about the top of its plate rear, which stays on the body."""
+    return V(S.P['DeviceCx'], S.plate_top(), S.z_rear())
+
+
+def tilt(shape, sign=1):
+    """From the cradle's own frame to the worn one (sign -1 goes back)."""
+    return shape.rotated(pivot(), V(1, 0, 0), -sign * J['Tilt'])
+
+
+def cradle_frame():
     S.DD = False
     S.P.clear(); S.P.update(S.BASE); S.P.update({k: v for k, (v, _) in S.STANDARD.items()})
     S.cup_centres = lambda: {}                            # no suction cups: no keyholes, no cup proxies
     S.keyholes = lambda: []
-    base = S.printed_part()
+
+
+def printed_part():
+    """The worn part: the cradle tilted, on a body-side base that wraps the body and carries the band ears."""
+    cradle_frame()
+    base = tilt(S.printed_part())
     zr, zf = S.z_rear(), S.z_front()
     ears, slots = ears_and_slots()
     # Ears: a shell PlateT thick that wraps the body, so they curve back round it.
@@ -109,12 +125,14 @@ def printed_part():
     near = Part.makeCompound([box(x0 - b, x1 + b, max(y0 - b, S.y_end() + 1), min(y1 + b, S.plate_top() - 1),
                                   zr - 20, zf + 1) for x0, x1, y0, y1 in ears])
     plate = plate.cut(inside).common(near)               # only the ears and their blends; the lever slots stay open
-    # Under the sleeve, the flat rear is filled down to the body curve, except under the lever so it
-    # still flexes and has room to be pressed.
-    fill = S.plan_face().translated(V(0, 0, -20)).extrude(V(0, 0, 20.01)).cut(body())
-    fill = fill.cut(lever_keepout(0.5).extrude(V(0, 0, 40)))
-    ye = S.y_end()                                        # the back of the bottom edge, on the body
-    root = [e for e in fill.Edges if e.BoundBox.YMax < ye + 0.3 and e.BoundBox.ZMax < zr - 0.3]
+    # Under the sleeve, the tilted plate rear is filled down to the body: a wedge, thick at the bottom.
+    # Under the lever it is left open, so the lever still flexes and has room to be pressed.
+    fill = tilt(S.plan_face().translated(V(0, 0, -60)).extrude(V(0, 0, 60.01))).cut(body())
+    fill = fill.cut(tilt(lever_keepout(0.5).translated(V(0, 0, -40)).extrude(V(0, 0, 80))))
+    fill = fill.common(shell(0.0, 200.0))                 # nothing inside the body or below it
+    on_body = lambda e: all(body().distToShape(Part.Vertex(v.Point))[0] < 0.05 for v in e.Vertexes)
+    root = [e for e in fill.Edges if e.BoundBox.YMax < J['BodyApexY'] - 30 and on_body(e)
+            and abs(e.BoundBox.XMax - e.BoundBox.XMin) > 5]
     fill = S.try_fillet(fill, root, (J['RootEdgeR'], J['RootEdgeR'] / 2), 'bottom edge, body side')
     part = base.fuse([plate, fill]).removeSplitter()
     return part.cut([rounded_rect(x0, x1, y0, y1, zr - 20, J['SlotR']).extrude(V(0, 0, t + 40))
@@ -156,8 +174,16 @@ def pad_face():
 
 
 def pad():
-    """The pad as worn, wrapped round the body."""
-    return pad_face().translated(V(0, 0, -30)).extrude(V(0, 0, 40)).common(shell(-J['PadT'], 0.0))
+    """The pad as worn, wrapped round the body under the tilted plate."""
+    return tilt(pad_face().translated(V(0, 0, -60)).extrude(V(0, 0, 70))).common(shell(-J['PadT'], 0.0))
+
+
+def pad_template():
+    """The pad outline as it lies on the body: the plan face foreshortened by the tilt."""
+    m = App.Matrix(); m.scale(1, math.cos(math.radians(J['Tilt'])), 1)
+    p = pivot()
+    return pad_face().translated(-p).transformGeometry(m).translated(V(p.x, p.y, 0) - V(0, 0, 0)).translated(
+        V(0, 0, -S.z_rear()))
 
 
 def band_proxy():
@@ -181,8 +207,9 @@ def band_proxy():
 
 
 def checks(doc, printed, black, blue, foam):
-    S.design_checks(printed, black, blue, None)
-    S.module_checks(doc, printed)
+    # the snap backplate's checks run in the cradle's own frame, against the case as modelled
+    S.design_checks(tilt(printed, -1), tilt(black, -1), tilt(blue, -1), None)
+    S.module_checks(doc, tilt(printed, -1))
     zr = S.z_rear(); _, slots = ears_and_slots()
     pf = pad_face()
     print('CHECK pad: valid %s, %.0f cm2, overlap with the part %.4f mm3' % (
@@ -191,18 +218,21 @@ def checks(doc, printed, black, blue, foam):
         hole = rounded_rect(x0, x1, y0, y1, zr - 20, J['SlotR']).extrude(V(0, 0, 20.1))
         print('CHECK band slot %.1f x %.1f: pad overlap %.4f mm3, plate overlap %.4f mm3' % (
             x1 - x0, y1 - y0, hole.common(foam).Volume, hole.common(printed).Volume))
-    lever = box(S.P['LatchX0'], S.P['LatchX1'], S.P['LatchRootY'], S.FAR, zr - 10, zr)
+    lever = tilt(box(S.P['LatchX0'], S.P['LatchX1'], S.P['LatchRootY'], S.FAR, zr - 30, zr))
     print('CHECK pad clear of the lever: overlap %.4f mm3' % lever.common(foam).Volume)
-    for y, what in ((S.y_end() + 1, 'bottom edge, on the penis base'), (J['BodyApexY'], 'apex'),
-                    (S.plate_top() - 1, 'lever tab, room to press')):
+    for y0, what in ((S.y_end() + 3, 'bottom edge, on the penis base'), (J['BodyApexY'], 'apex'),
+                     (S.plate_top() - 1, 'lever tab, room to press')):
+        y = tilt(Part.Vertex(V(S.P['DeviceCx'], y0, zr))).Point.y
         seg = Part.LineSegment(V(S.P['DeviceCx'], y, zr - 30), V(S.P['DeviceCx'], y, zr + 1)).toShape()
         low = min(v.Point.z for v in seg.common(printed).Vertexes)
         gap = body().distToShape(Part.Vertex(V(S.P['DeviceCx'], y, low)))[0]
         print('CHECK centreline at Y %.0f (%s): back %.2f mm off the body' % (y, what, gap))
-    eb = Part.makeCompound([doc.getObject(n).Shape for n in S.MODULE_PARTS]).BoundBox
+    case = tilt(Part.makeCompound([doc.getObject(n).Shape for n in S.MODULE_PARTS]))
     bb = printed.optimalBoundingBox()   # tori give loose plain bounding boxes
-    print('CHECK worn: %.1f x %.1f x %.1f mm, %.1f mm from the body to the case front (pad included)' % (
-        bb.XLength, bb.YLength, bb.ZLength, eb.ZMax - (zr - J['PadT'])))
+    eb = case.optimalBoundingBox()
+    print('CHECK worn: part %.1f x %.1f x %.1f mm; case front %.1f to %.1f mm off the body at the plate apex '
+          '(pad included), beam %.0f deg up' % (bb.XLength, bb.YLength, bb.ZLength, eb.ZMin - (zr - J['PadT']),
+                                               eb.ZMax - (zr - J['PadT']), J['Tilt']))
 
 
 def tagged(doc, name, label, shape, colour):
@@ -224,9 +254,13 @@ def main():
     if o is not None:
         o.Visibility = False
     printed = printed_part()
-    black, blue = S.split_colours(printed)
+    black, blue = (tilt(c) for c in S.split_colours(tilt(printed, -1)))   # the touch region is in the cradle frame
     foam = pad(); band = band_proxy()
     checks(doc, printed, black, blue, foam)
+    worn = App.Placement(V(0, 0, 0), App.Rotation(V(1, 0, 0), -J['Tilt']), pivot())
+    for o in doc.RootObjects:                             # the case as worn, tilted with the cradle
+        if hasattr(o, 'Placement') and o.Name != 'ExplodedView':
+            o.Placement = worn.multiply(o.Placement)
     group = doc.addObject('App::Part', 'JockMount'); group.Label = 'Jock mount'
     for name, label, shape, colour in (
             ('JockMountPrinted', 'Jock mount - printed, black', black, PLATE_COLOUR),
@@ -245,14 +279,14 @@ def main():
     flat.exportStep(stem + '-Pad.step'); mesh(flat, stem + '-Pad.stl')
     import importDXF
     pd = App.newDocument('JockPad'); pf = pd.addObject('Part::Feature', 'Pad')
-    pf.Shape = Part.Compound(pad_face().translated(V(0, 0, -S.z_rear())).Wires)
+    pf.Shape = Part.Compound(pad_template().Wires)
     pd.recompute(); importDXF.export([pf], stem + '-Pad.dxf'); App.closeDocument(pd.Name)
     cx = S.P['DeviceCx']                                  # a patch of the wearer, for the side preview
     skin = shell(-J['PadT'] - 12, -J['PadT']).common(box(cx - 95, cx + 95, -45, 150, S.z_rear() - 45, S.z_rear()))
     for shape, name in ((black, 'mount-black'), (blue, 'mount-blue'), (foam, 'pad'), (band, 'band'), (skin, 'body')):
         mesh(shape, os.path.join(BUILD, name + '.stl'))
     for n in S.MODULE_PARTS:
-        mesh(doc.getObject(n).Shape, os.path.join(BUILD, n + '.stl'), fine=False)
+        mesh(tilt(doc.getObject(n).Shape), os.path.join(BUILD, n + '.stl'), fine=False)
     doc.saveAs(os.path.join(HERE, 'DTT-Jock-Mount.FCStd'))
     return doc
 

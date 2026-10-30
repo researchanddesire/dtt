@@ -3,8 +3,9 @@
 The snap backplate's cradle, worn on a jockstrap waistband. The case sits on the
 pubic mound with the jack end down, so the distance sensor looks straight out
 over the base of the penis and measures the partner's head moving up and down.
-The back is curved to sit on the pubic mound: 120 mm across the hips and
-300 mm from the penis base up. It can be used to measure fellatio, or the
+The cradle leans out 15° at the bottom on a wedge, so the beam points up
+over an erect shaft. The back is curved to sit on the pubic mound: 120 mm
+across the hips and 300 mm from the penis base up. It can be used to measure fellatio, or the
 wearer's own hand.
 
 ![Hero](images/Jock-Mount-Hero.png)
@@ -45,6 +46,6 @@ for the images.
 
 - Body curve (`BodyR`, `BodyRLong` and `BodyApexY` are all assumed).
 - Band slot fit on a real jockstrap (`BandW`, `SlotT`).
-- Whether the sensor sees the head and not the shaft. An erect shaft angled up
-  could cross the beam.
+- Whether the 15° tilt keeps the shaft out of the beam (`Tilt`). Less tilt
+  makes the wedge thinner.
 - Comfort with and without the pad (`PadT`).
