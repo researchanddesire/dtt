@@ -13,15 +13,16 @@ right under its jack end, in front of the distance sensor. Two toy interfaces.
 
 Like the comfortable soft harnesses (Joque, RodeoH, Aslan Jaguar), the only
 hard part is small: a printed core that is just the cradle and the toy ring.
-It sits on a padded leather panel curved to the pubic mound, with adjustable
-waist and jock-style leg straps on D-rings.
+It sits on a padded leather panel curved to the pubic mound. The straps
+thread through slots printed on the core, so the foam is between every
+buckle and the skin.
 
 Worn, on MakeHuman's CC0 average female body (`render_on_body.py`). The panel
 curve is fitted to it; worn this way the toy points about 14° down.
 
-| Front | Low | Side | Back |
-| --- | --- | --- | --- |
-| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Low](images/Harness-Mount-Ring-On-Body-Low.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
+| Front | Close | Low | Side | Back |
+| --- | --- | --- | --- | --- |
+| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Close](images/Harness-Mount-Ring-On-Body-Detail.png) | ![Low](images/Harness-Mount-Ring-On-Body-Low.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
 
 ## Use
 
@@ -31,10 +32,10 @@ curve is fitted to it; worn this way the toy points about 14° down.
 - **24 mm thread:** for the OSSM Double Double and other 24 mm threaded
   mounts. Push the printed screw into the hex pocket from the body side and
   thread the toy on from the front.
-- **Panel and straps:** a sewn leather panel with four D-ring tabs, 1 in
-  straps with slides, a side-release buckle at the back, and leg straps that
-  clip on with snap hooks. See [BUILD.md](BUILD.md) for the cut list,
-  pattern, hardware and assembly.
+- **Panel and straps:** a plain sewn leather panel, 1 in straps through four
+  slots on the core (waist at the sides, legs under the ring), slides to
+  adjust and a side-release buckle at the back. See [BUILD.md](BUILD.md) for
+  the cut list, pattern, hardware and assembly.
 - **DTT:** slides in and releases as on the snap backplate. Use a right-angle
   3.5 mm plug with the O-ring version.
 

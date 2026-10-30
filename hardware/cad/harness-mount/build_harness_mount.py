@@ -42,8 +42,14 @@ SB.OUT = os.path.join(ROOT, 'hardware', 'production-exports', 'cad', 'harness-mo
 PARAMS = {
     # straps
     'StrapW': (25.4, 'design: 1 in webbing, the common harness strap; 25 mm webbing fits too'),
-    'WaistTabX': (88.0, 'design: hip corners of the V panel, where the waist D-rings sit'),
-    'WaistTabY': (100.0, 'design: waist straps across the top of the V, level with the upper case'),
+    'WaistTabX': (88.0, 'design: hip corners of the V panel; the waist straps run over them'),
+    'WaistTabY': (95.0, 'design: waist straps across the top of the V, level with the upper case'),
+    'SlotW': (26.5, 'design: strap slot length, for 1 in webbing or elastic'),
+    'SlotT': (5.5, 'design: strap slot width, for a doubled strap end'),
+    'SlotTabT': (5.5, 'design: strap tab height off the panel front'),
+    'SlotBarW': (4.5, 'design: the bar the strap wraps, outboard of the slot'),
+    'SlotTunnel': (2.5, 'design: gap under the bar for the strap, over the panel front'),
+    'LegSlotX': (20.0, 'design: leg slots this far either side of the toy axis, under the lobe, pointing down the leg crease'),
     # ring interface (strap-on O-ring standard)
     'SocketD': (50.0, 'design: one socket for every ring; a 1.75 in ring keeps a 2.8 mm wall'),
     'SocketClear': (0.2, 'design: radial clearance of the ring in its socket'),
@@ -92,16 +98,16 @@ def lobe_r():
 
 
 # panel outline (x from the centreline, y), right half, top to bottom; mirrored for the left
-PANEL = [(0, 120), (46, 120), (80, 116), (94, 106), (90, 90), (64, 52), (46, 14), (40, -26), (36, -54),
-         (26, -70)]
+PANEL = [(0, 120), (46, 120), (80, 116), (94, 106), (90, 90), (68, 52), (58, 14), (58, -20), (56, -48),
+         (48, -68), (38, -80)]
 
 
 def panel_face():
     """The soft panel in plan: the classic strap-on V, wide at the hips for the waist D-rings and
-    narrowing to a round point under the toy, its sides there for the leg D-rings."""
+    narrowing to a round point under the toy, wide enough there for foam under the leg slots."""
     cx = P['DeviceCx']; zr = SB.z_rear()
     pts = [V(cx + x, y, zr) for x, y in PANEL] + [V(cx - x, y, zr) for x, y in reversed(PANEL[1:])]
-    pts.insert(len(PANEL), V(cx, -76, zr))
+    pts.insert(len(PANEL), V(cx, -88, zr))
     c = Part.BSplineCurve(); c.interpolate(pts, PeriodicFlag=True)
     return Part.Face(Part.Wire(c.toShape()))
 
@@ -156,10 +162,59 @@ def lever_zone(z0, z1):
     return box(P['LatchX0'] - g - w, P['LatchX1'] + g + w, P['LatchRootY'] - P['LatchReliefD'] / 2 - w, 500, z0, z1)
 
 
+def slot_frames():
+    """Where the strap slots sit: (edge point of the core outline in plan, outward direction), for the
+    waist slots on the sides of the upper case and the leg slots on the lobe round the toy."""
+    cx = P['DeviceCx']; ax, ay = axis(); wire = core_face().OuterWire; out = []
+    for s in (1, -1):
+        for o, d in ((V(cx, H['WaistTabY'], 0), V(s, 0, 0)), (V(ax + s * H['LegSlotX'], ay, 0), V(0, -1, 0))):
+            o.z = SB.z_rear()
+            hits = Part.LineSegment(o, o + d * 200).toShape().section(wire).Vertexes
+            e = max((v.Point for v in hits), key=lambda q: (q - o).Length)
+            out.append((e, d))
+    return out
+
+
+def slot_plan(e, d, u0, u1, h, z0=-100.0, z1=100.0):
+    """A prism over the strap tab's rectangle: u0..u1 out along d from the core edge e, half width h."""
+    t = V(-d.y, d.x, 0)
+    pts = [e + d * u0 + t * h, e + d * u1 + t * h, e + d * u1 - t * h, e + d * u0 - t * h]
+    pts = [V(q.x, q.y, z0) for q in pts]
+    f = Part.Face(Part.makePolygon(pts + pts[:1]))
+    return f, f.extrude(V(0, 0, z1 - z0))
+
+
+SLOT_U = (-6.0, 3.0)   # tab from 6 mm inside the core edge; slot starts 3 mm outside it
+
+
+def slot_tabs():
+    """Printed strap tabs on the sides of the core, lying on the panel front: a slot and the bar outboard
+    of it, which stands SlotTunnel off the panel so the strap wraps it and is sewn back on itself. The
+    rings and buckles are gone; the foam is between the hardware and the skin."""
+    rs = rear_surface(); tabs = []
+    u0, us = SLOT_U; u1 = us + H['SlotT'] + H['SlotBarW']; h = H['SlotW'] / 2 + 3.25
+    for e, d in slot_frames():
+        f, _ = slot_plan(e, d, u0, u1, h)
+        plan = SB.round_face(f, 0, 3.0).extrude(V(0, 0, 200))
+        tab = rs.extrude(V(0, 0, H['SlotTabT'])).common(plan).removeSplitter()
+        tab = tab.cut(slot_plan(e, d, us, us + H['SlotT'], H['SlotW'] / 2)[1])
+        tunnel = rs.translated(V(0, 0, -1)).extrude(V(0, 0, H['SlotTunnel'] + 1)).common(
+            slot_plan(e, d, us, u1 + 1, H['SlotW'] / 2 + 0.5)[1])
+        tabs.append(tab.cut(tunnel).removeSplitter())
+    return tabs
+
+
+def slot_bars():
+    """Centre of each bar on its outer face and the outward direction, for the strap routing."""
+    us = SLOT_U[1] + H['SlotT'] + H['SlotBarW'] / 2
+    return [(V((e + d * us).x, (e + d * us).y, rear_z((e + d * us).x, (e + d * us).y) + H['SlotTabT']), d)
+            for e, d in slot_frames()]
+
+
 def pad():
     """The soft front panel: an even layer behind the concave rear face over the panel outline, open
     behind the lever, with a hole for the toy shaft (ring) and the screw holes through its leather, pocketed
-    in the foam for the screw heads. The straps are sewn on, so no slots."""
+    in the foam for the screw heads. The straps hang off the core, so the panel is plain."""
     rs = rear_surface()
     layer = rs.extrude(V(0, 0, -H['PadT']))
     prism = panel_face().extrude(V(0, 0, 120)).translated(V(0, 0, -60))
@@ -176,44 +231,38 @@ def pad():
     return blank.cut(cuts).removeSplitter()
 
 
-TAB = (25.0, 90.0)   # strap tab: 1 in wide, folded round its D-ring, 20 mm of each end sewn into the panel
-TABS = [(86.0, 100.0, 0.97, 0.25), (30.0, -60.0, 0.8, -0.6)]   # (x from the axis, y, out direction): hip
-                                                              # ears and bottom corners; render_on_body.py too
 FOAM_INSET = 5.0     # foam stops short of the edge, so the edge stitching goes through leather only
 
 
 def pattern(padshape, path):
     """Flat cut pattern, 1:1 in mm, as DXF (R12, layers CUT and MARK) and SVG: the leather shell (with the
-    Chicago screw holes), the foam (inset, with pockets for the screw heads), the lining (which covers the
-    screw heads), the four strap tabs, and where the tabs go (MARK, dashed blue). The panel is only a few mm deep over its width, so
-    its outline in plan is the flat pattern."""
+    Chicago screw holes), the foam (inset, with pockets for the screw heads) and the lining (which covers the
+    screw heads). MARK (dashed blue) is where the core sits. The panel is only a few mm deep over its width,
+    so its outline in plan is the flat pattern."""
     rear = max(padshape.Faces, key=lambda f: f.Area if f.normalAt(*f.Surface.parameter(f.CenterOfMass)).z < -0.5 else 0)
     flat = lambda w: [(q.x, q.y) for q in w.discretize(Distance=1.0)]
     outer = flat(rear.OuterWire)
     holes = [flat(w) for w in rear.Wires if not w.isSame(rear.OuterWire)]
     circle = lambda x, y, r: [(x + r * math.cos(2 * math.pi * k / 48), y + r * math.sin(2 * math.pi * k / 48)) for k in range(48)]
-    poly = Part.Face(Part.makePolygon([V(x, y, 0) for x, y in outer + outer[:1]]))
-    foam = flat(poly.makeOffset2D(-FOAM_INSET, join=0).OuterWire)
-    cx = P['DeviceCx']; marks = []
-    for x, y, dx, dy in TABS:   # where each tab's end is sewn in, 20 mm inside the edge
-        for sx in (1, -1):
-            t = V(sx * dx, dy, 0); t.normalize(); w = V(-t.y, t.x, 0)
-            o = V(cx + sx * x, y, 0)
-            edge = Part.LineSegment(o, o + t * 80).toShape().section(poly.OuterWire).Vertexes
-            c = min((v.Point for v in edge), key=lambda q: (q - o).Length) - t * 10
-            marks.append([(q.x, q.y) for q in (c + t * 10 + w * 12.5, c - t * 10 + w * 12.5, c - t * 10 - w * 12.5, c + t * 10 - w * 12.5)])
+    g, w = P['LatchSlot'], 2.0   # inset from the panel outline and the lever notch (offsetting the polygon can fail)
+    y0 = P['LatchRootY'] - P['LatchReliefD'] / 2 - w
+    notch = Part.Face(Part.makePolygon([V(P['LatchX0'] - g - w, y0, 0), V(P['LatchX1'] + g + w, y0, 0),
+                                        V(P['LatchX1'] + g + w, 500, 0), V(P['LatchX0'] - g - w, 500, 0), V(P['LatchX0'] - g - w, y0, 0)]))
+    plan = [V(q.x, q.y, 0) for q in panel_face().OuterWire.discretize(Distance=1.0)]
+    inset = Part.Face(Part.makePolygon(plan + plan[:1])).makeOffset2D(-FOAM_INSET, join=0)
+    top = rear.OuterWire.BoundBox.YMax - FOAM_INSET   # the panel's top edge is straight, where the rear sheet ends
+    inset = inset.common(Part.Face(Part.makePolygon([V(-500, -500, 0), V(500, -500, 0), V(500, top, 0), V(-500, top, 0), V(-500, -500, 0)])))
+    foam = flat(max(inset.cut(notch.makeOffset2D(FOAM_INSET, join=0)).Faces, key=lambda f: f.Area).OuterWire)
+    marks = [flat(core_face().OuterWire)]
     x0, y0 = min(x for x, _ in outer), min(y for _, y in outer)
     w = max(x for x, _ in outer) - x0 + 20
     pieces = [('Shell, leather x1', [outer] + holes + [circle(x, y, H['ScrewHoleD'] / 2) for x, y in pegs()], marks, 0),
               ('Foam x1', [foam] + holes + [circle(x, y, H['ScrewHeadD'] / 2) for x, y in pegs()], [], w),
-              ('Lining x1', [outer] + holes, marks, 2 * w)]
-    tab = [(0, 0), (TAB[0], 0), (TAB[0], TAB[1]), (0, TAB[1])]
+              ('Lining x1', [outer] + holes, [], 2 * w)]
     loops = []
     for label, ps, ms, dx in pieces:
         loops += [(label, [(x - x0 + dx, y - y0) for x, y in pl], False) for pl in ps]
         loops += [(label, [(x - x0 + dx, y - y0) for x, y in pl], True) for pl in ms]
-    for i in range(4):
-        loops.append(('Strap tab x4', [(x + 3 * w + i * (TAB[0] + 10), y) for x, y in tab], False))
     with open(path + '.dxf', 'w') as f:
         f.write('0\nSECTION\n2\nENTITIES\n')
         for _, pl, mark in loops:
@@ -316,7 +365,7 @@ def printed_part():
     rs = rear_surface()
     above = rs.extrude(V(0, 0, 80))
     fill = core_plan(-100, zr + 1).common(above).cut(lever_zone(-100, zr + 1)).removeSplitter()
-    body = flat.common(core_plan(-100, 100)).fuse(fill).removeSplitter()
+    body = flat.common(core_plan(-100, 100)).fuse([fill] + slot_tabs()).removeSplitter()
     body = body.cut(lever_zone(-100, zr))
     cuts = screw_holes() + [SB.dd_pocket()]
     ax, ay = axis()
@@ -361,6 +410,13 @@ def checks(doc, printed, toy, extra):
     print('CHECK rear sweep: hip ears %.1f mm, tip %.1f mm, top %.1f mm behind the rear on the toy axis' % (
         zr - rear_z(P['DeviceCx'] + H['WaistTabX'], H['WaistTabY']), zr - pb.ZMin - H['PadT'],
         zr - rear_z(P['DeviceCx'], SB.plate_top())))
+    edge = outline.OuterWire
+    for (e, d), (b, _) in zip(slot_frames(), slot_bars()):
+        f, _ = slot_plan(e, d, SLOT_U[0], SLOT_U[1] + H['SlotT'] + H['SlotBarW'], H['SlotW'] / 2 + 3.25, 0, 1)
+        f = f.translated(V(0, 0, SB.z_rear()))
+        inside = all(outline.isInside(v.Point, 0.01, True) for v in f.Vertexes)
+        print('CHECK strap slot at (%.1f, %.1f), bar %.1f mm in front of the panel: tab inside the panel %s, %.1f mm of foam past it' % (
+            b.x - P['DeviceCx'], b.y, H['SlotTunnel'], inside, f.distToShape(edge)[0]))
     jx, jz = SB.ENC.P['jack_axis']
     for r in (3.0, 4.5):
         n = 0.0
