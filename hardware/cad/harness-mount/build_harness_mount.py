@@ -176,6 +176,70 @@ def pad():
     return blank.cut(cuts).removeSplitter()
 
 
+TAB = (25.0, 90.0)   # strap tab: 1 in wide, folded round its D-ring, 20 mm of each end sewn into the panel
+TABS = [(60.0, 84.0, 1.0, 0.0), (34.0, -54.0, 0.68, -0.73)]   # (x from the axis, y, out direction): hip
+                                                              # ears and bottom corners; render_on_body.py too
+FOAM_INSET = 5.0     # foam stops short of the edge, so the edge stitching goes through leather only
+
+
+def pattern(padshape, path):
+    """Flat cut pattern, 1:1 in mm, as DXF (R12, layers CUT and MARK) and SVG: the leather shell (with the
+    Chicago screw holes), the foam (inset, with pockets for the screw heads), the lining (which covers the
+    screw heads), the four strap tabs, and where the tabs go (MARK, dashed blue). The panel is only a few mm deep over its width, so
+    its outline in plan is the flat pattern."""
+    rear = max(padshape.Faces, key=lambda f: f.Area if f.normalAt(*f.Surface.parameter(f.CenterOfMass)).z < -0.5 else 0)
+    flat = lambda w: [(q.x, q.y) for q in w.discretize(Distance=1.0)]
+    outer = flat(rear.OuterWire)
+    holes = [flat(w) for w in rear.Wires if not w.isSame(rear.OuterWire)]
+    circle = lambda x, y, r: [(x + r * math.cos(2 * math.pi * k / 48), y + r * math.sin(2 * math.pi * k / 48)) for k in range(48)]
+    poly = Part.Face(Part.makePolygon([V(x, y, 0) for x, y in outer + outer[:1]]))
+    foam = flat(poly.makeOffset2D(-FOAM_INSET, join=0).OuterWire)
+    cx = P['DeviceCx']; marks = []
+    for x, y, dx, dy in TABS:   # where each tab's end is sewn in, 20 mm inside the edge
+        for sx in (1, -1):
+            t = V(sx * dx, dy, 0); t.normalize(); w = V(-t.y, t.x, 0)
+            o = V(cx + sx * x, y, 0)
+            edge = Part.LineSegment(o, o + t * 80).toShape().section(poly.OuterWire).Vertexes
+            c = min((v.Point for v in edge), key=lambda q: (q - o).Length) - t * 10
+            marks.append([(q.x, q.y) for q in (c + t * 10 + w * 12.5, c - t * 10 + w * 12.5, c - t * 10 - w * 12.5, c + t * 10 - w * 12.5)])
+    x0, y0 = min(x for x, _ in outer), min(y for _, y in outer)
+    w = max(x for x, _ in outer) - x0 + 20
+    pieces = [('Shell, leather x1', [outer] + holes + [circle(x, y, H['ScrewHoleD'] / 2) for x, y in pegs()], marks, 0),
+              ('Foam x1', [foam] + holes + [circle(x, y, H['ScrewHeadD'] / 2) for x, y in pegs()], [], w),
+              ('Lining x1', [outer] + holes, marks, 2 * w)]
+    tab = [(0, 0), (TAB[0], 0), (TAB[0], TAB[1]), (0, TAB[1])]
+    loops = []
+    for label, ps, ms, dx in pieces:
+        loops += [(label, [(x - x0 + dx, y - y0) for x, y in pl], False) for pl in ps]
+        loops += [(label, [(x - x0 + dx, y - y0) for x, y in pl], True) for pl in ms]
+    for i in range(4):
+        loops.append(('Strap tab x4', [(x + 3 * w + i * (TAB[0] + 10), y) for x, y in tab], False))
+    with open(path + '.dxf', 'w') as f:
+        f.write('0\nSECTION\n2\nENTITIES\n')
+        for _, pl, mark in loops:
+            layer = 'MARK' if mark else 'CUT'
+            f.write('0\nPOLYLINE\n8\n%s\n66\n1\n70\n1\n' % layer)
+            for x, y in pl:
+                f.write('0\nVERTEX\n8\n%s\n10\n%.3f\n20\n%.3f\n' % (layer, x, y))
+            f.write('0\nSEQEND\n')
+        f.write('0\nENDSEC\n0\nEOF\n')
+    xmax = max(x for _, pl, _ in loops for x, _ in pl) + 10; ymax = max(y for _, pl, _ in loops for _, y in pl) + 20
+    with open(path + '.svg', 'w') as f:
+        f.write('<svg xmlns="http://www.w3.org/2000/svg" width="%.0fmm" height="%.0fmm" viewBox="-10 -10 %.1f %.1f">\n'
+                '<rect x="-10" y="-10" width="100%%" height="100%%" fill="white"/>\n' % (xmax + 10, ymax + 30, xmax + 10, ymax + 30))
+        for label, pl, mark in loops:
+            d = 'M' + ' L'.join('%.2f %.2f' % (x, ymax - y) for x, y in pl) + ' Z'
+            f.write('<path d="%s" fill="none" stroke="%s" stroke-width="0.4"%s/>\n'
+                    % (d, '#1767ed' if mark else 'black', ' stroke-dasharray="2 1.5"' if mark else ''))
+        seen = set()
+        for label, pl, _ in loops:
+            if label not in seen:
+                seen.add(label); x = min(p[0] for p in pl)
+                f.write('<text x="%.1f" y="%.1f" font-size="6" font-family="sans-serif">%s</text>\n' % (x, ymax + 8, label))
+        f.write('<text x="0" y="-3" font-size="5" font-family="sans-serif">Print at 100%: this line is 50 mm</text>'
+                '<line x1="80" y1="-4" x2="130" y2="-4" stroke="black" stroke-width="0.6"/>\n</svg>\n')
+
+
 def screw_holes():
     """Through holes for the Chicago screws, the post heads sunk into the cradle floor under the case."""
     zf = SB.z_front()
@@ -354,7 +418,8 @@ def build(mode):
     else:
         Part.makeCompound([black, blue]).exportStep(out('.step'))
     meshes = [(printed, ''), (black, '-Black'), (blue, '-Blue')]
-    padshape.exportStep(out('-Panel.step'))   # reference for the panel pattern; it is sewn, not printed
+    padshape.exportStep(out('-Panel.step'))   # the panel as it curves; it is sewn, not printed
+    pattern(padshape, out('-Pattern'))
     if mode == 'ring':
         for d in RING_SIZES:
             r = ring(d, placed=False)

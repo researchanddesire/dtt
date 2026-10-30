@@ -13,8 +13,8 @@ right under its jack end, in front of the distance sensor. Two toy interfaces.
 
 Like the comfortable soft harnesses (Joque, RodeoH, Aslan Jaguar), the only
 hard part is small: a printed core that is just the cradle and the toy ring.
-It sits on a padded leather or neoprene front panel, curved to the pubic mound,
-with the waist and leg webbing sewn to its hip ears and tip.
+It sits on a padded leather panel curved to the pubic mound, with adjustable
+waist and jock-style leg straps on D-rings.
 
 Worn, on MakeHuman's CC0 average female body (`render_on_body.py`). The panel
 curve is fitted to it; worn this way the toy points about 14° down.
@@ -31,12 +31,10 @@ curve is fitted to it; worn this way the toy points about 14° down.
 - **24 mm thread:** for the OSSM Double Double and other 24 mm threaded
   mounts. Push the printed screw into the hex pocket from the body side and
   thread the toy on from the front.
-- **Panel:** 2 mm leather (or neoprene) over about 3 mm foam, lined. One-piece
-  jock cut (like Joque or Aslan Jaguar): the leg straps grow out of the
-  panel's lower sides, run down the leg creases clear of the vulva, cup the
-  cheeks and sew to the back of the 1 in waist belt. The `-Panel` outline is
-  the panel only so far. Four 5 mm Chicago screws join it to the core; in the
-  ring version the ring flange clamps it too.
+- **Panel and straps:** a sewn leather panel with four D-ring tabs, 1 in
+  straps with slides, a side-release buckle at the back, and leg straps that
+  clip on with snap hooks. See [BUILD.md](BUILD.md) for the cut list,
+  pattern, hardware and assembly.
 - **DTT:** slides in and releases as on the snap backplate. Use a right-angle
   3.5 mm plug with the O-ring version.
 

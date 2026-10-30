@@ -1,4 +1,4 @@
-"""Renders the O-ring harness mount worn on a reference body, with a 1 in waist belt and two leg straps,
+"""Renders the O-ring harness mount worn on a reference body, with its straps and hardware as BUILD.md lists
 to show how it belts on. Run under the FreeCAD GUI after build_harness_mount.py:
 
     xvfb-run -a freecad render_on_body.FCMacro   (a macro that execs this file)
@@ -26,11 +26,9 @@ TILT = 14.0                   # harness tilt on the body, deg: the top lies back
 BODY_AXIS = (-8.0, 117.0)     # body (y, front z) under the toy axis in the mesh frame: over the pubic bone
 WAIST = (62.0, 84.0)          # panel hip ear x offset from the axis, y
 STRAP_W, STRAP_T = 25.4, 1.6
-LEG_W = 30.0                  # leg straps behind: soft, lined
 
 SKIN = (0.80, 0.74, 0.69)     # plain mannequin
 WEBBING = (0.07, 0.07, 0.08)
-HARDWARE = (0.45, 0.46, 0.50)
 
 
 # ---------------------------------------------------------------- body
@@ -59,24 +57,11 @@ def plan_prism(wire, z0=-400.0, h=800.0):
     return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(V(0, 0, h))
 
 
-def lobe(s):
-    """Plan of one leg strap's front, cut in one piece with the panel: out of its lower side, down the
-    leg crease beside the vulva to the top of the inner thigh."""
-    pts = [V(AX + s * x, y, -400) for x, y in JOCK_LOBE]
-    c = Part.BSplineCurve(); c.interpolate(pts, PeriodicFlag=True)
-    return Part.Face(Part.Wire(c.toShape())).extrude(V(0, 0, 800))
-
-
-JOCK_LOBE = [(26, -42), (44, -44), (49, -62), (45, -86), (36, -110), (28, -130), (21, -136), (17, -128),
-             (21, -108), (27, -86), (29, -66), (25, -52)]
-
-
 def draped(m, pad):
-    """The soft panel as it lies on the body, in one piece with the fronts of the leg straps: the builder's
-    panel outline and holes, but its back on the skin instead of on the builder's fitted curve (leather
-    and foam follow the body)."""
+    """The soft panel as it lies on the body: the builder's panel outline and holes, but its back on the
+    skin instead of on the builder's fitted curve (leather and foam follow the body)."""
     rear = max(pad.Faces, key=lambda f: f.Area if f.normalAt(*f.Surface.parameter(f.CenterOfMass)).z < -0.5 else 0)
-    plan = plan_prism(rear.OuterWire).fuse([lobe(-1), lobe(1)]).removeSplitter()
+    plan = plan_prism(rear.OuterWire)
     bb = plan.BoundBox; bb = App.BoundBox(bb.XMin, bb.YMin, 0, bb.XMax, bb.YMax, 0)
     xs = [bb.XMin - 6 + 6 * i for i in range(int(bb.XLength / 6) + 3)]
     ys = [bb.YMin - 6 + 6 * j for j in range(int(bb.YLength / 6) + 3)]
@@ -176,39 +161,47 @@ def strip(path, width=STRAP_W, align=None, step=5.0, thick=STRAP_T, soft=False):
     return Part.makeLoft(wires, True, True, False)
 
 
-def belt(m, panel):
-    """Round the back at the hip ears' height, each end sewn onto the front of an ear."""
-    y = WAIST[1]; zc = centre_z(m, y, 120)
-    front = lambda x: (V(x, y, 200), V(0, 0, -1), False)
-    rays = [front(AX + WAIST[0] - 14), front(AX + WAIST[0] - 4)]
-    rays += [(V(AX, y, zc), V(math.sin(math.radians(5 * k)), 0, math.cos(math.radians(5 * k))), True)
-             for k in range(4, 73)]
-    rays += [front(AX - WAIST[0] + 4), front(AX - WAIST[0] + 14)]
-    path = on_surface(m, panel, rays)
-    keep = path[:2] + [p for p in path[2:-2] if abs(p[0].x - AX) > WAIST[0] + 8] + path[-2:]
-    return strip(keep, align=[V(0, 1, 0)] * len(keep))
+NORMALS = {}
 
 
-# leg strap waypoints (x out from the toy axis, y, z), between them the shortest path over the skin
-# in the leg crease beside the vulva, round the top of the inner thigh into the cheek's fold
-LEG_PATH = [(36, -88, -22), (30, -108, -32), (23, -128, -45), (17, -148, -70), (20, -160, -110),
-            (40, -160, -140), (65, -130, -190), (76, -40, -215), (70, 40, -200), (66, 80, -195)]
+def normals(m):
+    """Mesh points and vertex normals (area weighted)."""
+    if id(m) not in NORMALS:
+        pts = np.array([(p.x, p.y, p.z) for p in m.Points]); tri = np.array([f.PointIndices for f in m.Facets])
+        fn = np.cross(pts[tri[:, 1]] - pts[tri[:, 0]], pts[tri[:, 2]] - pts[tri[:, 0]])
+        vn = np.zeros_like(pts)
+        for k in range(3):
+            np.add.at(vn, tri[:, k], fn)
+        NORMALS[id(m)] = pts, vn / (np.linalg.norm(vn, axis=1)[:, None] + 1e-12), tri
+    return NORMALS[id(m)]
+
+
+def normal_at(m, p, r=18.0):
+    """Skin normal near p, averaged over a patch, so a strap across a crease doesn't flip about."""
+    pts, vn, _ = normals(m)
+    n = vn[((pts - np.array(tuple(p))) ** 2).sum(1) < r * r].sum(0)
+    return V(*(n / np.linalg.norm(n)))
+
+
+def skin(m, x, y, lift=STRAP_T / 2 + 0.6, panel=None):
+    """(point, normal) on the front of the body (or the panel) at x, y, lifted off it."""
+    p = hit(m, panel, V(x, y, 300), V(0, 0, -1))
+    n = normal_at(m, p)
+    return p + n * lift, n
 
 
 def surface_path(m, targets):
     """Shortest path along the mesh edges through the vertices nearest the targets, as (point, normal)."""
     import heapq
-    pts = np.array([(p.x, p.y, p.z) for p in m.Points]); tri = np.array([f.PointIndices for f in m.Facets])
-    fn = np.cross(pts[tri[:, 1]] - pts[tri[:, 0]], pts[tri[:, 2]] - pts[tri[:, 0]])
-    vn = np.zeros_like(pts)
-    for k in range(3):
-        np.add.at(vn, tri[:, k], fn)
-    vn /= np.linalg.norm(vn, axis=1)[:, None] + 1e-12
-    nbr = [set() for _ in pts]
-    for t in tri:
-        for i in range(3):
-            nbr[t[i]].add(t[i - 1]); nbr[t[i - 1]].add(t[i])
-    ids = [int(np.argmin(((pts - t) ** 2).sum(1))) for t in targets]
+    pts, vn, tri = normals(m)
+    if 'nbr' not in NORMALS:
+        nbr = [set() for _ in pts]
+        for t in tri:
+            for i in range(3):
+                nbr[t[i]].add(t[i - 1]); nbr[t[i - 1]].add(t[i])
+        NORMALS['nbr'] = nbr
+    nbr = NORMALS['nbr']
+    ids = [int(np.argmin(((pts - np.array(tuple(t))) ** 2).sum(1))) for t in targets]
     route = [ids[0]]
     for a, b in zip(ids, ids[1:]):
         dist, prev, q = {a: 0.0}, {}, [(0.0, a)]
@@ -226,30 +219,194 @@ def surface_path(m, targets):
         while seg[-1] != a:
             seg.append(prev[seg[-1]])
         route += seg[::-1][1:]
-    for i in route:   # normals averaged over an 18 mm patch, so a strap across a crease doesn't flip about
-        n = vn[((pts - pts[i]) ** 2).sum(1) < 18.0 ** 2].sum(0); vn[i] = n / np.linalg.norm(n)
-    out, last = [], None   # every 20 mm or so, so the spline smooths the zigzag along the edges
+    out, last = [], None   # every 28 mm or so, so the spline smooths the zigzag along the edges
     for i in route:
         if last is None or np.linalg.norm(pts[i] - pts[last]) > 28 or i == route[-1]:
-            n = V(*vn[i]); out.append((V(*pts[i]) + n * (STRAP_T / 2 + 0.6), n)); last = i
+            q = V(*pts[i]); n = normal_at(m, q); out.append((q + n * (STRAP_T / 2 + 0.6), n)); last = i
     return out
 
 
-def leg_strap(m, panel, s):
-    """From under the end of the panel's leg lobe round the top of the inner thigh, cupping the cheek in
-    its fold, and up the outside of the back to the belt, jock style (Joque, Aslan Jaguar)."""
-    path = surface_path(m, [V(AX + s * x, y, z) for x, y, z in [(33, -104, -26)] + LEG_PATH[2:]])
-    return strip(path, width=LEG_W, thick=2.6, soft=True)
+def to_skin(m, q, lift):
+    """The nearest point on the skin to q, lifted off it, and the normal there."""
+    pts, _, _ = normals(m)
+    v = V(*pts[int(np.argmin(((pts - np.array(tuple(q))) ** 2).sum(1)))])
+    n = normal_at(m, v)
+    return v + n * lift, n
 
 
-def buckle(m, panel):
-    """A ladder-lock slider on the belt at the right hip."""
-    y = WAIST[1]; phi = math.radians(62)
-    (p, n), = on_surface(m, panel, [(V(AX, y, centre_z(m, y, 120)), V(math.sin(phi), 0, math.cos(phi)), True)])
-    frame = Part.makeBox(40, 32, 4, V(-20, -16, 0)).cut(Part.makeBox(30, 26, 6, V(-15, -13, -1)))
-    frame = frame.fuse(Part.makeBox(30, 3, 4, V(-15, -1.5, 0)))
-    frame.rotate(V(0, 0, 0), V(0, 1, 0), math.degrees(math.atan2(n.x, n.z)))
-    return frame.translated(p + n * 0.8)
+def length(path):
+    return sum((b[0] - a[0]).Length for a, b in zip(path, path[1:]))
+
+
+def along(path, d):
+    """(point, tangent, normal) at distance d along a (point, normal) path."""
+    for a, b in zip(path, path[1:]):
+        seg = (b[0] - a[0]).Length
+        if d <= seg or b is path[-1]:
+            f = min(d / seg, 1.0); t = b[0] - a[0]; t.normalize()
+            n = a[1] * (1 - f) + b[1] * f; n.normalize()
+            return a[0] + (b[0] - a[0]) * f, t, n
+        d -= seg
+
+
+def part(path, d0, d1, lift=0.0):
+    """The stretch of a path between two distances along it, lifted off it (a strap end doubled back)."""
+    total = length(path); d1 = min(d1, total)
+    k = max(2, int((d1 - d0) / 5))
+    out = []
+    for i in range(k + 1):
+        p, t, n = along(path, d0 + (d1 - d0) * i / k)
+        out.append((p + n * lift, n))
+    return out
+
+
+# ---------------------------------------------------------------- hardware
+# Each is built in a local frame: X across the strap, Y along it, Z out of the body.
+
+METAL = (0.70, 0.71, 0.74)
+PLASTIC = (0.10, 0.10, 0.11)
+ROD = 1.75                    # 3.5 mm wire
+
+
+def d_ring():
+    """1 in D-ring: straight bar on X at y 0, the round side toward +Y."""
+    return Part.makeCompound([Part.makeCylinder(ROD, 28, V(-14, 0, 0), V(1, 0, 0)),
+                              Part.makeTorus(14, ROD, V(0, 0, 0), V(0, 0, 1), -180, 180, 180)])
+
+
+def tri_glide():
+    """1 in slide (tri-glide), centred."""
+    f = Part.makeBox(33, 24, 3, V(-16.5, -12, -1.5))
+    for y in (-9.5, 2.5):
+        f = f.cut(Part.makeBox(27, 7, 5, V(-13.5, y, -3)))
+    return f
+
+
+def side_release():
+    """1 in side-release buckle, centred on the join: socket toward +Y, plug toward -Y."""
+    sock = Part.makeBox(31, 30, 9, V(-15.5, 0, -2))
+    plug = Part.makeBox(27, 22, 6, V(-13.5, -22, -1)).fuse(Part.makeBox(33, 6, 6, V(-16.5, -22, -1)))
+    out = []
+    for b in (sock, plug):
+        try:
+            b = b.makeFillet(1.5, b.Edges)
+        except Exception:
+            pass
+        out.append(b)
+    return Part.makeCompound(out)
+
+
+def snap_hook():
+    """Swivel snap hook: hook at y 0 (round the ring), eye for the strap at -Y."""
+    eye = Part.makeTorus(7, 2.0, V(0, -50, 0), V(0, 0, 1))
+    body = Part.makeBox(12, 36, 7, V(-6, -42, -3.5))
+    try:
+        body = body.makeFillet(2.5, body.Edges)
+    except Exception:
+        pass
+    hook = Part.makeTorus(6, 2.4, V(0, -2, 0), V(1, 0, 0), -180, 180, 200)
+    return Part.makeCompound([eye, body, hook])
+
+
+def place(shape, p, t, n):
+    """Local X across, Y along t, Z along n, origin at p."""
+    z = V(n); z.normalize()
+    y = t - z * t.dot(z); y.normalize()
+    x = y.cross(z)
+    mtx = App.Matrix(x.x, y.x, z.x, p.x, x.y, y.y, z.y, p.y, x.z, y.z, z.z, p.z, 0, 0, 0, 1)
+    s = shape.copy(); s.transformShape(mtx)
+    return s
+
+
+# ---------------------------------------------------------------- the rig
+# Panel: blue leather shell, foam, lining, edge stitched; four 1 in tabs sewn between shell and lining, each
+# round a D-ring: at the hip ears (waist belt) and the bottom corners (leg straps), so the straps pivot.
+# Waist: two straps, each through its hip D-ring and back through a slide to adjust, meeting at a
+# side-release buckle at the back. Two more D-rings slide on the belt at the back.
+# Legs: 1 in elastic, looped and sewn through the bottom D-ring, down the leg crease, under the cheek, up
+# through a slide and an eye of a snap hook, which clips to the belt's back D-ring.
+
+HIP_TAB = (60.0, 84.0, 1.0, 0.0)      # (x out from the axis, y) inside the ear's edge, direction out; as TABS in the builder
+LEG_TAB = (34.0, -54.0, -0.05, -1.0)  # bottom corner; sewn square to the edge, pulled round to the leg crease when worn
+TAB_OUT = 11.0                        # tab length past the panel edge to the D-ring bar
+BACK_RING_X = 66.0                    # belt D-rings for the leg straps, x out from the centre back
+LEG_PATH = [(30, -108, -32), (23, -128, -45), (17, -148, -70), (20, -160, -110),
+            (40, -160, -140), (65, -130, -190), (76, -40, -215)]
+LENGTHS = {}
+
+
+def tab_ring(m, panel, s, tab):
+    """A blue tab out of the panel edge with its D-ring; returns (tab, ring, ring tip (point, t, n))."""
+    x, y, dx, dy = tab
+    pf = hit(m, panel, V(AX + s * x, y, 300), V(0, 0, -1))
+    e = pf - V(0, 0, PAD_T / 2)                                    # mid-thickness at the edge
+    d = V(s * dx, dy, 0); d.normalize()
+    b, n = skin(m, AX + s * x + d.x * 30, y + d.y * 30, PAD_T / 2)
+    t = b - e; t.normalize()
+    tab_path = [(e - t * 18, n), (e + t * TAB_OUT, n)]
+    bar = e + t * (TAB_OUT - 1)
+    ring = place(d_ring(), bar, t, n)
+    tip = bar + t * (14 + ROD)
+    return strip(tab_path, width=STRAP_W, thick=2.4), ring, (tip, t, n)
+
+
+def belt(m, panel, tips):
+    """Round the back from one hip D-ring to the other, at the ears' height."""
+    y = WAIST[1]; zc = centre_z(m, y, 120)
+    rays = [(V(AX, y, zc), V(math.sin(math.radians(a)), 0, math.cos(math.radians(a))), True)
+            for a in range(60, 301, 4)]
+    path = [q for q in on_surface(m, None, rays) if abs(q[0].x - AX) > abs(tips[1][0].x - AX) + 6 or q[0].z < zc]
+    path.sort(key=lambda q: math.atan2(q[0].x - AX, q[0].z - zc) % (2 * math.pi))
+    (r, tr, nr), (l, tl, nl) = tips
+    return [(r - tr * 6, nr)] + path + [(l - tl * 6, nl)]
+
+
+def rig(m, panel):
+    """All the straps and hardware, as {name: (shape, colour)}; strap lengths go to LENGTHS."""
+    blue, metal, black, plastic = [], [], [], []
+    hips = [tab_ring(m, panel, s, HIP_TAB) for s in (1, -1)]
+    legs = [tab_ring(m, panel, s, LEG_TAB) for s in (1, -1)]
+    for tab, ring, _ in hips + legs:
+        blue.append(tab); metal.append(ring)
+    bp = belt(m, panel, [hips[0][2], hips[1][2]])
+    total = length(bp)
+    black.append(strip(bp, align=[V(0, 1, 0)] * len(bp)))
+    for d0, d1, sign in ((0, 70, 1), (total - 70, total, -1)):            # ends doubled back to a slide
+        tail = part(bp, d0, d1, STRAP_T + 0.2)
+        black.append(strip(tail, align=[V(0, 1, 0)] * len(tail)))
+        p, t, n = along(bp, d0 + 52 if sign > 0 else d1 - 52)
+        metal.append(place(tri_glide(), p + n * (2 * STRAP_T + 1.0), t, n))
+    zc = centre_z(m, WAIST[1], 120)
+    mid = min(range(len(bp)), key=lambda i: abs(bp[i][0].x - AX) + (0 if bp[i][0].z < zc else 1e3))
+    dm = length(bp[:mid + 1])
+    p, t, n = along(bp, dm)
+    plastic.append(place(side_release(), p + n * 2.5, t, n))
+    LENGTHS['waist (each side, D-ring to buckle, + 150 to adjust)'] = round(dm + 150)
+    for k, s in enumerate((1, -1)):
+        i = min(range(len(bp)), key=lambda i: abs(bp[i][0].x - (AX + s * BACK_RING_X)) + (0 if bp[i][0].z < zc else 1e3))
+        p, t, n = along(bp, length(bp[:i + 1]))
+        down = V(0, -1, 0) - n * n.y; down.normalize()
+        bar = p + down * (STRAP_W / 2 + 1.5) + n * (STRAP_T / 2 + 0.5)
+        metal.append(place(d_ring(), bar, down, n))
+        ring_end = bar + down * (14 + ROD)
+        eye, en = to_skin(m, ring_end + down * 50, 3.0)   # the hook hangs on the cheek's curve
+        up = ring_end - eye; up.normalize()
+        metal.append(place(snap_hook(), ring_end, up, (n + en) * 0.5))
+        down = up * -1
+        # the leg strap, from its front D-ring round the leg to the hook's eye
+        tip, tt, tn = legs[k][2]
+        back = surface_path(m, [tip + tt * 12] + [V(AX + s * x, y, z) for x, y, z in LEG_PATH] + [eye - n * 4])
+        lp = [(tip - tt * 6, tn)] + back + [(eye + down * 3, n)]
+        black.append(strip(lp))
+        L = length(lp)
+        black.append(strip(part(lp, 0, 32, STRAP_T + 0.2)))                 # sewn loop at the front ring
+        tail = part(lp, L - 75, L, STRAP_T + 0.2)                          # doubled back through the slide
+        black.append(strip(tail))
+        p2, t2, n2 = along(lp, L - 45)
+        metal.append(place(tri_glide(), p2 + n2 * (2 * STRAP_T + 1.0), t2, n2))
+        LENGTHS['leg strap (each, elastic, sewn loop + 120 to adjust)'] = round(L + 32 + 120)
+    return {'Tabs': (Part.makeCompound(blue), LEATHER), 'Webbing': (Part.makeCompound(black), WEBBING),
+            'Hardware': (Part.makeCompound(metal), METAL), 'Buckle': (Part.makeCompound(plastic), PLASTIC)}
 
 
 # ---------------------------------------------------------------- scene
@@ -320,13 +477,11 @@ def main():
     src = App.openDocument(SOURCE)
     MESH = body()
     panel = draped(MESH, src.getObject('HarnessPad').Shape)
-    LEATHER = tuple(src.getObject('HarnessPad').ViewObject.ShapeColor[:3])   # leg straps cut with the panel
-    PARTS = {
-        'Panel': (panel, LEATHER),
-        'WaistBelt': (belt(MESH, panel), WEBBING),
-        'LegStraps': (Part.makeCompound([leg_strap(MESH, panel, s) for s in (-1, 1)]), LEATHER),
-        'Buckle': (buckle(MESH, panel), HARDWARE),
-    }
+    LEATHER = tuple(src.getObject('HarnessPad').ViewObject.ShapeColor[:3])
+    PARTS = {'Panel': (panel, LEATHER)}
+    PARTS.update(rig(MESH, panel))
+    with open(os.environ.get('HARNESS_LENGTHS', os.devnull), 'w') as f:   # for the cut list
+        f.writelines('%s: %d mm\n' % kv for kv in LENGTHS.items())
     pic = 'Harness-Mount-Ring-On-Body'
     shoot(src, pic + '-Front.png', App.Rotation(V(0, 1, 0), 28).multiply(App.Rotation(V(1, 0, 0), -8)))
     shoot(src, pic + '-Side.png', App.Rotation(V(0, 1, 0), 90).multiply(App.Rotation(V(1, 0, 0), -4)))
