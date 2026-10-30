@@ -3,7 +3,7 @@ two leg straps, to show how it belts on. Run under the FreeCAD GUI after build_h
 
     xvfb-run -a freecad render_on_body.FCMacro   (a macro that execs this file)
 
-The dummy is a stand-in, sized like an adult and shaped so its front meets the pad, not a body scan."""
+The dummy is a stand-in, sized like an adult and shaped so its front meets the panel, not a body scan."""
 
 import math, os
 import FreeCAD as App
@@ -18,7 +18,7 @@ SOURCE = os.path.join(HERE, 'DTT-Harness-Mount-Ring.FCStd')
 AX, AY = 21.0, -33.8          # toy axis of the ring version (build_harness_mount.axis())
 Z_REAR, PAD_T = -15.1, 5.0    # flat plate rear and pad thickness
 PAD_RX, PAD_RUP, PAD_RDOWN = 120.0, 1500.0, 65.0
-WAIST = (32.0, 84.0)          # waist slot x offset from the axis, y
+WAIST = (62.0, 84.0)          # panel hip ear x offset from the axis, y
 LEG_R, LEG_DEG = 37.0, 38.0
 STRAP_W, STRAP_T = 25.4, 1.6
 
@@ -193,55 +193,31 @@ def strip(path, width=STRAP_W, align=None, step=5.0):
     return Part.makeLoft(wires, True, True, False)
 
 
-def belt(body):
-    """Round the back at the slots' height, each end through its waist slot."""
-    y = WAIST[1]; zc = centre_z(y); rays = []
+def belt(body, panel):
+    """Round the back at the hip ears' height, each end sewn onto the front of an ear."""
+    y = WAIST[1]; zc = centre_z(y); solids = body + [panel]
     front = lambda x: (V(x, y, 200), V(0, 0, -1), False)
-    rays.append(front(AX + WAIST[0]))
-    rays.append(front(AX + WAIST[0] + 10))
-    for k in range(4, 73):
-        phi = math.radians(5 * k)
-        rays.append((V(AX, y, zc), V(math.sin(phi), 0, math.cos(phi)), True))
-    rays.append(front(AX - WAIST[0] - 10))
-    rays.append(front(AX - WAIST[0]))
-    path = on_surface(body, rays)
-    keep = [path[0], path[1]] + [p for p in path[2:-2] if abs(p[0].x - AX) > WAIST[0] + 16] + [path[-2], path[-1]]
+    rays = [front(AX + WAIST[0] - 14), front(AX + WAIST[0] - 4)]
+    rays += [(V(AX, y, zc), V(math.sin(math.radians(5 * k)), 0, math.cos(math.radians(5 * k))), True)
+             for k in range(4, 73)]
+    rays += [front(AX - WAIST[0] + 4), front(AX - WAIST[0] + 14)]
+    path = on_surface(solids, rays)
+    keep = path[:2] + [p for p in path[2:-2] if abs(p[0].x - AX) > WAIST[0] + 8] + path[-2:]
     return strip(keep, align=[V(0, 1, 0)] * len(keep))
 
 
-def leg_strap(body, s):
-    """From the leg slot down behind the plate and over the mound into the crease at the top of the inner
-    thigh, round under the cheek and up the back to the belt."""
-    a = math.radians(LEG_DEG)
-    sx, sy = AX + s * LEG_R * math.sin(a), AY - LEG_R * math.cos(a)
-    rays = [(V(sx, sy, 200), V(0, 0, -1), False)]
-    rays += [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(23, -80), (23, -95)]]
+def leg_strap(body, panel, s):
+    """Sewn onto the front of the panel tip, down into the crease at the top of the inner thigh, round
+    under the cheek and up the back to the belt."""
+    solids = body + [panel]
+    rays = [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(14, -62), (17, -72), (23, -88), (23, -100)]]
     y0, a, b, zf = sections()[0]
     for phi, x in [(55, 22), (78, 22), (100, 22), (125, 26), (150, 40)]:      # under the pelvis, between the legs
         f = math.radians(phi)
         rays.append((V(AX + s * x, y0, zf - b), V(0, -math.sin(f), math.cos(f)), True))
     for x, y in [(40, -110), (50, -65), (56, -10), (56, 40), (54, 70)]:
         rays.append((V(AX + s * x, y, centre_z(y)), V(s * 0.3, 0, -1), True))
-    return strip(on_surface(body, rays))
-
-
-def loops():
-    """The strap ends folded through each slot round its outer bar, as seen on the front of the plate."""
-    out = []
-    for s in (-1, 1):
-        x0 = AX + s * WAIST[0]; y = WAIST[1]
-        pts = [V(x0, y, rear_z(x0, y) + 6.9), V(x0 + s * 6.5, y, rear_z(x0 + s * 6.5, y) + 6.9),
-               V(x0 + s * 9.2, y, rear_z(x0 + s * 9, y) + 3), V(x0 + s * 6.5, y, rear_z(x0 + s * 6.5, y) - 0.9)]
-        out.append(strip([(p, V(0, 0, 1)) for p in pts], align=[V(0, 1, 0)] * 4))
-        a = math.radians(LEG_DEG)
-        r = V(s * math.sin(a), -math.cos(a), 0)        # radially out from the toy
-        along = V(-s * math.cos(a), -math.sin(a), 0)   # the slot's long axis
-        c = V(AX, AY, 0) + r * LEG_R
-        pts = []
-        for k, (dr, dz) in enumerate([(0, 6.9), (6.5, 6.9), (9.2, 3), (6.5, -0.9)]):
-            p = c + r * dr; pts.append(V(p.x, p.y, rear_z(p.x, p.y) + dz))
-        out.append(strip([(p, V(0, 0, 1)) for p in pts], align=[along] * 4))
-    return out
+    return strip(on_surface(solids, rays))
 
 
 def buckle(body):
@@ -313,6 +289,8 @@ def main():
     pv.SetUnsigned('BackgroundColor2', rgb(0.93, 0.93, 0.95))
     pv.SetUnsigned('BackgroundColor3', rgb(0.70, 0.71, 0.75))
 
+    src = App.openDocument(SOURCE)
+    panel = src.getObject('HarnessPad').Shape
     body, joints = dummy()
     skin = torso(0.7)[0]
     stickers_b, stickers_y = [], []
@@ -323,12 +301,10 @@ def main():
     PARTS = {
         'Dummy': (Part.makeCompound(body), DUMMY), 'DummyJoints': (joints, JOINT),
         'TargetBlack': (Part.makeCompound(stickers_b), JOINT), 'TargetYellow': (Part.makeCompound(stickers_y), (0.98, 0.86, 0.1)),
-        'WaistBelt': (belt(body), WEBBING),
-        'LegStraps': (Part.makeCompound([leg_strap(body, s) for s in (-1, 1)]), WEBBING),
-        'StrapLoops': (Part.makeCompound(loops()), WEBBING),
+        'WaistBelt': (belt(body, panel), WEBBING),
+        'LegStraps': (Part.makeCompound([leg_strap(body, panel, s) for s in (-1, 1)]), WEBBING),
         'Buckle': (buckle(body), HARDWARE),
     }
-    src = App.openDocument(SOURCE)
     pic = 'Harness-Mount-Ring-On-Body'
     shoot(src, pic + '-Front.png', App.Rotation(V(0, 1, 0), 28).multiply(App.Rotation(V(1, 0, 0), -8)))
     shoot(src, pic + '-Side.png', App.Rotation(V(0, 1, 0), 90).multiply(App.Rotation(V(1, 0, 0), -4)))
