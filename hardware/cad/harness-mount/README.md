@@ -16,7 +16,8 @@ hard part is small: a printed core that is just the cradle and the toy ring.
 It sits on a padded leather or neoprene front panel, curved to the pubic mound,
 with the waist and leg webbing sewn to its hip ears and tip.
 
-Worn, on a stand-in crash-test dummy (`render_on_body.py`):
+Worn, on MakeHuman's CC0 average female body (`render_on_body.py`). The panel
+curve is fitted to it; worn this way the toy points about 14° down.
 
 | Front | Side | Back |
 | --- | --- | --- |

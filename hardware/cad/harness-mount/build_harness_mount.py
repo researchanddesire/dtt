@@ -57,11 +57,11 @@ PARAMS = {
     'RingGap': (3.0, 'design: boss edge to the hood; a straight 3.5 mm plug does not fit, use a right-angle one'),
     'ToyBaseD': (60.0, 'reference proxy (estimate): flared dildo base behind the plate; a wider one rests on the curved rear'),
     'ToyBaseT': (6.0, 'reference proxy (estimate)'),
-    # soft front panel (sewn, not printed) and its body-side curve; the curve is an estimate to tune on a person
+    # soft front panel (sewn, not printed) and its body-side curve, fitted to a reference body; tune on a person
     'PadT': (5.0, 'design: soft panel: 2 mm leather, about 3 mm foam and lining, behind the core and out to the ears and tip'),
-    'PadRX': (120.0, 'estimate: rear face curve across the hips; the waist wings sweep back about 8 mm'),
-    'PadRUp': (1500.0, 'estimate: up the lower belly, for the mons standing proud of it; about 6 mm at the top'),
-    'PadRDown': (65.0, 'estimate: curling back between the legs below the toy, worn low with the ring over the pubic bone'),
+    'PadRX': (225.0, 'fit: across the hips, to the MakeHuman CC0 average young female (reference/), worn tilted 14 deg'),
+    'PadRUp': (2000.0, 'fit: up the lower belly, nearly flat once the harness tilts 14 deg to lie on it'),
+    'PadRDown': (160.0, 'fit: curling back over the mons toward the crotch, ring over the pubic bone'),
     'PadEdgeR': (2.0, 'design: rounded panel edges (bound or rolled leather)'),
     'PadBaseHole': (46.0, 'design: ring version: the shaft passes, the flared base sits on the soft panel, which keeps the ring flange in'),
     'LeatherT': (2.0, 'reference: front leather of the panel, which the screws pass; the rest of PadT is foam and lining'),
