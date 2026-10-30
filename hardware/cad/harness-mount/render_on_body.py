@@ -26,7 +26,7 @@ TILT = 14.0                   # harness tilt on the body, deg: the top lies back
 BODY_AXIS = (-8.0, 117.0)     # body (y, front z) under the toy axis in the mesh frame: over the pubic bone
 WAIST = (62.0, 84.0)          # panel hip ear x offset from the axis, y
 STRAP_W, STRAP_T = 25.4, 1.6
-LEG_W = 20.0                  # leg straps: 3/4 in elastic
+LEG_W = 30.0                  # leg straps behind: soft, lined
 
 SKIN = (0.80, 0.74, 0.69)     # plain mannequin
 WEBBING = (0.07, 0.07, 0.08)
@@ -59,17 +59,38 @@ def plan_prism(wire, z0=-400.0, h=800.0):
     return Part.Face(Part.makePolygon(pts + [pts[0]])).extrude(V(0, 0, h))
 
 
+def lobe(s):
+    """Plan of one leg strap's front, cut in one piece with the panel: out of its lower side, down the
+    leg crease beside the vulva to the top of the inner thigh."""
+    pts = [V(AX + s * x, y, -400) for x, y in JOCK_LOBE]
+    c = Part.BSplineCurve(); c.interpolate(pts, PeriodicFlag=True)
+    return Part.Face(Part.Wire(c.toShape())).extrude(V(0, 0, 800))
+
+
+JOCK_LOBE = [(26, -42), (44, -44), (49, -62), (45, -86), (36, -110), (28, -130), (21, -136), (17, -128),
+             (21, -108), (27, -86), (29, -66), (25, -52)]
+
+
 def draped(m, pad):
-    """The soft panel as it lies on the body: the builder's panel outline and holes, but its back on the
-    skin instead of on the builder's fitted curve (leather and foam follow the body)."""
+    """The soft panel as it lies on the body, in one piece with the fronts of the leg straps: the builder's
+    panel outline and holes, but its back on the skin instead of on the builder's fitted curve (leather
+    and foam follow the body)."""
     rear = max(pad.Faces, key=lambda f: f.Area if f.normalAt(*f.Surface.parameter(f.CenterOfMass)).z < -0.5 else 0)
-    bb = pad.BoundBox
+    plan = plan_prism(rear.OuterWire).fuse([lobe(-1), lobe(1)]).removeSplitter()
+    bb = plan.BoundBox; bb = App.BoundBox(bb.XMin, bb.YMin, 0, bb.XMax, bb.YMax, 0)
     xs = [bb.XMin - 6 + 6 * i for i in range(int(bb.XLength / 6) + 3)]
     ys = [bb.YMin - 6 + 6 * j for j in range(int(bb.YLength / 6) + 3)]
     sheet = Part.BSplineSurface()
-    sheet.interpolate([[V(x, y, hit(m, None, V(x, y, 300), V(0, 0, -1)).z + 0.3) for y in ys] for x in xs])
+    def skin(x, y):   # outside the plan, between the legs, held up so the sheet doesn't ripple
+        ts = [t for t in ray_mesh(m, V(x, y, 300), V(0, 0, -1)) if t > 0]
+        z = 300 - min(ts) if ts else -1e9
+        return z if plan.isInside(V(x, y, 0), 0.5, True) else max(z, -55.0)
+    zs = np.array([[skin(x, y) for y in ys] for x in xs])
+    pad_ = np.pad(zs, 1, mode='edge')   # one 3 x 3 smoothing pass: the leather bridges the mesh's facets
+    zs = sum(pad_[1 + i:1 + i + len(xs), 1 + j:1 + j + len(ys)] for i in (-1, 0, 1) for j in (-1, 0, 1)) / 9
+    sheet.interpolate([[V(x, y, zs[a, b] + 0.3) for b, y in enumerate(ys)] for a, x in enumerate(xs)])
     layer = sheet.toShape().extrude(V(0, 0, PAD_T))
-    out = layer.common(plan_prism(rear.OuterWire))
+    out = layer.common(plan)
     for w in rear.Wires:
         if not w.isSame(rear.OuterWire):
             out = out.cut(plan_prism(w))
@@ -119,10 +140,10 @@ def on_surface(m, panel, rays):
     return out
 
 
-def strip(path, width=STRAP_W, align=None, step=5.0):
-    """Webbing along a list of (point, surface normal): thin rectangles laid on the surface every step mm
+def strip(path, width=STRAP_W, align=None, step=5.0, thick=STRAP_T, soft=False):
+    """Webbing along a list of (point, surface normal): thin sections laid on the surface every step mm
     along a spline through the points, joined by a ruled loft (a smooth one overshoots on the tight
-    turns)."""
+    turns). width may be a function of the distance along; soft gives rolled, rounded edges."""
     pts = [p for p, _ in path]
     c = Part.BSplineCurve(); c.interpolate(pts)
     us = [c.parameter(p) for p in pts]
@@ -143,8 +164,14 @@ def strip(path, width=STRAP_W, align=None, step=5.0):
             w = w * -1
         w_prev = w
         n = w.cross(t); n.normalize()
-        hw, ht = w * (width / 2), n * (STRAP_T / 2)
-        q = [p + hw + ht, p - hw + ht, p - hw - ht, p + hw - ht]
+        wd = width(c.length(us[0], u)) if callable(width) else width
+        hw, ht = w * (wd / 2), n * (thick / 2)
+        if soft:   # a flattened superellipse: flat faces, round edges
+            q = [p + hw * (math.copysign(abs(math.cos(a)) ** 0.25, math.cos(a)))
+                 + ht * (math.copysign(abs(math.sin(a)) ** 0.6, math.sin(a)))
+                 for a in [2 * math.pi * j / 16 for j in range(16)]]
+        else:
+            q = [p + hw + ht, p - hw + ht, p - hw - ht, p + hw - ht]
         wires.append(Part.makePolygon(q + [q[0]]))
     return Part.makeLoft(wires, True, True, False)
 
@@ -203,16 +230,16 @@ def surface_path(m, targets):
         n = vn[((pts - pts[i]) ** 2).sum(1) < 18.0 ** 2].sum(0); vn[i] = n / np.linalg.norm(n)
     out, last = [], None   # every 20 mm or so, so the spline smooths the zigzag along the edges
     for i in route:
-        if last is None or np.linalg.norm(pts[i] - pts[last]) > 20 or i == route[-1]:
+        if last is None or np.linalg.norm(pts[i] - pts[last]) > 28 or i == route[-1]:
             n = V(*vn[i]); out.append((V(*pts[i]) + n * (STRAP_T / 2 + 0.6), n)); last = i
     return out
 
 
 def leg_strap(m, panel, s):
-    """Sewn onto the front of the panel's lower side, down the leg crease, round the top of the inner thigh,
-    under the cheek in its fold and up the outside of the back to the belt, jockstrap style."""
-    front = on_surface(m, panel, [(V(AX + s * x, y, 200), V(0, 0, -1), False) for x, y in [(36, -44), (36, -58)]])
-    return strip(front + surface_path(m, [V(AX + s * x, y, z) for x, y, z in LEG_PATH]), width=LEG_W)
+    """From under the end of the panel's leg lobe round the top of the inner thigh, cupping the cheek in
+    its fold, and up the outside of the back to the belt, jock style (Joque, Aslan Jaguar)."""
+    path = surface_path(m, [V(AX + s * x, y, z) for x, y, z in [(33, -104, -26)] + LEG_PATH[2:]])
+    return strip(path, width=LEG_W, thick=2.6, soft=True)
 
 
 def buckle(m, panel):
@@ -282,7 +309,7 @@ def shoot(src, fname, cam, turned=False):
 
 
 def main():
-    global PARTS, MESH
+    global PARTS, MESH, LEATHER
     pv = App.ParamGet('User parameter:BaseApp/Preferences/View')
     pv.SetBool('ShowNaviCube', False); pv.SetBool('ShowAxisCross', False)
     pv.SetBool('Gradient', True); pv.SetBool('Simple', False)
@@ -293,10 +320,11 @@ def main():
     src = App.openDocument(SOURCE)
     MESH = body()
     panel = draped(MESH, src.getObject('HarnessPad').Shape)
+    LEATHER = tuple(src.getObject('HarnessPad').ViewObject.ShapeColor[:3])   # leg straps cut with the panel
     PARTS = {
-        'Panel': (panel, tuple(src.getObject('HarnessPad').ViewObject.ShapeColor[:3])),
+        'Panel': (panel, LEATHER),
         'WaistBelt': (belt(MESH, panel), WEBBING),
-        'LegStraps': (Part.makeCompound([leg_strap(MESH, panel, s) for s in (-1, 1)]), WEBBING),
+        'LegStraps': (Part.makeCompound([leg_strap(MESH, panel, s) for s in (-1, 1)]), LEATHER),
         'Buckle': (buckle(MESH, panel), HARDWARE),
     }
     pic = 'Harness-Mount-Ring-On-Body'

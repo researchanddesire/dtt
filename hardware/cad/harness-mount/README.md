@@ -31,11 +31,12 @@ curve is fitted to it; worn this way the toy points about 14° down.
 - **24 mm thread:** for the OSSM Double Double and other 24 mm threaded
   mounts. Push the printed screw into the hex pocket from the body side and
   thread the toy on from the front.
-- **Panel:** 2 mm leather (or neoprene) over about 3 mm foam, lined, cut to
-  the `-Panel` outline. Sew 1 in (25 mm) webbing to the hip ears (waist) and
-  the lower corners (two 3/4 in elastic jock-style leg straps, in the leg
-  creases, clear of the vulva). Four 5 mm Chicago screws join it to the
-  core; in the ring version the ring flange clamps it too.
+- **Panel:** 2 mm leather (or neoprene) over about 3 mm foam, lined. One-piece
+  jock cut (like Joque or Aslan Jaguar): the leg straps grow out of the
+  panel's lower sides, run down the leg creases clear of the vulva, cup the
+  cheeks and sew to the back of the 1 in waist belt. The `-Panel` outline is
+  the panel only so far. Four 5 mm Chicago screws join it to the core; in the
+  ring version the ring flange clamps it too.
 - **DTT:** slides in and releases as on the snap backplate. Use a right-angle
   3.5 mm plug with the O-ring version.
 
