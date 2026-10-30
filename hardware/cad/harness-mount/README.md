@@ -17,6 +17,12 @@ back round the hips, the top 7 mm up the belly, and the leg tabs about 13 mm
 back between the legs. A 5 mm TPU pad follows the curve under the middle of
 the plate, clear of the strap slots so the webbing can't peel it.
 
+Worn, on a stand-in crash-test dummy (`render_on_body.py`):
+
+| Front | Side | Back |
+| --- | --- | --- |
+| ![Front](images/Harness-Mount-Ring-On-Body-Front.png) | ![Side](images/Harness-Mount-Ring-On-Body-Side.png) | ![Back](images/Harness-Mount-Ring-On-Body-Back.png) |
+
 ## Use
 
 - **O-ring:** for flared-base dildos, the usual strap-on fit. Drop the ring
