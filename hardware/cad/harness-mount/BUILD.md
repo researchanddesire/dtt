@@ -20,7 +20,7 @@ Use the `-Pattern.svg` (print it at 100% and check the 50 mm line) or the
 | Foam | 3 mm closed-cell foam (EVA or neoprene) | 1 | pattern |
 | Lining | 1 mm garment leather, suede or neoprene | 1 | pattern |
 | Waist strap | 1 in nylon webbing | 2 | 490 mm |
-| Leg strap | 1 in firm elastic | 2 | 710 mm |
+| Leg strap | 1 in firm elastic | 2 | 910 mm |
 
 The slot positions and strap lengths come from a cloth sim of the panel and
 straps on the reference body ([cloth_sim.py](cloth_sim.py)). For a different
@@ -57,5 +57,7 @@ size, add or take off half the difference in hip measurement on each waist strap
 
 ## Wear
 
-Buckle the waist at the back. Bring each leg strap down the leg crease and
-under the cheek, loop it over the waist strap, then tighten the slides.
+Buckle the waist at the back. Bring each leg strap down the front of the
+thigh, round the inside a hand's width below the crotch and up under the
+cheek, loop it over the waist strap, then tighten the slides. Nothing runs
+over the vulva or a cage.

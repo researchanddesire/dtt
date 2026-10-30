@@ -49,8 +49,8 @@ PARAMS = {
     'SlotTabT': (5.5, 'design: strap tab height off the panel front'),
     'SlotBarW': (4.5, 'design: the bar the strap wraps, outboard of the slot'),
     'SlotTunnel': (2.5, 'design: gap under the bar for the strap, over the panel front'),
-    'WaistSlotUp': (0.0, 'sim: waist slot tilt, deg up (cloth_sim.py: the belt leaves the core level, 3 deg up)'),
-    'LegSlotX': (15.5, 'sim: leg slots side by side under the lobe, pointing down (cloth_sim.py: both legs settle 6 mm either side of the centre, pulling straight down)'),
+    'WaistSlotUp': (10.0, 'sim: waist slot tilt, deg up (cloth_sim.py: the belt leaves the core 3 to 15 deg up)'),
+    'LegSlotDir': (-57.0, 'sim: leg slots on the lobe this many deg below sideways, pointing out from the toy axis (cloth_sim.py, with no straps over the vulva or a cage: the leg straps settle there, pulling straight out)'),
     # ring interface (strap-on O-ring standard)
     'SocketD': (50.0, 'design: one socket for every ring; a 1.75 in ring keeps a 2.8 mm wall'),
     'SocketClear': (0.2, 'design: radial clearance of the ring in its socket'),
@@ -169,8 +169,9 @@ def slot_frames():
     cx = P['DeviceCx']; ax, ay = axis(); wire = core_face().OuterWire; out = []
     for s in (1, -1):
         up = math.radians(H['WaistSlotUp'])
+        leg = lambda s: V(s * math.cos(math.radians(H['LegSlotDir'])), math.sin(math.radians(H['LegSlotDir'])), 0)
         for o, d, tilt in ((V(cx, H['WaistTabY'], 0), V(s, 0, 0), V(s * math.cos(up), math.sin(up), 0)),
-                           (V(ax + s * H['LegSlotX'], ay, 0), V(0, -1, 0), V(0, -1, 0))):
+                           (V(ax, ay, 0), leg(s), leg(s))):
             o.z = SB.z_rear()
             hits = Part.LineSegment(o, o + d * 200).toShape().section(wire).Vertexes
             e = max((v.Point for v in hits), key=lambda q: (q - o).Length)

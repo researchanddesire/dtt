@@ -36,7 +36,10 @@ AX, AY = B['axis']()
 Z_REAR, PAD_T = SB.z_rear(), H['PadT']
 TILT, BODY_AXIS = 14.0, (-8.0, 117.0)
 BODY = os.path.join(HERE, 'reference', 'body-female-lower.obj')
-STRAP_T = 1.6
+STRAP_T, STRAP_W = 1.6, 25.4
+KEEP_OUT_X, KEEP_OUT_Y, KEEP_OUT_Z = 28.0, -90.0, -85.0   # no straps within X of the centre line, below Y and in
+                                       # front of Z: the vulva, or a chastity cage. The mons ends at about y -90;
+                                       # behind z -85 is the perineum, where the leg straps may cross to the buttock crease
 FREE = bool(os.environ.get('SIM_FREE'))
 OUT = os.path.join(HERE, 'harness-sim-free.json' if FREE else 'harness-sim.json')
 
@@ -216,6 +219,38 @@ def collide(x, w, tree, sp, sn, off):
     return hit
 
 
+def keep_out(x, mask):
+    """No strap over the vulva, or a caged penis: below KEEP_OUT_Y, strap centres stay KEEP_OUT_X plus half
+    a strap width out from the centre line, in front of KEEP_OUT_Z."""
+    lim = KEEP_OUT_X + STRAP_W / 2
+    dx = x[:, 0] - AX
+    bad = mask & (x[:, 1] < KEEP_OUT_Y) & (x[:, 2] > KEEP_OUT_Z) & (np.abs(dx) < lim)
+    x[bad, 0] = AX + np.where(dx[bad] >= 0, lim, -lim)
+
+
+def ribbon_edges(x, chains, w, tree, sp, sn):
+    """The strap is 25 mm wide, not a line: where either edge would sink into the skin (across a crease),
+    lift the strap there by as much."""
+    off = STRAP_T / 2 + 0.3
+    for c in chains:
+        p = x[c]
+        t = np.gradient(p, axis=0); t /= np.linalg.norm(t, axis=1)[:, None] + 1e-12
+        d, i = tree.query(p); n = sn[i]
+        b = np.cross(t, n); b /= np.linalg.norm(b, axis=1)[:, None] + 1e-12
+        lift = np.zeros(len(c))
+        for sgn in (1, -1):
+            e = p + b * (sgn * STRAP_W / 2)
+            d, j = tree.query(e)
+            lift = np.maximum(lift, off - ((e - sp[j]) * sn[j]).sum(1))
+        lift[w[c] == 0] = 0
+        x[c] += n * np.maximum(lift, 0)[:, None]
+
+
+def ribbon_normals(x, c, tree, sn):
+    d, i = tree.query(x[c])
+    return sn[i]
+
+
 def main():
     pts, tri = body()
     sp, sn = samples(pts, tri)
@@ -298,7 +333,9 @@ def main():
                 x[i] = slide(pull, line, mask)
             for k in range(2):   # each leg strap's loop sits on the belt
                 x[chains[1 + k][-1]] = x[chains[0][leg_belt[k]]]
+            keep_out(x, strap & (w > 0))
             touch = collide(x, w, tree, sp, sn, offs)
+            ribbon_edges(x, chains, w, tree, sp, sn)
             # straps over the panel ride on its front
             sidx = np.where(strap)[0]
             d, i = ptree.query(x[sidx])
@@ -324,6 +361,8 @@ def main():
 
     res = {'panel': {'points': x[pidx].round(3).tolist(), 'triangles': ptri.tolist(), 'flat': q2.round(3).tolist()},
            'waist': x[chains[0]].round(3).tolist(), 'legs': [x[c].round(3).tolist() for c in chains[1:]],
+           'waist_n': ribbon_normals(x, chains[0], tree, sn).round(4).tolist(),
+           'legs_n': [ribbon_normals(x, c, tree, sn).round(4).tolist() for c in chains[1:]],
            'buckle': int(back), 'leg_belt': [int(j) for j in leg_belt],
            'ends': [{'x': float(x[i][0] - AX), 'y': float(x[i][1]), 'z': float(x[i][2]),
                      'dir': [float(t) for t in (x[i + (1 if k != 1 else -1)] - x[i])[:2] / np.linalg.norm((x[i + (1 if k != 1 else -1)] - x[i])[:2])]}
