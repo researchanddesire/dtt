@@ -42,8 +42,8 @@ SB.OUT = os.path.join(ROOT, 'hardware', 'production-exports', 'cad', 'harness-mo
 PARAMS = {
     # straps
     'StrapW': (25.4, 'design: 1 in webbing, the common harness strap; 25 mm webbing fits too'),
-    'WaistTabX': (62.0, 'design: panel hip ears, the waist webbing sewn on behind them'),
-    'WaistTabY': (84.0, 'design: waist straps beside the upper case'),
+    'WaistTabX': (88.0, 'design: hip corners of the V panel, where the waist D-rings sit'),
+    'WaistTabY': (100.0, 'design: waist straps across the top of the V, level with the upper case'),
     # ring interface (strap-on O-ring standard)
     'SocketD': (50.0, 'design: one socket for every ring; a 1.75 in ring keeps a 2.8 mm wall'),
     'SocketClear': (0.2, 'design: radial clearance of the ring in its socket'),
@@ -92,16 +92,16 @@ def lobe_r():
 
 
 # panel outline (x from the centreline, y), right half, top to bottom; mirrored for the left
-PANEL = [(0, 118), (30, 117), (50, 109), (62, 92), (62, 74), (54, 52), (46, 25), (46, -10), (47, -35),
-         (44, -54), (32, -66)]
+PANEL = [(0, 120), (46, 120), (80, 116), (94, 106), (90, 90), (64, 52), (46, 14), (40, -26), (36, -54),
+         (26, -70)]
 
 
 def panel_face():
-    """The soft panel in plan: a rounded shield, ears at the hips for the waist straps, narrowing round
-    the toy to a short round bottom, its corners for the leg straps."""
+    """The soft panel in plan: the classic strap-on V, wide at the hips for the waist D-rings and
+    narrowing to a round point under the toy, its sides there for the leg D-rings."""
     cx = P['DeviceCx']; zr = SB.z_rear()
     pts = [V(cx + x, y, zr) for x, y in PANEL] + [V(cx - x, y, zr) for x, y in reversed(PANEL[1:])]
-    pts.insert(len(PANEL), V(cx, -71, zr))
+    pts.insert(len(PANEL), V(cx, -76, zr))
     c = Part.BSplineCurve(); c.interpolate(pts, PeriodicFlag=True)
     return Part.Face(Part.Wire(c.toShape()))
 
@@ -123,7 +123,7 @@ def rear_z(x, y):
 def rear_surface():
     """The rear face as a B-spline sheet over the whole plate."""
     ax, ay = axis()
-    xs = [ax - 66 + 6 * i for i in range(23)]
+    xs = [ax - 102 + 6 * i for i in range(35)]
     ys = [ay - 60 + 6 * j for j in range(int((SB.plate_top() + 70 - ay) / 6) + 1)]
     s = Part.BSplineSurface()
     s.interpolate([[V(x, y, rear_z(x, y)) for y in ys] for x in xs])
@@ -177,7 +177,7 @@ def pad():
 
 
 TAB = (25.0, 90.0)   # strap tab: 1 in wide, folded round its D-ring, 20 mm of each end sewn into the panel
-TABS = [(60.0, 84.0, 1.0, 0.0), (34.0, -54.0, 0.68, -0.73)]   # (x from the axis, y, out direction): hip
+TABS = [(86.0, 100.0, 0.97, 0.25), (30.0, -60.0, 0.8, -0.6)]   # (x from the axis, y, out direction): hip
                                                               # ears and bottom corners; render_on_body.py too
 FOAM_INSET = 5.0     # foam stops short of the edge, so the edge stitching goes through leather only
 

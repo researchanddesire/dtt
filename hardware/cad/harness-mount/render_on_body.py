@@ -24,7 +24,7 @@ AX, AY = 21.0, -33.8          # toy axis of the ring version (build_harness_moun
 Z_REAR, PAD_T = -15.1, 5.0    # flat core rear and panel thickness
 TILT = 14.0                   # harness tilt on the body, deg: the top lies back on the belly
 BODY_AXIS = (-8.0, 117.0)     # body (y, front z) under the toy axis in the mesh frame: over the pubic bone
-WAIST = (62.0, 84.0)          # panel hip ear x offset from the axis, y
+WAIST = (88.0, 100.0)         # panel hip corner x offset from the axis, y
 STRAP_W, STRAP_T = 25.4, 1.6
 
 SKIN = (0.80, 0.74, 0.69)     # plain mannequin
@@ -326,8 +326,8 @@ def place(shape, p, t, n):
 # Legs: 1 in elastic, looped and sewn through the bottom D-ring, down the leg crease, under the cheek, up
 # through a slide and an eye of a snap hook, which clips to the belt's back D-ring.
 
-HIP_TAB = (60.0, 84.0, 1.0, 0.0)      # (x out from the axis, y) inside the ear's edge, direction out; as TABS in the builder
-LEG_TAB = (34.0, -54.0, -0.05, -1.0)  # bottom corner; sewn square to the edge, pulled round to the leg crease when worn
+HIP_TAB = (86.0, 100.0, 1.0, 0.0)      # (x out from the axis, y) inside the ear's edge, direction out; as TABS in the builder
+LEG_TAB = (30.0, -60.0, 0.1, -1.0)  # bottom corner; sewn square to the edge, pulled round to the leg crease when worn
 TAB_OUT = 11.0                        # tab length past the panel edge to the D-ring bar
 BACK_RING_X = 66.0                    # belt D-rings for the leg straps, x out from the centre back
 LEG_PATH = [(30, -108, -32), (23, -128, -45), (17, -148, -70), (20, -160, -110),
@@ -395,11 +395,11 @@ def rig(m, panel):
         down = up * -1
         # the leg strap, from its front D-ring round the leg to the hook's eye
         tip, tt, tn = legs[k][2]
-        back = surface_path(m, [tip + tt * 12] + [V(AX + s * x, y, z) for x, y, z in LEG_PATH] + [eye - n * 4])
-        lp = [(tip - tt * 6, tn)] + back + [(eye + down * 3, n)]
+        back = surface_path(m, [tip + tt * 20] + [V(AX + s * x, y, z) for x, y, z in LEG_PATH] + [eye - n * 4])
+        lp = [(tip - tt * 6, tn)] + back[1:] + [(eye + down * 3, n)]
         black.append(strip(lp))
         L = length(lp)
-        black.append(strip(part(lp, 0, 32, STRAP_T + 0.2)))                 # sewn loop at the front ring
+        black.append(strip(part(lp, 0, 18, STRAP_T + 0.2)))                 # sewn loop at the front ring
         tail = part(lp, L - 75, L, STRAP_T + 0.2)                          # doubled back through the slide
         black.append(strip(tail))
         p2, t2, n2 = along(lp, L - 45)

@@ -17,7 +17,7 @@ Use the `-Pattern.svg` (print it at 100% and check the 50 mm line) or the
 | Foam | 3 mm closed-cell foam (EVA or neoprene) | 1 | pattern |
 | Lining | 1 mm garment leather, suede or neoprene | 1 | pattern |
 | Strap tab | leather or webbing, 25 mm wide | 4 | 25 x 90 mm |
-| Waist strap | 1 in nylon webbing | 2 | 450 mm |
+| Waist strap | 1 in nylon webbing | 2 | 400 mm |
 | Leg strap | 1 in firm elastic | 2 | 560 mm |
 
 The strap lengths fit the reference body. For a different size, add or take
@@ -41,7 +41,7 @@ off half the difference in hip measurement on each waist strap.
    to the back of the shell, with its pockets over the screw holes.
 3. **Panel:** lay the shell face down and put the tabs on the dashed marks,
    rings outward. Lay the lining on top. Stitch 4 mm in from the edge, from
-   the top of one hip ear round the bottom to the other, through the tab ends.
+   one hip corner round the point to the other, through the tab ends.
    Leave the top edge open as a pocket, and close it with two snaps. Burnish
    the edges.
 4. **Core:** drop the ring into the socket from the back. Set the core on the
