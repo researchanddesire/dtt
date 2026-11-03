@@ -101,10 +101,10 @@ PARAMS = {
     "button_pad": (33.82, 68.64, 3.7),  # centre x, y (the post's) and radius; covers the post (r 3.5)
     "button_bar": (16.0, 4.0),  # root x and width, on the pad's centreline
     "button_slot_w": 0.7,
-    # The R+D logo moves to the top right corner, 3.5 mm in from the edges and
-    # 3 mm clear of the button: scale, then where the top right corner of its
-    # bounding box goes (from 22.19, 90.29).
-    "logo": (0.9, (42.45, 91.10)),
+    # The R+D logo is tucked into the top left corner, 3.5 mm in from the edges
+    # and 4.3 mm clear of the button: scale, then where the top left corner of
+    # its bounding box goes (from 2.44, 90.29).
+    "logo": (0.9, (-0.45, 91.10)),
     # Under the button, a U of walls round the slot holds a floor that stops
     # its travel, 5 mm clear of the OLED board edge where its ribbon folds round.
     "button_tray": (29.8, 0.8, 9.57, 10.57),  # fences to x, wall thickness, floor z
@@ -554,7 +554,7 @@ def button_inlay(grow=0.05):
 
 def logo_inlay(logo):
     """The original logo inlay (its top faces at the top face), scaled about
-    the top right corner of its bounding box and moved to P["logo"], at the
+    the top left corner of its bounding box and moved to P["logo"], at the
     same depth."""
     s, (x, y) = P["logo"]
     zt = P["top_z"]
@@ -563,8 +563,8 @@ def logo_inlay(logo):
     depth = zt - logo.BoundBox.ZMin
     solids = []
     for f in tops:
-        f.scale(s, V(bb.XMax, bb.YMax, zt))
-        f.translate(V(x - bb.XMax, y - bb.YMax, 0))
+        f.scale(s, V(bb.XMin, bb.YMax, zt))
+        f.translate(V(x - bb.XMin, y - bb.YMax, 0))
         solids.append(f.extrude(V(0, 0, -depth)))
     return Part.makeCompound(solids)
 
