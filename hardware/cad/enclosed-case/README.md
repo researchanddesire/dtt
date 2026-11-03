@@ -43,7 +43,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 ## Source
 
 - `build_enclosed_case.py` builds the parts from `../DTT.FCStd`. Dimensions are
-  in `PARAMS`.
+  in `PARAMS`. Set `outline` to `"conformal"` for walls that follow the PCB's
+  three widths (50 / 48 / 44 mm); the snap backplate only fits the taper.
 - `make_assembly.FCMacro` writes `DTT-Enclosed.FCStd`, `DTT-Enclosed.step`,
   `parts/` and `images/`: `xvfb-run -a freecad make_assembly.FCMacro`.
 - The PCB is unchanged; the screws use its existing 3.6 mm holes.
@@ -60,8 +61,9 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
 - USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
-- The button feel: a plain bar with a round pad over the plunger. Its tray
-  now stays 5 mm clear of the screen board.
+- The button feel: a 4 mm black bar to a blue round pad over the plunger,
+  a little softer than the 5.4 mm bar before. Its tray stays 5 mm clear of
+  the screen board.
 - The OLED clips: the module clicks in and its glass sits flat on the plate.
   The lips are set to lift the board 0.3 mm past its seat, so the beams stay
   sprung against it.

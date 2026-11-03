@@ -1,9 +1,10 @@
 """Build the enclosed DTT case from ../DTT.FCStd.
 
-The housing is filled out to one rounded rectangle, a sliding switch cover
-drives S1, and a rear cover tray holds the PCB from its top face down. The
-original four PCB screws pass up through the tray and PCB into the housing
-bosses, with their heads sunk flush in the tray.
+The housing is filled out to a new outline, tapered toward the jack or
+stepped to follow the PCB, a sliding switch cover drives S1, and a rear cover
+tray holds the PCB from its top face down. The original four PCB screws pass
+up through the tray and PCB into the housing bosses, with their heads sunk
+flush in the tray.
 
 Run with FreeCAD 1.1+ (GUI under xvfb keeps the colours in the saved file):
     xvfb-run -a freecad make_assembly.FCMacro
@@ -31,10 +32,17 @@ PARAMS = {
     "pcb_bottom_z": -5.1,
     "screw_axes": [(3.0, 76.0), (39.0, 76.0), (3.3, 27.5), (38.7, 27.5)],
     # Outer shape: full width at the USB-C end, then the sides curve in toward
-    # the jack end on two large arcs.
+    # the jack end on two large arcs ("taper"), or step in with the PCB's
+    # three widths ("conformal").
+    "outline": "taper",
     "outer": (-4.0, -0.6, 46.0, 94.6),  # x0, y0, x1, y1 of the full-width outline
     "outer_r": 4.0,  # USB-C end corners
     "taper": (75.0, 3.0, 6.0),  # sides start to curve in at this y, inset of each side at the jack end face, jack-end corner radius
+    # The original housing outline, flush with the PCB: half-widths about x 21
+    # of the jack, middle and USB-C sections, and its 45 degree steps and
+    # jack-end corners as lines x - y = c (right side; the left mirrors it).
+    "housing_steps": ((19.0, 21.0, 22.0), (16.0, -15.0), 35.99),
+    "conformal": (3.0, 1.5, 3.0),  # side wall outside the original housing, step corner radius, jack-end corner radius
     "top_z": 14.17,
     "top_fillet": 1.2,
     "bottom_chamfer": 0.8,
@@ -88,11 +96,15 @@ PARAMS = {
     "groove": (0.8, 1.0, 1.1),  # inset from the outer face, width, depth
     "groove_y": (5.9, 89.1),
     "tongue": (0.6, 0.6, 0.2),  # width, height, end clearance; centred in the groove (0.8 x 1.0 was too tight)
-    # Flexure button (a touch point, blue inlay): a bar from the top plate
-    # ending in a round pad over the original plunger post, freed by a U slot.
+    # Flexure button: a black bar from the top plate ending in a round pad over
+    # the original plunger post, freed by a U slot. Only the pad is blue.
     "button_pad": (33.82, 68.64, 3.7),  # centre x, y (the post's) and radius; covers the post (r 3.5)
-    "button_bar": (16.0, 5.4),  # root x and width, on the pad's centreline
+    "button_bar": (16.0, 4.0),  # root x and width, on the pad's centreline
     "button_slot_w": 0.7,
+    # The R+D logo moves to the top right corner, 3.5 mm in from the edges and
+    # 3 mm clear of the button: scale, then where the top right corner of its
+    # bounding box goes (from 22.19, 90.29).
+    "logo": (0.9, (42.45, 91.10)),
     # Under the button, a U of walls round the slot holds a floor that stops
     # its travel, 5 mm clear of the OLED board edge where its ribbon folds round.
     "button_tray": (29.8, 0.8, 9.57, 10.57),  # fences to x, wall thickness, floor z
@@ -195,18 +207,76 @@ def taper_arcs():
     return x0 + R, x1 - R, ys, R
 
 
+def conformal_steps():
+    """Right side of the conformal outline: centre x, the three side x values
+    (jack, middle, USB-C sections) and the step lines x - y = c, all moved out
+    by the wall."""
+    x0, _, x1, _ = P["outer"]
+    xc = (x0 + x1) / 2
+    (hj, hm, hu), (cl, cu), cj = P["housing_steps"]
+    w = P["conformal"][0]
+    d = w * math.sqrt(2)  # a 45 degree line moved out by w
+    return xc, (xc + hj + w, xc + hm + w, xc + hu + w), (cl + d, cu + d, cj + d)
+
+
 def half_width(y):
     """Distance from the centreline to the case side at y (before the corners round it)."""
     x0, _, x1, _ = P["outer"]
+    if P["outline"] == "conformal":
+        xc, (xj, xm, xu), (cl, cu, cj) = conformal_steps()
+        for x_lo, x_hi, c in ((xm, xu, cu), (xj, xm, cl), (-1e9, xj, cj)):
+            if y >= x_hi - c:
+                return x_hi - xc
+            if y >= x_lo - c:
+                return y + c - xc  # on the 45 degree step
     if P["taper"][1] <= 0 or y >= P["taper"][0]:
         return (x1 - x0) / 2
     cl, _, ys, R = taper_arcs()
     return (x1 - x0) / 2 - (R - math.sqrt(R * R - (ys - y) ** 2))
 
 
+def filleted_polygon(pts, radii, z=0.0):
+    """Closed polygon through pts (anticlockwise) with a tangent arc of
+    radii[i] at each corner."""
+    n = len(pts)
+    pts = [V(x, y, z) for x, y in pts]
+    corners = []
+    for i in range(n):
+        p0, p1, p2 = pts[i - 1], pts[i], pts[(i + 1) % n]
+        u1, u2 = (p1 - p0).normalize(), (p2 - p1).normalize()
+        half = math.acos(max(-1.0, min(1.0, u1.dot(u2)))) / 2  # half the turn
+        t = radii[i] * math.tan(half)
+        mid = p1 + (u2 - u1).normalize() * (radii[i] / math.cos(half) - radii[i])
+        corners.append((p1 - u1 * t, mid, p1 + u2 * t))
+    edges = []
+    for i, (a, m, b) in enumerate(corners):
+        edges += [Part.Arc(a, m, b), Part.LineSegment(b, corners[(i + 1) % n][0])]
+    return Part.Face(Part.Wire([e.toShape() for e in edges]))
+
+
+def conformal_outline(z=0.0):
+    """Case outline that follows the PCB: the original housing outline with
+    its three widths and 45 degree steps, moved out by the wall along the
+    sides, between the end faces."""
+    _, y0, _, y1 = P["outer"]
+    xc, (xj, xm, xu), (cl, cu, cj) = conformal_steps()
+    _, rs, rj = P["conformal"]
+    right = [(cj + y0, y0), (xj, xj - cj), (xj, xj - cl), (xm, xm - cl), (xm, xm - cu), (xu, xu - cu), (xu, y1)]
+    left = [(2 * xc - x, y) for x, y in reversed(right)]
+    radii = [rj, rj, rs, rs, rs, rs, P["outer_r"]]
+    return filleted_polygon(right + left, radii + radii[::-1], z)
+
+
 def plan_outline(z=0.0):
-    """Case outline in plan: straight sides from the USB-C end, then arcs that
-    bring each side in toward the jack end, rounded into the jack end face."""
+    """Case outline in plan."""
+    if P["outline"] == "conformal":
+        return conformal_outline(z)
+    return taper_outline(z)
+
+
+def taper_outline(z=0.0):
+    """Straight sides from the USB-C end, then arcs that bring each side in
+    toward the jack end, rounded into the jack end face."""
     x0, y0, x1, y1 = P["outer"]
     r = P["outer_r"]
     ys, d, rj = P["taper"]
@@ -475,14 +545,28 @@ def button_slot(H):
 
 
 def button_inlay(grow=0.05):
-    """Blue on the bar and the pad, grown a hair into the slot so the cut never
-    lands on its walls. It starts level with the round slot ends."""
+    """Blue on the round pad only, grown a hair into the slot so the cut never
+    lands on its walls; the bar stays black."""
     px, py, pr = P["button_pad"]
-    xr, bw = P["button_bar"]
     z0, z1 = P["inlay_z"]
-    h = bw / 2 + grow
-    icon = merge_faces(rect(xr - P["button_slot_w"] / 2, py - h, px, py + h, z0).fuse(disc(px, py, pr + grow, z0)))
-    return icon.extrude(V(0, 0, z1 + 1 - z0))
+    return disc(px, py, pr + grow, z0).extrude(V(0, 0, z1 + 1 - z0))
+
+
+def logo_inlay(logo):
+    """The original logo inlay (its top faces at the top face), scaled about
+    the top right corner of its bounding box and moved to P["logo"], at the
+    same depth."""
+    s, (x, y) = P["logo"]
+    zt = P["top_z"]
+    tops = [f.copy() for f in logo.Faces if f.normalAt(0, 0).z > 0.99 and abs(f.CenterOfMass.z - zt) < 1e-3]
+    bb = Part.makeCompound(tops).BoundBox
+    depth = zt - logo.BoundBox.ZMin
+    solids = []
+    for f in tops:
+        f.scale(s, V(bb.XMax, bb.YMax, zt))
+        f.translate(V(x - bb.XMax, y - bb.YMax, 0))
+        solids.append(f.extrude(V(0, 0, -depth)))
+    return Part.makeCompound(solids)
 
 
 def screen_clips():
@@ -519,7 +603,8 @@ def screen_clips():
 
 
 def build_all(doc):
-    H = doc.getObject("Part__Feature001").Shape
+    logo0 = doc.getObject("Body").Shape
+    H = doc.getObject("Part__Feature001").Shape.fuse(logo0).removeSplitter()  # fill the original logo pocket
     board = doc.getObject("BoardRev4").Shape
 
     housing, pcb = build_housing(H, board)
@@ -531,6 +616,8 @@ def build_all(doc):
     cover = cover.fuse(tongue()).removeSplitter()
     button = housing.common(button_inlay()).removeSplitter()
     housing = housing.cut(button_inlay()).removeSplitter()
+    logo = logo_inlay(logo0)
+    housing = housing.cut(logo).removeSplitter()
     housing = housing.cut(tongue(groove=True)).removeSplitter()
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
@@ -542,5 +629,6 @@ def build_all(doc):
         cover=cover,
         s1=build_s1(doc.getObject("Part__Feature002").Shape),
         button=button,
+        logo=logo,
         screws=[build_screw(x, y) for (x, y) in P["screw_axes"]],
     )

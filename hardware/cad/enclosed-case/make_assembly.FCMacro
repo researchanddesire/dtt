@@ -70,12 +70,11 @@ def assemble():
         print(k, s.isValid(), len(s.Solids), round(s.Volume, 1))
 
     # The logo body is bound to the housing and would re-pad against the new
-    # shape, so keep its original solid as a plain part.
+    # shape, so replace it with the moved inlay as a plain part.
     body = doc.getObject("Body")
-    logo_shape = body.Shape.copy()
     body.removeObjectsFromDocument()
     doc.removeObject("Body")
-    logo = feature(doc, "LogoInlay", "R+D logo inlay - print blue", logo_shape, CYAN, doc.getObject("Part"))
+    logo = feature(doc, "LogoInlay", "R+D logo inlay - print blue", g["logo"], CYAN, doc.getObject("Part"))
     button = feature(doc, "ButtonInlay", "Button inlay - print blue", g["button"], BLUE, doc.getObject("Part"))
 
     housing = doc.getObject("Part__Feature001")
