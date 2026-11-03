@@ -44,7 +44,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 
 - `build_enclosed_case.py` builds the parts from `../DTT.FCStd`. Dimensions are
   in `PARAMS`. Set `outline` to `"conformal"` for walls that follow the PCB's
-  three widths (50 / 48 / 44 mm); the snap backplate only fits the taper.
+  three widths (50 / 48 / 44 mm). Set `lean` to `(3.0, 2.5)` for sides that
+  curve in 3 mm toward the top. The snap backplate only fits the upright taper.
 - `make_assembly.FCMacro` writes `DTT-Enclosed.FCStd`, `DTT-Enclosed.step`,
   `parts/` and `images/`: `xvfb-run -a freecad make_assembly.FCMacro`.
 - The PCB is unchanged; the screws use its existing 3.6 mm holes.

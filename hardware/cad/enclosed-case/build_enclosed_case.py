@@ -43,6 +43,9 @@ PARAMS = {
     # jack-end corners as lines x - y = c (right side; the left mirrors it).
     "housing_steps": ((19.0, 21.0, 22.0), (16.0, -15.0), 35.99),
     "conformal": (3.0, 1.5, 3.0),  # side wall outside the original housing, step corner radius, jack-end corner radius
+    # Lofted sides: upright from the seam to past S1's window and channel, then
+    # each long side curves in on an arc, so the case slims away from the PCB.
+    "lean": (0.0, 2.5),  # inset of each side at the top face (0 keeps them upright), z where the lean starts
     "top_z": 14.17,
     "top_fillet": 1.2,
     "bottom_chamfer": 0.8,
@@ -317,6 +320,46 @@ def envelope(z0, z1):
     return s
 
 
+def side_inset(z):
+    """How far each long side has leaned in at height z: nothing up to the
+    start of the lean, then an arc that leaves the upright wall tangentially."""
+    d, zv = P["lean"]
+    if d <= 0 or z <= zv:
+        return 0.0
+    h = P["top_z"] - zv
+    R = (h * h + d * d) / (2 * d)
+    dz = min(z, P["top_z"]) - zv
+    return R - math.sqrt(R * R - dz * dz)
+
+
+def outline_at(z, inset):
+    """The plan outline with both long sides moved in by inset; the end faces stay."""
+    if inset <= 1e-9:
+        return plan_outline(z)
+    saved = dict(P)
+    try:
+        if P["outline"] == "conformal":
+            w, rs, rj = P["conformal"]
+            P["conformal"] = (w - inset, rs, rj)
+        else:
+            x0, y0, x1, y1 = P["outer"]
+            P["outer"] = (x0 + inset, y0, x1 - inset, y1)
+        return plan_outline(z)
+    finally:
+        P.clear()
+        P.update(saved)
+
+
+def lofted_envelope(z0, z1, sections=12):
+    """envelope(), with the sides leaning in above the start of the lean."""
+    zv = P["lean"][1]
+    if P["lean"][0] <= 0 or z1 <= zv:
+        return envelope(z0, z1)
+    zs = [zv + (z1 - zv) * i / sections for i in range(sections + 1)]
+    upper = Part.makeLoft([outline_at(z, side_inset(z)).OuterWire for z in zs], True, False)
+    return envelope(z0, zv).fuse(upper).removeSplitter()
+
+
 def above_slope(shift):
     """Everything above the sensor-end slope, moved shift outwards along -Y."""
     z0, y0, k = P["slope"]
@@ -330,7 +373,7 @@ def outer_upper():
     y0 = P["outer"][1]
     zs, zt = P["pcb_top_z"], P["top_z"]
     r = P["top_fillet"]
-    e = envelope(zs, zt)
+    e = lofted_envelope(zs, zt)
     e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
     e = e.cut(above_slope(1.0 - y0))  # original end wall at y = 1
     try:
@@ -375,8 +418,11 @@ def build_housing(H, board):
     # The slope cut sits 0.3 mm inside the original slope so the two bond
     # instead of meeting on one plane.
     keep = keep.fuse(ext(p0.makeOffset2D(-P["top_overlap"]), P["top_band_z"], zt)).cut(above_slope(-0.3))
-    fill = outer_upper().cut(keep)
+    outer = outer_upper()
+    fill = outer.cut(keep)
     h = H.fuse(fill).common(box(-20, -20, zs, 70, 120, zt)).removeSplitter()
+    if P["lean"][0] > 0:
+        h = h.common(outer).removeSplitter()  # leaning sides pass inside the original wall's top
 
     (a0, a1) = P["sw_body"]
     cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])] + slider_cuts() + connector_cuts()
@@ -558,6 +604,7 @@ def logo_inlay(logo):
     same depth."""
     s, (x, y) = P["logo"]
     zt = P["top_z"]
+    x += side_inset(zt)  # stays the same distance from the left side when the sides lean
     tops = [f.copy() for f in logo.Faces if f.normalAt(0, 0).z > 0.99 and abs(f.CenterOfMass.z - zt) < 1e-3]
     bb = Part.makeCompound(tops).BoundBox
     depth = zt - logo.BoundBox.ZMin
