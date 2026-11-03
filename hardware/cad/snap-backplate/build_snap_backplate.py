@@ -8,7 +8,7 @@ STEP/STL exports in hardware/production-exports/cad/snap-backplate/. DTT-Enclose
 not modified. Edit PARAMS below and re-run to change the design.
 
 The enclosed case is full width at its USB-C end and curves in toward the jack end, so the sleeve's
-section follows its sides: side walls with lips over the case's top fillet, and a hood over its jack end. The case
+section follows its sides: side walls with lips over the case's top round, and a hood over its jack end. The case
 rests on a ledge along the foot of each side wall, and the lever's teeth catch its USB-C end face
 either side of the USB-C recess.
 
@@ -56,7 +56,7 @@ PARAMS = {
     'BodyRearZ': (-8.1, 'verified: rear cover outer face, flat, with the screws flush'),
     'BodyX0': (-4.0, 'verified: case side at the USB-C end; toward the jack end the sides follow ENC.plan_outline'),
     'BodyX1': (46.0, 'verified: case side at the USB-C end; the switch cover grip stands 0.4 proud at Y 79.9-88.1'),
-    'TopFilletR': (1.2, 'verified: round along the top edges'),
+    'TopFilletR': (ENC.top_round() or ENC.P['edge_fillet'], 'verified: round along the top edges, from the case builder'),
     'DeviceCx': (21.0, 'verified: case centreline'),
     'DeviceBottomY': (-0.6, 'verified: jack end face'),
     'DeviceTopY': (94.6, 'verified: USB-C end face'),
@@ -74,7 +74,7 @@ PARAMS = {
     'RestGap': (1.0, 'design: plate front to the case rear, the height of the side ledges; the cup heads sit 0.6 below the plate front'),
     'WallClear': (0.2, 'design: clearance to the housing sides'),
     'RailT': (2.0, 'design: side wall thickness'),
-    'WallTopAbove': (1.2, 'design: wall top above the case front face; the lips are 1 mm thick at the tip'),
+    'WallTopAbove': (1.2, 'design: wall top above the case front face'),
     'HoodT': (1.4, 'design: jack-end hood thickness normal to the housing end slope'),
     'HoodTopR': (4.0, 'design: blend from the hood slope into the flat top'),
     'SwoopY0': (44.0, 'design: wall top starts to fall here; the lips run to here'),
@@ -82,7 +82,8 @@ PARAMS = {
     'EdgeR': (1.0, 'design: fillet along the whole outer top edge of the sleeve and wings, half the 2 mm wall so its top stays square'),
     'BedChamfer': (0.6, 'design: rear outer edge, against elephant foot'),
     'InnerChamfer': (1.0, 'design: 45 deg fillet-chamfer at the inner foot of the walls'),
-    'HookEngage': (0.6, 'design: lip reach over the case sides onto the top fillet, and over the jack end onto its slope'),
+    'HookEngage': (0.6, 'design: lip reach over the jack end onto its slope'),
+    'LipPastTangent': (0.4, 'design: the side lips reach this far in past where their 45 deg faces touch the top round'),
     'JackOpenX0': (14.0, 'design: opening in the hood for the 3.5 mm plug'),
     'JackOpenX1': (28.0, 'design'),
     'JackOpenR': (3.0, 'design: bottom corners of the plug opening'),
@@ -461,6 +462,7 @@ def cavity():
     offset by the clearance."""
     zf = z_front(); c = P['WallClear']; ch = P['InnerChamfer']; ztop = z_wall_top() + 5
     he = P['HookEngage']; r = P['TopFilletR']
+    hs = r - (r + c) / math.sqrt(2) + P['LipPastTangent']   # side lip reach over the case side
     zw, lc = z_wall_top(), P['LipChamfer']
 
     def prof(lips, y):
@@ -471,9 +473,9 @@ def cavity():
         kl = (xr - r) + (P['HousingTopZ'] - r) + (r + c) * math.sqrt(2)
         zl = kl - ir                                      # where it leaves the inner face
         if lips:
-            tl, tr, zt, d = xl + he, xr - he, kl - (xr - he), lc
+            tl, tr, zt, d = xl + hs, xr - hs, kl - (xr - hs), lc
         else:                                             # same vertices, the lip faces run straight up
-            tl, tr, zt, d = il, ir, zl + he, 0.0
+            tl, tr, zt, d = il, ir, zl + hs, 0.0
         return [(il + ch, zf), (ir - ch, zf), (ir, zf + ch), (ir, zl), (tr, zt), (tr, zw - lc), (tr + d, zw),
                 (tr + d, ztop), (tl - d, ztop), (tl - d, zw), (tl, zw - lc), (tl, zt), (il, zl), (il, zf + ch)]
 

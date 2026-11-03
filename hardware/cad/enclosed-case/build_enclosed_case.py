@@ -47,7 +47,15 @@ PARAMS = {
     # each long side curves in on an arc, so the case slims away from the PCB.
     "lean": (0.0, 2.5),  # inset of each side at the top face (0 keeps them upright), z where the lean starts
     "top_z": 14.17,
-    "top_fillet": 1.2,
+    # Round along the top edge, built into the lofted sides, so it can be larger
+    # than the USB-C end corners: those tighten as the round brings the outline
+    # in, down to corner_min_r at the top face. Under it the walls are kept
+    # min_wall thick from inside. The conformal outline's 1.5 mm step corners
+    # keep a plain edge_fillet instead.
+    "top_round": 5.0,
+    "corner_min_r": 1.0,
+    "min_wall": 1.6,
+    "edge_fillet": 1.2,  # sloped end edges
     "bottom_chamfer": 0.8,
     # Sloped sensor end of the original housing: z = z0 + k * (y - y0).
     "slope": (9.774, 1.2, 1.368),
@@ -104,10 +112,10 @@ PARAMS = {
     "button_pad": (33.82, 68.64, 3.7),  # centre x, y (the post's) and radius; covers the post (r 3.5)
     "button_bar": (16.0, 4.0),  # root x and width, on the pad's centreline
     "button_slot_w": 0.7,
-    # The R+D logo is tucked into the top left corner, 3.5 mm in from the edges
-    # and 4.3 mm clear of the button: scale, then where the top left corner of
-    # its bounding box goes (from 2.44, 90.29).
-    "logo": (0.9, (-0.45, 91.10)),
+    # The R+D logo is tucked into the top left corner of the flat top, 1 mm in
+    # from where the round starts: scale, then where the top left corner of its
+    # bounding box goes (from 2.44, 90.29).
+    "logo": (0.78, (2.0, 88.6)),
     # Under the button, a U of walls round the slot holds a floor that stops
     # its travel, 5 mm clear of the OLED board edge where its ribbon folds round.
     "button_tray": (29.8, 0.8, 9.57, 10.57),  # fences to x, wall thickness, floor z
@@ -332,32 +340,81 @@ def side_inset(z):
     return R - math.sqrt(R * R - dz * dz)
 
 
-def outline_at(z, inset):
-    """The plan outline with both long sides moved in by inset; the end faces stay."""
-    if inset <= 1e-9:
+def top_round():
+    """Radius of the round built into the sides (none on the conformal outline)."""
+    return P["top_round"] if P["outline"] == "taper" else 0.0
+
+
+def round_inset(z, t=0.0):
+    """How far the top round has brought the whole outline in at height z, on
+    the surface t inside the outer one (its round has radius r - t)."""
+    r = top_round()
+    zc = P["top_z"] - r
+    if r <= t or z <= zc:
+        return t
+    dz = min(z - zc, r - t)
+    return r - math.sqrt(max((r - t) ** 2 - dz * dz, 0.0))
+
+
+def outline_at(z, inset, around=0.0):
+    """The plan outline with both long sides moved in by inset, then the whole
+    outline moved in by around, as the top round does: the ends move in too and
+    the convex corners tighten. Only the long sides move on the conformal
+    outline."""
+    if inset <= 1e-9 and around <= 1e-9:
         return plan_outline(z)
     saved = dict(P)
     try:
         if P["outline"] == "conformal":
             w, rs, rj = P["conformal"]
-            P["conformal"] = (w - inset, rs, rj)
+            P["conformal"] = (w - inset - around, rs, rj)
         else:
             x0, y0, x1, y1 = P["outer"]
-            P["outer"] = (x0 + inset, y0, x1 - inset, y1)
+            ys, d, rj = P["taper"]
+            r = top_round()
+            # Each corner tightens evenly as the outline comes in, from its own
+            # radius to its radius less r at the top face, but not under corner_min_r.
+            corner = lambda c: c - (c - max(c - r, P["corner_min_r"])) * min(around / r, 1.0) if r > 0 else c
+            P["outer"] = (x0 + inset + around, y0 + around, x1 - inset - around, y1 - around)
+            P["outer_r"] = corner(P["outer_r"])
+            if d > 0:  # the side arcs keep their centres
+                R = ((ys - y0) ** 2 + d * d) / (2 * d) - around
+                d = R - math.sqrt(R * R - (ys - y0 - around) ** 2)
+            P["taper"] = (ys, d, corner(rj))
         return plan_outline(z)
     finally:
         P.clear()
         P.update(saved)
 
 
-def lofted_envelope(z0, z1, sections=12):
-    """envelope(), with the sides leaning in above the start of the lean."""
-    zv = P["lean"][1]
-    if P["lean"][0] <= 0 or z1 <= zv:
-        return envelope(z0, z1)
-    zs = [zv + (z1 - zv) * i / sections for i in range(sections + 1)]
-    upper = Part.makeLoft([outline_at(z, side_inset(z)).OuterWire for z in zs], True, False)
-    return envelope(z0, zv).fuse(upper).removeSplitter()
+def section_levels(t=0.0):
+    """Heights of the loft sections: up through the lean, then round the top
+    round in equal steps of angle, ending at the top face (t below it)."""
+    r, zt = top_round(), P["top_z"]
+    d, zv = P["lean"]
+    zc = zt - r
+    zs = []
+    if d > 0 and (r <= 0 or zv < zc):
+        z1, n = (zc, 8) if r > 0 else (zt - t, 12)
+        zs += [zv + (z1 - zv) * i / n for i in range(n)]
+    if r > t:
+        zs += [zc + (r - t) * math.sin(math.pi / 2 * i / 15) for i in range(16)]
+    elif zs:
+        zs.append(zt - t)
+    return zs
+
+
+def lofted_envelope(z0, t=0.0):
+    """The case from z0 to the top face, or the surface t inside it: upright
+    sides, then a loft through sections that lean in and round over the top."""
+    zs = section_levels(t)
+    zt = P["top_z"] - t
+    za = zs[0] if zs else zt
+    prism = outline_at(z0, 0.0, round_inset(z0, t)).extrude(V(0, 0, za - z0))
+    if not zs:
+        return prism
+    loft = Part.makeLoft([outline_at(z, side_inset(z), round_inset(z, t)).OuterWire for z in zs], True, False)
+    return prism.fuse(loft).removeSplitter()
 
 
 def above_slope(shift):
@@ -372,16 +429,61 @@ def above_slope(shift):
 def outer_upper():
     y0 = P["outer"][1]
     zs, zt = P["pcb_top_z"], P["top_z"]
-    r = P["top_fillet"]
-    e = lofted_envelope(zs, zt)
-    e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
+    r = P["edge_fillet"]
+    e = lofted_envelope(zs)
+    if top_round() <= 0:
+        e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
     e = e.cut(above_slope(1.0 - y0))  # original end wall at y = 1
     try:
-        slope = [f for f in e.Faces if 0.5 < f.normalAt(0, 0).z < 0.99]
+        slope = [f for f in e.Faces if f.Surface.TypeId == "Part::GeomPlane" and 0.5 < f.normalAt(0, 0).z < 0.99]
         e = e.makeFillet(r, slope[0].Edges)
     except Exception as ex:
         print("slope fillet skipped:", ex)
     return e
+
+
+def solid(s):
+    """The one solid in s. removeSplitter can leave stray vertices beside it
+    in its compound, and the next boolean on that compound fails."""
+    assert len(s.Solids) == 1, "expected one solid, got %d" % len(s.Solids)
+    return s.Solids[0]
+
+
+def fuse_checked(a, b):
+    """a fused with b. On the original housing's faces OCC can fail or return
+    an empty result, so check it, and retry on the bare solids."""
+    def ok(s):
+        return len(s.Solids) == 1 and s.Volume > max(a.Volume, b.Volume) - 1e-3
+    try:
+        s = a.fuse(b)
+        if ok(s):
+            return s
+    except (Part.OCCError, ValueError):  # ValueError: a null result
+        pass
+    s = a.Solids[0].fuse(b.Solids[0])
+    assert ok(s), "fuse failed"
+    return s
+
+
+def inner_form(d, z0):
+    """The outer form from z0 up, d inside its faces (sloped end included)."""
+    k = P["slope"][2]
+    return lofted_envelope(z0, d).cut(above_slope(1.0 - P["outer"][1] - d * math.hypot(1, k) / k))
+
+
+def round_backing(outer):
+    """Where the top round comes closer than min_wall to the inside, the
+    housing is filled out to min_wall behind it, in a band round the outline
+    from the start of the round up. The fill stops 0.2 under the outer faces,
+    which the housing already has, so the fuse meets no coincident faces."""
+    r, t = top_round(), P["min_wall"]
+    if r <= t:
+        return None
+    zc, zt = P["top_z"] - r, P["top_z"]
+    f = plan_outline()
+    ring = f.cut(offset_face(f, -(r + 2.0))).extrude(V(0, 0, zt + 1 - zc))
+    ring.translate(V(0, 0, zc))
+    return inner_form(0.2, zc - 1.0).cut(inner_form(t, zc - 1.0)).common(ring).common(outer).removeSplitter()
 
 
 def connector_cuts():
@@ -420,16 +522,19 @@ def build_housing(H, board):
     keep = keep.fuse(ext(p0.makeOffset2D(-P["top_overlap"]), P["top_band_z"], zt)).cut(above_slope(-0.3))
     outer = outer_upper()
     fill = outer.cut(keep)
-    h = H.fuse(fill).common(box(-20, -20, zs, 70, 120, zt)).removeSplitter()
-    if P["lean"][0] > 0:
-        h = h.common(outer).removeSplitter()  # leaning sides pass inside the original wall's top
+    h = H.fuse(fill)
+    backing = round_backing(outer)
+    if backing is not None:
+        h = fuse_checked(h, backing)
+    h = h.common(box(-20, -20, zs, 70, 120, zt)).removeSplitter()
+    h = solid(h.common(outer).removeSplitter())  # the round and the lean pass inside the original wall's top
 
     (a0, a1) = P["sw_body"]
     cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])] + slider_cuts() + connector_cuts()
-    h = h.cut(cuts).removeSplitter()
+    h = solid(h.cut(cuts).removeSplitter())
     clear, add, slot = button_slot(H)
-    h = h.cut(clear).fuse(add).cut(slot).removeSplitter()
-    h = h.fuse(screen_clips()).removeSplitter()
+    h = solid(h.cut(clear).fuse(add).cut(slot).removeSplitter())
+    h = solid(h.fuse(screen_clips()).removeSplitter())
     return h, pcb
 
 
@@ -658,14 +763,14 @@ def build_all(doc):
     slider = build_slider()
     cover = build_cover(pcb)
     # The part of the end wall below the jack axis moves to the rear cover.
-    cover = cover.fuse(housing.common(jack_tab())).removeSplitter()
-    housing = housing.cut(jack_tab(P["tab_clear"])).removeSplitter()
-    cover = cover.fuse(tongue()).removeSplitter()
-    button = housing.common(button_inlay()).removeSplitter()
-    housing = housing.cut(button_inlay()).removeSplitter()
+    cover = solid(cover.fuse(housing.common(jack_tab())).removeSplitter())
+    housing = solid(housing.cut(jack_tab(P["tab_clear"])).removeSplitter())
+    cover = solid(cover.fuse(tongue()).removeSplitter())
+    button = solid(housing.common(button_inlay()).removeSplitter())
+    housing = solid(housing.cut(button_inlay()).removeSplitter())
     logo = logo_inlay(logo0)
-    housing = housing.cut(logo).removeSplitter()
-    housing = housing.cut(tongue(groove=True)).removeSplitter()
+    housing = solid(housing.cut(logo).removeSplitter())
+    housing = solid(housing.cut(tongue(groove=True)).removeSplitter())
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
     print("cover", cover.isValid(), len(cover.Solids), round(cover.Volume, 1))

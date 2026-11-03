@@ -31,6 +31,8 @@ EXPLODE = {"housing": 45.0, "cover": -14.0, "screws": -28.0, "slider": 14.0}
 def paint(o, colour):
     o.ViewObject.ShapeAppearance = (App.Material(DiffuseColor=colour),)
     o.ViewObject.ShapeColor = colour
+    o.ViewObject.Deviation = 0.02  # fine enough that the top round renders smooth
+    o.ViewObject.AngularDeflection = 4.0
 
 
 def feature(doc, name, label, shape, colour, group=None):

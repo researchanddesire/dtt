@@ -1,8 +1,8 @@
 # Enclosed case
 
 The DTT case, 50 mm wide at the USB-C end and curving in to 44 mm at the jack,
-with a blue switch cover that slides S1 and a rear cover tray that holds the
-PCB from its top face down. The original four PCB screws hold it together,
+with a 5 mm round along the top edge, a blue switch cover that slides S1 and a
+rear cover tray that holds the PCB from its top face down. The original four PCB screws hold it together,
 flush in countersinks in the rear cover. It replaces the loop backing, and
 slides into the [snap backplate](../snap-backplate/).
 
@@ -43,8 +43,10 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 ## Source
 
 - `build_enclosed_case.py` builds the parts from `../DTT.FCStd`. Dimensions are
-  in `PARAMS`. Set `outline` to `"conformal"` for walls that follow the PCB's
-  three widths (50 / 48 / 44 mm). Set `lean` to `(3.0, 2.5)` for sides that
+  in `PARAMS`. `top_round` is the round along the top edge; under it the
+  walls are filled out to 1.6 mm from inside. Set `outline` to `"conformal"`
+  for walls that follow the PCB's three widths (50 / 48 / 44 mm); its step
+  corners keep a 1.2 mm fillet. Set `lean` to `(3.0, 2.5)` for sides that
   curve in 3 mm toward the top. The snap backplate only fits the upright taper.
 - `make_assembly.FCMacro` writes `DTT-Enclosed.FCStd`, `DTT-Enclosed.step`,
   `parts/` and `images/`: `xvfb-run -a freecad make_assembly.FCMacro`.
@@ -62,6 +64,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
 - USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
+- The top round prints on the plate, so its first 1.5 mm overhangs past 45°.
+  Support it from the build plate, or lower `top_round`.
 - The button feel: a 4 mm black bar to a blue round pad over the plunger,
   a little softer than the 5.4 mm bar before. Its tray stays 5 mm clear of
   the screen board.
