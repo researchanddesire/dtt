@@ -49,13 +49,17 @@ PARAMS = {
     "top_z": 14.17,
     # Round along the top edge, built into the lofted sides, so it can be larger
     # than the USB-C end corners: those tighten as the round brings the outline
-    # in, down to corner_min_r at the top face. Under it the walls are kept
-    # min_wall thick from inside. The conformal outline's 1.5 mm step corners
-    # keep a plain edge_fillet instead.
+    # in, toward corner_min_r. It runs round the jack end too. The round stops
+    # where it has turned round_stop degrees from upright, and a straight face
+    # carries on at that slope to the top face, so it prints top face down
+    # without support. Under it the walls are kept min_wall thick from inside.
+    # The conformal outline's 1.5 mm step corners keep a plain edge_fillet and
+    # the original sloped jack end instead.
     "top_round": 5.0,
+    "round_stop": 45.0,
     "corner_min_r": 1.0,
     "min_wall": 1.6,
-    "edge_fillet": 1.2,  # sloped end edges
+    "edge_fillet": 1.2,  # conformal outline only
     "bottom_chamfer": 0.8,
     # Sloped sensor end of the original housing: z = z0 + k * (y - y0).
     "slope": (9.774, 1.2, 1.368),
@@ -113,9 +117,9 @@ PARAMS = {
     "button_bar": (16.0, 4.0),  # root x and width, on the pad's centreline
     "button_slot_w": 0.7,
     # The R+D logo is tucked into the top left corner of the flat top, 1 mm in
-    # from where the round starts: scale, then where the top left corner of its
-    # bounding box goes (from 2.44, 90.29).
-    "logo": (0.78, (2.0, 88.6)),
+    # from its edge: scale, then where the top left corner of its bounding box
+    # goes (from 2.44, 90.29).
+    "logo": (0.78, (-0.07, 90.67)),
     # Under the button, a U of walls round the slot holds a floor that stops
     # its travel, 5 mm clear of the OLED board edge where its ribbon folds round.
     "button_tray": (29.8, 0.8, 9.57, 10.57),  # fences to x, wall thickness, floor z
@@ -345,15 +349,25 @@ def top_round():
     return P["top_round"] if P["outline"] == "taper" else 0.0
 
 
+def stop_angle():
+    """Where the top round hands over to the straight face, in radians from upright."""
+    return math.radians(min(P["round_stop"], 90.0))
+
+
 def round_inset(z, t=0.0):
     """How far the top round has brought the whole outline in at height z, on
-    the surface t inside the outer one (its round has radius r - t)."""
+    the surface t inside the outer one (its round has radius r - t, and the
+    straight face above it is t inside the outer one)."""
     r = top_round()
     zc = P["top_z"] - r
     if r <= t or z <= zc:
         return t
-    dz = min(z - zc, r - t)
-    return r - math.sqrt(max((r - t) ** 2 - dz * dz, 0.0))
+    rho, a = r - t, stop_angle()
+    za = zc + rho * math.sin(a)
+    if z <= za or a > math.radians(89.9):
+        dz = min(z - zc, rho)
+        return r - math.sqrt(max(rho * rho - dz * dz, 0.0))
+    return r - rho * math.cos(a) + math.tan(a) * (min(z, P["top_z"] - t) - za)
 
 
 def outline_at(z, inset, around=0.0):
@@ -388,33 +402,45 @@ def outline_at(z, inset, around=0.0):
 
 
 def section_levels(t=0.0):
-    """Heights of the loft sections: up through the lean, then round the top
-    round in equal steps of angle, ending at the top face (t below it)."""
+    """Heights of the loft sections, t below the outer faces: up through the
+    lean and round the top round in equal steps of angle (curved), then up
+    the straight face above the round to the top face (straight)."""
     r, zt = top_round(), P["top_z"]
     d, zv = P["lean"]
     zc = zt - r
-    zs = []
+    curved, straight = [], []
     if d > 0 and (r <= 0 or zv < zc):
         z1, n = (zc, 8) if r > 0 else (zt - t, 12)
-        zs += [zv + (z1 - zv) * i / n for i in range(n)]
+        curved += [zv + (z1 - zv) * i / n for i in range(n)]
     if r > t:
-        zs += [zc + (r - t) * math.sin(math.pi / 2 * i / 15) for i in range(16)]
-    elif zs:
-        zs.append(zt - t)
-    return zs
+        a = stop_angle()
+        n = max(4, int(round(16 * a / (math.pi / 2))))
+        curved += [zc + (r - t) * math.sin(a * i / n) for i in range(n + 1)]
+        za = curved[-1]
+        if zt - t > za + 1e-6:
+            m = 4 if d > 0 else 1
+            straight = [za + (zt - t - za) * i / m for i in range(m + 1)]
+    elif curved:
+        curved.append(zt - t)
+    return curved, straight
 
 
 def lofted_envelope(z0, t=0.0):
     """The case from z0 to the top face, or the surface t inside it: upright
-    sides, then a loft through sections that lean in and round over the top."""
-    zs = section_levels(t)
+    sides, then a loft through sections that lean in and round over the top,
+    and a ruled one up the straight face above the round (smooth if the sides
+    lean, which curves it)."""
+    curved, straight = section_levels(t)
     zt = P["top_z"] - t
-    za = zs[0] if zs else zt
-    prism = outline_at(z0, 0.0, round_inset(z0, t)).extrude(V(0, 0, za - z0))
-    if not zs:
-        return prism
-    loft = Part.makeLoft([outline_at(z, side_inset(z), round_inset(z, t)).OuterWire for z in zs], True, False)
-    return prism.fuse(loft).removeSplitter()
+    za = curved[0] if curved else zt
+    wire = lambda z: outline_at(z, side_inset(z), round_inset(z, t)).OuterWire
+    s = outline_at(z0, 0.0, round_inset(z0, t)).extrude(V(0, 0, za - z0))
+    if not curved:
+        return s
+    s = s.fuse(Part.makeLoft([wire(z) for z in curved], True, False))
+    if straight:
+        s = s.fuse(Part.makeLoft([wire(z) for z in straight], True, P["lean"][0] <= 0))
+    return solid(s.removeSplitter())
 
 
 def above_slope(shift):
@@ -427,12 +453,16 @@ def above_slope(shift):
 
 
 def outer_upper():
+    """The outer form above the seam. The top round runs round the jack end
+    too; without it the top edges get a plain fillet and the jack end keeps
+    the original housing's sloped end, thickened."""
     y0 = P["outer"][1]
     zs, zt = P["pcb_top_z"], P["top_z"]
     r = P["edge_fillet"]
     e = lofted_envelope(zs)
-    if top_round() <= 0:
-        e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
+    if top_round() > 0:
+        return e
+    e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
     e = e.cut(above_slope(1.0 - y0))  # original end wall at y = 1
     try:
         slope = [f for f in e.Faces if f.Surface.TypeId == "Part::GeomPlane" and 0.5 < f.normalAt(0, 0).z < 0.99]
@@ -466,9 +496,8 @@ def fuse_checked(a, b):
 
 
 def inner_form(d, z0):
-    """The outer form from z0 up, d inside its faces (sloped end included)."""
-    k = P["slope"][2]
-    return lofted_envelope(z0, d).cut(above_slope(1.0 - P["outer"][1] - d * math.hypot(1, k) / k))
+    """The outer form with the top round from z0 up, d inside its faces."""
+    return lofted_envelope(z0, d)
 
 
 def round_backing(outer):

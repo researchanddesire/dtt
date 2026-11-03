@@ -8,16 +8,15 @@ STEP/STL exports in hardware/production-exports/cad/snap-backplate/. DTT-Enclose
 not modified. Edit PARAMS below and re-run to change the design.
 
 The enclosed case is full width at its USB-C end and curves in toward the jack end, so the sleeve's
-section follows its sides: side walls with lips over the case's top round, and a hood over its jack end. The case
-rests on a ledge along the foot of each side wall, and the lever's teeth catch its USB-C end face
-either side of the USB-C recess.
+section follows its sides: side walls with lips over the case's top round, and a hood with the same lip over
+its jack end. The case rests on a ledge along the foot of each side wall, and the lever's teeth catch its
+USB-C end face either side of the USB-C recess.
 
 Design language: the track and the plate are one form. The part is the intersection of
 a plan outline (the case outline grown by the wall; in the Double Double version it flares into two
-cup wings with large radii) and a side elevation (a hood
-at the jack end that leans at the housing's own end angle, a flat top along the module, then one
-S-shaped swoop down into the wings ahead of the side switch). The outer top edge carries one
-continuous fillet and the module cavity is cut out of that form. The latch is a release lever
+cup wings with large radii) and a side elevation (a flat top from the hood at the jack end along the
+module, then one S-shaped swoop down into the wings ahead of the side switch). The outer top edge carries
+one continuous fillet and the module cavity is cut out of that form. The latch is a release lever
 that is part of the plate outline: two slots run from under the module out through the top edge,
 the flex zone is thinned from the front, and the full-thickness press tab carries grip grooves.
 Printed-in stops limit the lever both ways: fingers under the tab and chamfered rails over its edges.
@@ -56,13 +55,11 @@ PARAMS = {
     'BodyRearZ': (-8.1, 'verified: rear cover outer face, flat, with the screws flush'),
     'BodyX0': (-4.0, 'verified: case side at the USB-C end; toward the jack end the sides follow ENC.plan_outline'),
     'BodyX1': (46.0, 'verified: case side at the USB-C end; the switch cover grip stands 0.4 proud at Y 79.9-88.1'),
-    'TopFilletR': (ENC.top_round() or ENC.P['edge_fillet'], 'verified: round along the top edges, from the case builder'),
+    'TopFilletR': (ENC.top_round() or ENC.P['edge_fillet'], 'verified: round along the top edges and the jack end, from the case builder; it turns into a 45 deg face at its 45 deg point'),
     'DeviceCx': (21.0, 'verified: case centreline'),
     'DeviceBottomY': (-0.6, 'verified: jack end face'),
     'DeviceTopY': (94.6, 'verified: USB-C end face'),
     'HousingTopZ': (14.17, 'verified: front face'),
-    'EndSlopeZ0': (9.5, 'verified: jack-end top slope starts at Y -0.6, Z 9.5'),
-    'EndSlopeY1': (2.81, 'verified: jack-end top slope ends at Y 2.81, Z 14.17'),
     # plate outline: a body flush with the track; the Double Double version flares into two wings that carry
     # its upper cups
     'PlateT': (6.0, 'design: 2 mm over the reference proxy, so the stop fingers stay 1.7 mm thick under the 3.7 mm press the teeth need'),
@@ -75,15 +72,12 @@ PARAMS = {
     'WallClear': (0.2, 'design: clearance to the housing sides'),
     'RailT': (2.0, 'design: side wall thickness'),
     'WallTopAbove': (1.2, 'design: wall top above the case front face'),
-    'HoodT': (1.4, 'design: jack-end hood thickness normal to the housing end slope'),
-    'HoodTopR': (4.0, 'design: blend from the hood slope into the flat top'),
     'SwoopY0': (44.0, 'design: wall top starts to fall here; the lips run to here'),
     'SwoopY1': (77.0, 'design: wall reaches the plate here, clear of the upper keyhole entries (Y 78.8) and the switch cover grip (Y 79.9)'),
     'EdgeR': (1.0, 'design: fillet along the whole outer top edge of the sleeve and wings, half the 2 mm wall so its top stays square'),
     'BedChamfer': (0.6, 'design: rear outer edge, against elephant foot'),
     'InnerChamfer': (1.0, 'design: 45 deg fillet-chamfer at the inner foot of the walls'),
-    'HookEngage': (0.6, 'design: lip reach over the jack end onto its slope'),
-    'LipPastTangent': (0.4, 'design: the side lips reach this far in past where their 45 deg faces touch the top round'),
+    'LipPastTangent': (0.4, 'design: the lips (sides and jack end) reach this far in past the 45 deg point of the case\'s top round, over its 45 deg face'),
     'JackOpenX0': (14.0, 'design: opening in the hood for the 3.5 mm plug'),
     'JackOpenX1': (28.0, 'design'),
     'JackOpenR': (3.0, 'design: bottom corners of the plug opening'),
@@ -363,22 +357,10 @@ def plan_face():
 
 
 def elevation_wire_pts():
-    """Side elevation (Y, Z) of the sleeve top: hood slope, flat top, S-swoop, plate."""
+    """Side elevation (Y, Z) of the sleeve top: flat from past the hood at the jack end (the plan outline
+    ends it, square like the side walls), then the S-swoop down to the plate."""
     zf, zr, zt = z_front(), z_rear(), z_wall_top()
-    y0, z0 = P['DeviceBottomY'], P['EndSlopeZ0']
-    y1, z1 = P['EndSlopeY1'], P['HousingTopZ']
-    L = math.hypot(y1 - y0, z1 - z0); u = ((y1 - y0) / L, (z1 - z0) / L)
-    n = (-u[1], u[0])                                     # outward normal of the housing end slope
-    q = (y0 + P['HoodT'] * n[0], z0 + P['HoodT'] * n[1])  # point on the hood's outer slope
-    k = u[1] / u[0]
-    yc = q[0] + (zt - q[1]) / k                           # slope meets the flat top
-    a = math.atan(k); R = P['HoodTopR']; tl = R * math.tan(a / 2)
-    p_s = (yc - tl * u[0], zt - tl * u[1])                # tangent point on the slope
-    p_f = (yc + tl, zt)                                   # tangent point on the flat
-    ctr = (yc + tl, zt - R)
-    d = (yc - ctr[0], zt - ctr[1]); dl = math.hypot(*d)
-    p_m = (ctr[0] + R * d[0] / dl, ctr[1] + R * d[1] / dl)
-    ya = y_end() - 3.0; za = q[1] + (ya - q[0]) * k
+    ya = y_end() - 3.0
     # two equal tangent arcs from (SwoopY0, zt) down to (SwoopY1, zf)
     s0, s1 = P['SwoopY0'], P['SwoopY1']; H = zt - zf; Ls = s1 - s0
     th = 2 * math.atan(H / Ls); Rs = Ls / (2 * math.sin(th))
@@ -386,7 +368,7 @@ def elevation_wire_pts():
     m_up = (c_up[0] + Rs * math.sin(th / 2), c_up[1] + Rs * math.cos(th / 2))
     mid = (c_up[0] + Rs * math.sin(th), c_up[1] + Rs * math.cos(th))
     m_lo = (c_lo[0] - Rs * math.sin(th / 2), c_lo[1] - Rs * math.cos(th / 2))
-    return dict(start=(ya, zr - 1), ya=(ya, za), p_s=p_s, p_m=p_m, p_f=p_f, s0=(s0, zt),
+    return dict(start=(ya, zr - 1), ya=(ya, zt), s0=(s0, zt),
                 m_up=m_up, mid=mid, m_lo=m_lo, s1=(s1, zf), far=(FAR, zf), far_low=(FAR, zr - 1),
                 swoop_r=Rs, swoop_deg=math.degrees(th))
 
@@ -394,8 +376,7 @@ def elevation_wire_pts():
 def elevation_solid():
     e = elevation_wire_pts(); xa, xb = -FAR / 2, FAR / 2
     P3 = lambda p: V(xa, p[0], p[1])
-    edges = [Part.LineSegment(P3(e['start']), P3(e['ya'])), Part.LineSegment(P3(e['ya']), P3(e['p_s'])),
-             Part.Arc(P3(e['p_s']), P3(e['p_m']), P3(e['p_f'])), Part.LineSegment(P3(e['p_f']), P3(e['s0'])),
+    edges = [Part.LineSegment(P3(e['start']), P3(e['ya'])), Part.LineSegment(P3(e['ya']), P3(e['s0'])),
              Part.Arc(P3(e['s0']), P3(e['m_up']), P3(e['mid'])), Part.Arc(P3(e['mid']), P3(e['m_lo']), P3(e['s1'])),
              Part.LineSegment(P3(e['s1']), P3(e['far'])), Part.LineSegment(P3(e['far']), P3(e['far_low'])),
              Part.LineSegment(P3(e['far_low']), P3(e['start']))]
@@ -456,18 +437,25 @@ def sleeve_blank():
     return blank
 
 
+def lip_reach():
+    """How far the lips reach in over the case's sides and jack end."""
+    r, c = P['TopFilletR'], P['WallClear']
+    return r - (r + c) / math.sqrt(2) + P['LipPastTangent']
+
+
 def cavity():
     """Module space: the side section with its lips and inner foot chamfer, taken through the curved sides
-    in sections a few mm apart, clipped at the jack end by the case's plan corners and its sloped end, both
-    offset by the clearance."""
+    in sections a few mm apart, clipped at the jack end by the case's plan corners offset by the clearance
+    and by the same section turned to the end, for the end lip."""
+    assert ENC.P['round_stop'] >= 45.0, 'the lips need the case round to reach its 45 deg point'
     zf = z_front(); c = P['WallClear']; ch = P['InnerChamfer']; ztop = z_wall_top() + 5
-    he = P['HookEngage']; r = P['TopFilletR']
-    hs = r - (r + c) / math.sqrt(2) + P['LipPastTangent']   # side lip reach over the case side
+    r = P['TopFilletR']
+    hs = lip_reach()
     zw, lc = z_wall_top(), P['LipChamfer']
 
     def prof(lips, y):
-        # The lip underside is a 45 deg line clear of the top fillet by the clearance, so it prints without
-        # support: x + z = k on the right, mirrored on the left.
+        # The lip underside is the case's 45 deg face over its top round, moved out by the clearance, so it
+        # prints without support: x + z = k on the right, mirrored on the left.
         xl, xr = side_x(y, 'L'), side_x(y, 'R')
         il, ir = xl - c, xr + c
         kl = (xr - r) + (P['HousingTopZ'] - r) + (r + c) * math.sqrt(2)
@@ -496,15 +484,13 @@ def cavity():
     # jack end: plan corners
     yb0, zr = P['DeviceBottomY'], z_rear()
     plan = case_face(c, zr).extrude(V(0, 0, 40))
-    # jack end: end lip that follows the case's end slope
-    y0, z0, y1, z1 = yb0, P['EndSlopeZ0'], P['EndSlopeY1'], P['HousingTopZ']
-    k = (z1 - z0) / (y1 - y0); L = math.hypot(y1 - y0, z1 - z0)
-    n = (-(z1 - z0) / L, (y1 - y0) / L)
-    q = (y0 + c * n[0], z0 + c * n[1])
-    yi, yt = yb0 - c, yb0 + (he - c) + c                  # inner face, lip tip (0.6 over the end)
-    zat = lambda y: q[1] + (y - q[0]) * k
-    end = prism_yz([(yi + ch, zf), (FAR, zf), (FAR, ztop), (yt, ztop), (yt, zat(yt)), (yi, zat(yi)),
-                    (yi, zf + ch)], -FAR / 2, FAR / 2)
+    # jack end: the end lip is the side lip turned to the end, its 45 deg underside clear of the case's
+    # end by the clearance
+    zc = P['HousingTopZ'] - r
+    zat = lambda y: (y - yb0) + zc + r * (math.sqrt(2) - 1) + c * math.sqrt(2)
+    yi, yt = yb0 - c, yb0 + hs                            # inner face, lip tip
+    end = prism_yz([(yi + ch, zf), (FAR, zf), (FAR, ztop), (yt - lc, ztop), (yt - lc, zw), (yt, zw - lc),
+                    (yt, zat(yt)), (yi, zat(yi)), (yi, zf + ch)], -FAR / 2, FAR / 2)
     jack_end = parts[0].common(plan).common(end)
     return jack_end.fuse(parts[1:]).removeSplitter()
 
@@ -517,7 +503,7 @@ def jack_opening():
     if not DD:   # where the plate runs on, round corners would meet it at a tangent and spoil the mesh
         face = face.makeOffset2D(-P['JackOpenR'], join=0).makeOffset2D(P['JackOpenR'], join=0)
     # the convex rounding also rounds the top corners, which are outside the part; keep the bottom flat
-    return face.extrude(V(0, P['DeviceBottomY'] + P['HookEngage'] + 1.0 + 6.0, 0))
+    return face.extrude(V(0, P['DeviceBottomY'] + lip_reach() + 1.0 + 6.0, 0))
 
 
 def key_mouth():
@@ -836,9 +822,9 @@ def mesh_ok(shape):
 
 
 def fillet_inner_top(shape):
-    """Round the inner top edges of the sleeve: the inner faces where the swoop crosses them and the
-    hood lip. They are edges between a vertical face and an upward face inside the module footprint.
-    The lip tips have a chamfer in the section instead."""
+    """Round the inner top edges of the sleeve: the inner faces where the swoop crosses them. They are
+    edges between a vertical face and an upward face inside the module footprint. The lip tips, along
+    the sides and the jack end, have a chamfer in the section instead."""
     zf = z_front(); x0 = P['BodyX0'] - 0.3; x1 = P['BodyX1'] + 0.3
     sel = []
     for e in shape.Edges:
@@ -853,7 +839,7 @@ def fillet_inner_top(shape):
         if vert.count(True) != 1:
             continue
         up = n[vert.index(False)]
-        if abs(up.z - math.sqrt(0.5)) < 0.01 and abs(abs(up.x) - math.sqrt(0.5)) < 0.01:
+        if abs(up.z - math.sqrt(0.5)) < 0.01 and abs(math.hypot(up.x, up.y) - math.sqrt(0.5)) < 0.01:
             continue                                      # the lip chamfers
         if up.z > 0.2 and not (abs(up.z - 1) < 1e-6 and abs(faces[vert.index(False)].CenterOfMass.z - zf) < 1e-6):
             sel.append(e)
@@ -899,7 +885,8 @@ def fillet_jack_opening(shape):
     outer, top = [], []
     for e in shape.Edges:
         b = e.BoundBox
-        if b.XMin < x0 - 0.01 or b.XMax > x1 + 0.01 or b.YMax > P['DeviceBottomY'] + 1 or b.ZMax < zf + 0.05:
+        if (b.XMin < x0 - 0.01 or b.XMax > x1 + 0.01 or b.ZMax < zf + 0.05
+                or b.YMax > P['DeviceBottomY'] + lip_reach() + P['LipChamfer'] + 0.3):   # past the end lip
             continue
         if abs(b.YMin - ye) < 1e-4 and abs(b.YMax - ye) < 1e-4:
             outer.append(e)
