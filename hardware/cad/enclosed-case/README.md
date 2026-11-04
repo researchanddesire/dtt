@@ -15,12 +15,28 @@ slides into the [snap backplate](../snap-backplate/).
 
 <img src="images/Enclosed-Sections.png" width="560">
 
+## Suction-cup rear cover
+
+Swap the rear cover for `Rear-Cover-Cups-Black` to stick the case straight on
+a wall with two suction cups. Push each cup's head in through the round hole
+and slide it sideways until it clicks. The two slide in opposite directions,
+so the case can't come off its cups whichever way you pull it. The keyholes fit
+a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm groove. The cover is 4 mm
+thicker so the heads fit under the PCB, with a roof over each, and the case
+no longer fits the snap backplate.
+
+| | |
+| --- | --- |
+| <img src="images/Enclosed-Cups.png" width="320"> | <img src="images/Part-RearCoverCups.png" width="320"> |
+| <img src="images/Enclosed-Cups-Exploded.png" width="320"> | |
+
 ## Print
 
 | Part | File | Colour | Orientation |
 | --- | --- | --- | --- |
 | Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl` in white, `Housing-Inlays-Blue.stl` (logo and button) in blue) | black | top face down |
 | Rear cover | `parts/Rear-Cover-Black.stl` | black | outer face down |
+| Suction-cup rear cover (instead) | `parts/Rear-Cover-Cups-Black.stl` | black | outer face down |
 | Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flange face down |
 
 ## Hardware
@@ -38,7 +54,7 @@ slides into the [snap backplate](../snap-backplate/).
 4. Fit the rear cover and drive the four screws into the original bosses.
    Snug them; do not strip the bosses.
 
-Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
+Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup cover).
 
 ## Source
 
@@ -68,6 +84,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm.
 - The button feel: a 4 mm black bar to a blue round pad over the plunger,
   a little softer than the 5.4 mm bar before. Its tray stays 5 mm clear of
   the screen board.
+- Suction-cup cover: the cups click in and sit tight (`cup_snap`, `cup_land`),
+  and the heads slide under the bridged roofs.
 - The OLED clips: the module clicks in and its glass sits flat on the plate.
   The lips are set to lift the board 0.3 mm past its seat, so the beams stay
   sprung against it.

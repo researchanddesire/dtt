@@ -24,6 +24,7 @@ V = App.Vector
 BLACK = (0.16, 0.16, 0.17)
 BLUE = (0.09, 0.42, 0.93)
 CYAN = BLUE  # logo fill, printed in the same blue filament as the touch points
+CUP = (0.80, 0.84, 0.88)
 IMAGES = os.path.join(HERE, "images")
 EXPLODE = {"housing": 45.0, "cover": -14.0, "screws": -28.0, "slider": 14.0}
 
@@ -101,6 +102,15 @@ def assemble():
     cover = feature(doc, "RearCover", "Rear cover - print black", g["cover"], BLACK, lb)
     slider = feature(doc, "SwitchCover", "Switch cover - print blue", g["slider"], BLUE,
                      doc.getObject("Cover___V3_v5"))
+    # The suction-cup rear cover goes in place of the rear cover, so it sits in
+    # its own hidden group, out of the STEP and the usual renders.
+    alt = doc.addObject("App::Part", "SuctionCupBack")
+    alt.Label = "Suction-cup rear cover - swap for the rear cover"
+    feature(doc, "RearCoverCups", "Suction-cup rear cover - print black", g["cup_cover"], BLACK, alt)
+    for i, s in enumerate(g["cups"], 1):
+        o = feature(doc, "SuctionCup%d" % i, "Suction cup %d - not printed" % i, s, CUP, alt)
+        o.ViewObject.Transparency = 30
+    alt.Visibility = False
 
     exploded(doc, housing, V(0, 0, EXPLODE["housing"]))
     exploded(doc, s1, V(0, 0, 0))
@@ -143,6 +153,7 @@ def export(doc):
                                                    doc.getObject("ButtonInlay").Shape])),
         ("Switch-Cover-Blue", doc.getObject("SwitchCover").Shape),
         ("Rear-Cover-Black", doc.getObject("RearCover").Shape),
+        ("Rear-Cover-Cups-Black", doc.getObject("RearCoverCups").Shape),
     ]
     for name, s in parts:
         s.exportStep(os.path.join(B.PARTS, name + ".step"))
@@ -232,6 +243,22 @@ def render(doc):
         show_only(doc, [name])
         camera(view, d)
         view.saveImage(os.path.join(IMAGES, "Part-" + name + ".png"), 1200, 1000, "White")
+    # Suction-cup rear cover from the wall side, then on the case with its cups
+    # clicked in, then with the cups pulled back off their entries.
+    doc.getObject("SuctionCupBack").Visibility = True
+    show_only(doc, ["RearCoverCups"])
+    camera(view, (-0.6, 0.9, 1.0))
+    view.saveImage(os.path.join(IMAGES, "Part-RearCoverCups.png"), 1200, 1000, "White")
+    cups = [doc.getObject("SuctionCup%d" % i) for i in (1, 2)]
+    show_only(doc, [n for n in assembled if n != "RearCover"] + ["RearCoverCups"] + [o.Name for o in cups])
+    camera(view, (-1, 1.2, 1.0))
+    view.saveImage(os.path.join(IMAGES, "Enclosed-Cups.png"), 1400, 1100, "White")
+    for o, (_, _, d) in zip(cups, B.P["cup_keys"]):
+        o.Placement = App.Placement(V(-d * B.P["cup_slot"], 0, -22), App.Rotation())
+    camera(view, (-1, 1.2, 1.0))
+    view.saveImage(os.path.join(IMAGES, "Enclosed-Cups-Exploded.png"), 1400, 1100, "White")
+    for o in cups:
+        o.Placement = App.Placement()
     for n, vis in saved.items():
         doc.getObject(n).Visibility = vis
 

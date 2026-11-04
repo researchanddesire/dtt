@@ -73,6 +73,25 @@ PARAMS = {
     "cover_pocket_depth": 1.3,  # clears USB shell legs and jack pegs
     "cover_relief": 0.2,  # floor stays clear of the PCB except at the pads
     "cover_pad_d": 7.5,
+    # Alternative rear cover that takes two suction cups straight on the back,
+    # in keyholes that run sideways in opposite directions, so the case can't
+    # slide off its cups whichever way it is pulled. The cups have a stem with a
+    # 15 x 3 mm head and an 8.5 x 2.5 mm groove, as in the snap backplate. The
+    # heads sit in chambers under the PCB, between the jack's pegs (y 11.7) and
+    # the headers' pins (y 80.1), where the PCB has nothing on its back but
+    # vias, and the keyholes stay 2 mm clear of the screws. Each chamber has a
+    # roof, so the PCB stays fully enclosed.
+    "cup_cover_extra": 4.0,  # floor added to the cover: land, head, room and roof under the PCB
+    "cup_keys": ((27.0, 21.5, 1.0), (15.0, 71.0, -1.0)),  # click end x, y and the slide in x from the entry
+    "cup_slot": 12.0,  # entry to click end
+    "cup_entry_d": 15.6,  # passes the 15 mm head
+    "cup_slot_w": 8.9,  # free slot on the 8.5 mm groove
+    "cup_snap": (8.4, 190.0, 1.5),  # click pocket diameter, how much of its rim it keeps, lead-in
+    "cup_land": 2.4,  # floor under the head, in the 2.5 mm groove
+    "cup_head": (15.0, 3.0, 0.5),  # head diameter, thickness, room over it (the roof is bridged)
+    "cup_roof": (0.9, 0.8),  # roof over each chamber, up to the relief under the PCB, and its wall
+    "cup_counterbore_d": 6.3,  # the screw heads stay at their usual depth
+    "cup_proxy": (35.0, 14.0, 8.5, 2.5),  # cup diameter and depth (estimates), groove diameter and length
     # Original short self-tapping PCB screws (0408LTFB, #4 x 1/2" Torx flat
     # head), sunk flush in 82 degree countersinks.
     "screw_clear_d": 3.2,
@@ -611,11 +630,15 @@ def build_slider():
     return s.removeSplitter()
 
 
-def build_cover(pcb):
-    """Rear cover: a tray from the seam at the PCB top down past the PCB back."""
+def build_cover(pcb, extra=0.0):
+    """Rear cover: a tray from the seam at the PCB top down past the PCB back.
+    With extra, its floor is that much thicker, with the screw heads at their
+    usual depth in counterbores, and it takes the suction-cup keyholes."""
     zs = P["pcb_top_z"]
     zt = P["pcb_bottom_z"]
     zb = zt - P["cover_thickness"]
+    zf = zb  # where the screw heads sit
+    zb -= extra
     cover = envelope(zb, zs)
     try:
         bottom = [e for e in cover.Edges if e.BoundBox.ZMax < zb + 1e-6]
@@ -627,6 +650,8 @@ def build_cover(pcb):
     cover = cover.cut(ext(pcb.makeOffset2D(P["pcb_edge_gap"]), zt - P["cover_relief"], zs + 1))
     cover = cover.cut(ext(pcb.makeOffset2D(-P["cover_pocket_inset"]), zt - P["cover_pocket_depth"], zs + 1))
     pads = [zcyl(x, y, P["cover_pad_d"], zt - P["cover_pocket_depth"] - 0.1, zt) for (x, y) in P["screw_axes"]]
+    if extra:
+        pads += cup_roofs(zt - P["cover_relief"])
     cover = cover.fuse(pads).common(shell)
     cover = cover.cut(slider_cuts()[:1] + connector_cuts())
     holes = []
@@ -635,9 +660,105 @@ def build_cover(pcb):
         r = P["csk_d"] / 2
         h = (r - P["screw_clear_d"] / 2) / math.tan(math.radians(P["csk_angle"] / 2))
         holes.append(Part.makeCone(r + 0.5 * math.tan(math.radians(P["csk_angle"] / 2)), P["screw_clear_d"] / 2,
-                                   h + 0.5, V(x, y, zb - 0.5)))
+                                   h + 0.5, V(x, y, zf - 0.5)))
+        if extra:
+            holes.append(zcyl(x, y, P["cup_counterbore_d"], zb - 1, zf))
     cover = cover.cut(holes)
+    if extra:
+        cover = cover.cut(cup_keyholes(zb))
     return cover.removeSplitter()
+
+
+def cup_keyholes(zb):
+    """Keyholes in the cup cover's floor (rear face at zb): an entry hole the
+    head passes, a slot for the stem's groove that narrows to a mouth and opens
+    into a round pocket the stem clicks into, and over the land a chamber the
+    head slides along, under the roof from cup_roofs()."""
+    re, w = P["cup_entry_d"] / 2, P["cup_slot_w"] / 2
+    dp, wrap, lead = P["cup_snap"]
+    a = math.radians((360 - wrap) / 2)
+    m, ym = dp / 2 * math.sin(a), dp / 2 * math.cos(a)  # half mouth, and its offset from the pocket centre
+    yl = ym + lead
+    zl = zb + P["cup_land"]
+    _, ht, hc = P["cup_head"]
+    zc = zl + ht + hc
+    s = P["cup_slot"]
+    cuts = []
+    for cx, cy, d in P["cup_keys"]:
+        ex = cx - d * s
+        # (along, across) from the click end, along running away from the entry
+        pts = [(-s, -w), (-s, w), (-yl, w), (-ym, m), (0, m), (0, -m), (-ym, -m), (-yl, -w)]
+        poly = [V(cx + d * u, cy + v, zb - 1) for u, v in pts]
+        slot = Part.Face(Part.makePolygon(poly + poly[:1])).extrude(V(0, 0, zl - zb + 2))
+        cuts += [zcyl(ex, cy, 2 * re, zb - 1, zc), zcyl(cx, cy, dp, zb - 1, zl + 1), slot,
+                 zcyl(cx, cy, 2 * re, zl, zc), box(min(ex, cx), cy - re, zl, max(ex, cx), cy + re, zc)]
+    return cuts
+
+
+def cup_roofs(zr):
+    """Blocks that rise from the pocket floor to zr over each keyhole's head
+    chamber, so the chamber is roofed over and the PCB stays enclosed."""
+    re = P["cup_entry_d"] / 2 + P["cup_roof"][1]
+    z0 = P["pcb_bottom_z"] - P["cover_pocket_depth"] - 0.1
+    s = P["cup_slot"]
+    out = []
+    for cx, cy, d in P["cup_keys"]:
+        ex = cx - d * s
+        out += [zcyl(ex, cy, 2 * re, z0, zr), zcyl(cx, cy, 2 * re, z0, zr),
+                box(min(ex, cx), cy - re, z0, max(ex, cx), cy + re, zr)]
+    return out
+
+
+def suction_cup(x, y, zb):
+    """Suction cup proxy clicked into a keyhole of the cup cover (rear face at
+    zb): cup body toward the wall, stem, groove through the land, head in the
+    chamber. The same proxy as the snap backplate's."""
+    cd, depth, gd, gl = P["cup_proxy"]
+    hd, ht, _ = P["cup_head"]
+    zs = zb - 0.1  # stem shoulder, just off the rear face
+    rim, z0 = zb - depth, zs - 3.0
+    outside = Part.makeCone(cd / 2, hd / 2, z0 - rim, V(x, y, rim))
+    inside = Part.makeCone(cd / 2 - 1.2, hd / 2 - 1.2, z0 - rim - 1.5, V(x, y, rim - 0.1))
+    stem = zcyl(x, y, hd, z0 - 0.5, zs)
+    groove = zcyl(x, y, gd, zs - 0.01, zs + gl + 0.01)
+    head = zcyl(x, y, hd, zs + gl, zs + gl + ht)
+    return outside.cut(inside).fuse([stem, groove, head]).removeSplitter()
+
+
+def cup_cover_rear():
+    return P["pcb_bottom_z"] - P["cover_thickness"] - P["cup_cover_extra"]
+
+
+def cup_checks(cover, cups, board, screws):
+    """Numbers worth reading after a change to the cup cover."""
+    bb = cover.BoundBox
+    print("CHECK cup cover valid %s, %d solid, %.1f x %.1f x %.1f mm, %.1f cm3" % (
+        cover.isValid(), len(cover.Solids), bb.XLength, bb.YLength, bb.ZLength, cover.Volume / 1000))
+    zb = cup_cover_rear()
+    print("CHECK case %.2f mm thick with it, %.1f more than with the usual cover" % (
+        P["top_z"] - zb, P["cup_cover_extra"]))
+    rest = [c.common(cover).Volume for c in cups]
+    for i, c in enumerate(cups):
+        print("CHECK cup %d: %.2f mm3 in the cover at rest (the click), head %.2f mm under the PCB, %.2f mm from a screw" % (
+            i + 1, rest[i], c.distToShape(board)[0], min(c.distToShape(s)[0] for s in screws)))
+    (x0, y0, _), (x1, y1, _) = P["cup_keys"]
+    d = math.hypot(x1 - x0, y1 - y0)
+    print("CHECK cups %.1f mm apart, %.1f mm between the rims of %.0f mm cups" % (d, d - P["cup_proxy"][0], P["cup_proxy"][0]))
+    holes = Part.makeCompound(cup_keyholes(zb))
+    zr = P["pcb_bottom_z"] - P["cover_relief"]
+    rs = cup_roofs(zr)
+    roof = rs[0].fuse(rs[1:]).common(box(-50, -50, zr - P["cup_roof"][0], 100, 150, zr))
+    print("CHECK roofs over the chambers: %.2f mm thick, %.1f%% solid, %.2f mm under the PCB" % (
+        roof.BoundBox.ZLength, 100 * cover.common(roof).Volume / roof.Volume, P["cover_relief"]))
+    print("CHECK keyholes to the screw counterbores %.2f mm" % min(
+        holes.distToShape(zcyl(x, y, P["cup_counterbore_d"], zb - 1, zb + P["cup_cover_extra"]))[0]
+        for x, y in P["screw_axes"]))
+    for name, (dx, dy) in (("up", (0, 2)), ("down", (0, -2)), ("left", (-2, 0)), ("right", (2, 0))):
+        moved = cover.translated(V(dx, dy, 0))
+        stuck = ["%d (%.0f mm3)" % (i + 1, v) for i, v in enumerate(c.common(moved).Volume for c in cups)
+                 if v > rest[i] + 1.0]
+        print("CHECK case pushed 2 mm %s on its cups: %s" % (
+            name, "blocked by cup " + ", ".join(stuck) if stuck else "slides off along the slots"))
 
 
 def build_s1(model):
@@ -791,10 +912,14 @@ def build_all(doc):
     housing, pcb = build_housing(H, board)
     slider = build_slider()
     cover = build_cover(pcb)
+    cup_cover = build_cover(pcb, P["cup_cover_extra"])
     # The part of the end wall below the jack axis moves to the rear cover.
-    cover = solid(cover.fuse(housing.common(jack_tab())).removeSplitter())
+    tab = housing.common(jack_tab())
+    cover = solid(cover.fuse(tab).removeSplitter())
+    cup_cover = solid(cup_cover.fuse(tab).removeSplitter())
     housing = solid(housing.cut(jack_tab(P["tab_clear"])).removeSplitter())
     cover = solid(cover.fuse(tongue()).removeSplitter())
+    cup_cover = solid(cup_cover.fuse(tongue()).removeSplitter())
     button = solid(housing.common(button_inlay()).removeSplitter())
     housing = solid(housing.cut(button_inlay()).removeSplitter())
     logo = logo_inlay(logo0)
@@ -803,11 +928,14 @@ def build_all(doc):
     print("housing", housing.isValid(), len(housing.Solids), round(housing.Volume, 1))
     print("slider", slider.isValid(), len(slider.Solids), round(slider.Volume, 1))
     print("cover", cover.isValid(), len(cover.Solids), round(cover.Volume, 1))
+    print("cup cover", cup_cover.isValid(), len(cup_cover.Solids), round(cup_cover.Volume, 1))
 
     return dict(
         housing=housing,
         slider=slider,
         cover=cover,
+        cup_cover=cup_cover,
+        cups=[suction_cup(x, y, cup_cover_rear()) for x, y, _ in P["cup_keys"]],
         s1=build_s1(doc.getObject("Part__Feature002").Shape),
         button=button,
         logo=logo,
