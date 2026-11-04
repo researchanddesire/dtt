@@ -26,13 +26,6 @@ The standard version has two cups in line, the upper one on a fixed tongue insid
 Instead of the cups, an optional one-piece wall bracket carries the keyhole studs. It screws or
 sticks to the wall, and the plate hangs on it.
 
-The Side Cups version is the standard one with both keyholes turned sideways, in opposite directions:
-the lower cup slides in from the left, the upper one from the right. No slide of the plate frees both
-cups, so pulling the case up and out cannot drag the plate off them. The tongue is too narrow for a
-sideways keyhole, so the upper cup sits under the case below the lever root. The cups click into the
-plate first, and then the plate goes onto the wall. It has no wall bracket, since rigid studs cannot
-enter two opposite slots.
-
 The same run builds a Double Double version for the OSSM Double Double toy mount. Its plate runs on
 past the jack end to a boss. A printed hex flange screw with the OSSM 24 mm thread sits in a hex pocket
 from the rear, so it cannot turn, and the Double Double threads onto it from the front. A fourth cup
@@ -199,7 +192,6 @@ PARAMS = {
 }
 P = {k: v for k, (v, _) in PARAMS.items()}
 DD = False   # True while main() builds the Double Double version
-SIDE = False   # True while main() builds the Side Cups version
 
 # The standard version (two cups in line, no wings) changes these. Its lever is a U: two arms from the root,
 # joined by the press tab, with a fixed tongue between them that carries the upper cup, so the cup sits
@@ -216,14 +208,6 @@ STANDARD = {
     'GripStart': (2.0, 'design: first groove centre past the teeth, clear of the slot across the tongue end'),
     'GripN': (3.0, 'design'),
     'LedgeY1': (92.0, 'design: ledge end, with a 45 deg lead-in, 2.6 short of the case end'),
-}
-
-# The Side Cups version changes these on top of STANDARD. Its lever and tongue stay as they are, so the
-# lever feels the same, but no cup sits on the tongue.
-SIDE_CUPS = {
-    'LowCupY': (11.0, 'design (Lucy: sideways keyholes in opposite directions): lower cup, entry on the left; its head recess stays 3 mm clear of the hood foot and the rim shows 3.7 mm below the plate'),
-    'UpCupY': (50.5, 'design: upper cup, entry on the right; its head recess stays 2.45 mm clear of the lever slot reliefs (Y 60.75), and the cups are 39.5 mm apart'),
-    'SideSlot': (11.0, 'design: entry to click end; one short of the standard 12, so the head recesses stay 1.4 mm clear of the ledge feet (X 0.8 and 41.2)'),
 }
 BASE = dict(P)
 
@@ -295,8 +279,6 @@ def cup_centres():
     if DD:
         yt = plate_top() - P['TopCupDrop']
         return {'UL': (cx - P['TopCupX'], yt), 'UR': (cx + P['TopCupX'], yt), 'L': (cx, P['LowCupY'])}
-    if SIDE:
-        return {'U': (cx, P['UpCupY']), 'L': (cx, P['LowCupY'])}
     return {'U': (cx, P['TongueTop'] - P['TongueWeb'] - P['KeyEntryD'] / 2), 'L': (cx, P['LowCupY'])}
 
 
@@ -308,38 +290,9 @@ def cup_positions():
     return cups
 
 
-def key_dir(key):
-    """Unit vector (X, Y) from a keyhole's entry to its click end: up, so the load seats the stems, or in
-    the Side Cups version sideways, the lower one to the right and the upper one to the left."""
-    if SIDE:
-        return (1.0, 0.0) if key == 'L' else (-1.0, 0.0)
-    return (0.0, 1.0)
-
-
-def key_slot(key):
-    if SIDE:
-        return P['SideSlot']
-    return P['TopSlot'] if key in ('UL', 'UR', 'U') else P['LowSlot']
-
-
 def entry_centre(key):
-    (sx, sy), (dx, dy) = cup_centres()[key], key_dir(key)
-    return sx - dx * key_slot(key), sy - dy * key_slot(key)
-
-
-def key_local(key, pts):
-    """Plate (X, Y) of keyhole points given as (across, along) from its click end, along running away from
-    the entry."""
-    (sx, sy), (dx, dy) = cup_centres()[key], key_dir(key)
-    return [(sx + u * dy + v * dx, sy - u * dx + v * dy) for u, v in pts]
-
-
-def key_box(key, across, along=0.0):
-    """(x0, x1, y0, y1) from a keyhole's entry centre to its click end, grown `across` either side of the
-    slot and `along` past both ends."""
-    (sx, sy), (ex, ey), (dx, dy) = cup_centres()[key], entry_centre(key), key_dir(key)
-    gx, gy = across * abs(dy) + along * abs(dx), across * abs(dx) + along * abs(dy)
-    return min(sx, ex) - gx, max(sx, ex) + gx, min(sy, ey) - gy, max(sy, ey) + gy
+    sx, sy = cup_centres()[key]
+    return sx, sy - (P['TopSlot'] if key in ('UL', 'UR', 'U') else P['LowSlot'])
 
 
 def dd_axis():
@@ -569,12 +522,11 @@ def keyholes():
     w, re, rp = P['KeySlotW'] / 2, P['KeyEntryD'] / 2, P['KeySnapD'] / 2
     m, ym = key_mouth(); yl = ym + P['KeySnapLead']
     for key, (sx, sy) in cup_centres().items():
-        (ex, ey), s = entry_centre(key), key_slot(key)
-        slot = prism(key_local(key, [(-w, -s), (w, -s), (w, -yl), (m, -ym), (m, 0), (-m, 0), (-m, -ym), (-w, -yl)]),
-                     zr - 1, zf + 1)
-        x0, x1, y0, y1 = key_box(key, re)
-        cut += [cyl(re, ex, ey, zr - 1, zf + 1), cyl(rp, sx, sy, zr - 1, zf + 1), slot,
-                cyl(re, sx, sy, zl, zf + 1), box(x0, x1, y0, y1, zl, zf + 1)]
+        ex, ey = entry_centre(key)
+        slot = prism([(sx - w, ey), (sx + w, ey), (sx + w, sy - yl), (sx + m, sy - ym), (sx + m, sy),
+                      (sx - m, sy), (sx - m, sy - ym), (sx - w, sy - yl)], zr - 1, zf + 1)
+        cut += [cyl(re, sx, ey, zr - 1, zf + 1), cyl(rp, sx, sy, zr - 1, zf + 1), slot,
+                cyl(re, sx, sy, zl, zf + 1), box(sx - re, sx + re, ey, sy, zl, zf + 1)]
     return cut
 
 
@@ -954,7 +906,10 @@ def printed_part():
     body = fillet_jack_opening(body)
     body = body.cut(keyholes()).removeSplitter()
     w = P['KeyEntryD'] / 2 + 0.1
-    kboxes = [key_box(key, w, w) for key in cup_centres()]
+    kboxes = []
+    for key, (sx, sy) in cup_centres().items():
+        ex, ey = entry_centre(key)
+        kboxes.append((sx - w, sx + w, ey - w, sy + w))
     body = fillet_edges_in(body, kboxes, P['KeyEdgeR'], zf, 'keyholes')
     if DD:
         body = body.cut(dd_pocket()).removeSplitter()
@@ -1108,23 +1063,11 @@ def design_checks(printed, black, blue, bracket):
     for key in cup_centres():
         sx, sy = cup_centres()[key]; ex, ey = entry_centre(key)
         w = P['KeyEntryD'] / 2; zr = z_rear()              # the head recess is the widest outline
-        x0, x1, y0, y1 = key_box(key, w)
-        kf = flat_face([cyl(w, ex, ey, zr, zr + 1), cyl(w, sx, sy, zr, zr + 1), box(x0, x1, y0, y1, zr, zr + 1)], zr)
+        kf = flat_face([cyl(w, ex, ey, zr, zr + 1), cyl(w, sx, sy, zr, zr + 1),
+                        box(sx - w, sx + w, ey, sy, zr, zr + 1)], zr)
         web = min(kf.distToShape(e)[0] for e in outline.Edges)
         print('CHECK keyhole %s web to plate edge %.2f mm' % (key, web))
     zf = z_front()
-    if SIDE:
-        (ux, uy), (lx, ly) = cup_centres()['U'], cup_centres()['L']
-        d = math.hypot(ux - lx, uy - ly)
-        print('CHECK cups %.1f mm apart, %.1f mm between the rims of %.0f mm cups; lower rim %.1f mm below the plate end' % (
-            d, d - P['CupD'], P['CupD'], y_end() - (ly - P['CupD'] / 2)))
-        print('CHECK upper head recess to the lever slot reliefs %.2f mm' % (
-            P['LatchRootY'] - P['LatchReliefD'] / 2 - (uy + P['KeyEntryD'] / 2)))
-        h = P['BodyRearZ'] - zf; fl, fr = P['BodyX0'] + P['LedgeReach'] + h, P['BodyX1'] - P['LedgeReach'] - h
-        for key in cup_centres():
-            x0, x1, _, _ = key_box(key, 0.0, P['KeyEntryD'] / 2)
-            print('CHECK keyhole %s head recess X %.2f to %.2f, %.2f mm clear of the ledge feet' % (
-                key, x0, x1, min(x0 - fl, fr - x1)))
     print('CHECK cup head and stud top %.2f mm under the case rear, %.2f under the plate front' % (
         P['BodyRearZ'] - cup_head_top(), zf - cup_head_top()))
     m, _ = key_mouth()
@@ -1160,22 +1103,7 @@ def design_checks(printed, black, blue, bracket):
         bb.XLength, bb.YLength, bb.ZLength, printed.isValid(), len(printed.Solids)))
     e = elevation_wire_pts()
     print('CHECK swoop radius %.1f mm, %.1f deg' % (e['swoop_r'], e['swoop_deg']))
-    escape_checks(printed)
     return strain
-
-
-def escape_checks(printed):
-    """Can the plate slide off its cups? Moved 2 mm each way in its plane, it either runs into a cup stem
-    or slides along the slots. The stems sit 0.05 mm tight in their click pockets, so the overlap at rest
-    is not zero."""
-    cups = {k: cup_shape(x, y) for k, (x, y) in cup_centres().items()}
-    rest = {k: c.common(printed).Volume for k, c in cups.items()}
-    for name, (dx, dy) in (('up', (0, 2)), ('down', (0, -2)), ('left', (-2, 0)), ('right', (2, 0))):
-        moved = printed.translated(V(dx, dy, 0))
-        over = {k: c.common(moved).Volume for k, c in cups.items()}
-        stuck = ['%s (%.0f mm3)' % (k, v) for k, v in over.items() if v > rest[k] + 1.0]
-        print('CHECK plate moved 2 mm %s: %s' % (name, 'blocked by cup ' + ', '.join(stuck) if stuck else
-                                                 'slides on its cups along the slots'))
 
 
 # The enclosed case's outer parts in DTT-Enclosed.FCStd
@@ -1253,8 +1181,6 @@ def parameter_sheet(doc):
     rows = dict(PARAMS)
     if not DD:
         rows.update(STANDARD)
-    if SIDE:
-        rows.update(SIDE_CUPS)
     for i, (k, (_, note)) in enumerate(rows.items(), 2):
         sheet.set('A%d' % i, k); sheet.set('B%d' % i, '%g' % P[k]); sheet.set('C%d' % i, note)
     return sheet
@@ -1267,25 +1193,21 @@ SCREW_COLOUR = (0.25, 0.25, 0.27)
 BRACKET_PREVIEW_COLOUR = (0.30, 0.30, 0.32)    # a touch lighter than the plate, so the two read apart
 
 
-def build(variant):
-    """Build one version ('standard', 'double-double' or 'side-cups') into its own copy of the DTT
-    assembly, export it and save it beside this script."""
-    global DD, SIDE
-    DD, SIDE = variant == 'double-double', variant == 'side-cups'
-    dd = DD
+def build(dd):
+    """Build one version into its own copy of the DTT assembly, export it and save it beside this script."""
+    global DD
+    DD = dd
     P.clear(); P.update(BASE)
     if not dd:
         P.update({k: v for k, (v, _) in STANDARD.items()})
-    if SIDE:
-        P.update({k: v for k, (v, _) in SIDE_CUPS.items()})
-    stem = 'DTT-Snap-Backplate' + {'double-double': '-Double-Double', 'side-cups': '-Side-Cups'}.get(variant, '')
+    stem = 'DTT-Snap-Backplate' + ('-Double-Double' if dd else '')
     doc = App.openDocument(MODULE)
     o = doc.getObject('ExplodedView')   # the case's exploded copies
     if o is not None:
         o.Visibility = False
     printed = printed_part()
     black, blue = split_colours(printed)
-    bracket = None if dd or SIDE else wall_bracket()
+    bracket = None if dd else wall_bracket()
     design_checks(printed, black, blue, bracket)
     module_checks(doc, printed)
     group = doc.addObject('App::Part', 'SnapBackplate'); group.Label = 'Snap backplate'
@@ -1303,7 +1225,7 @@ def build(variant):
                                PLATE_COLOUR))
         group.addObject(tagged(doc, 'SnapDoubleDouble', 'OSSM Double Double 24mm Threaded (proxy)',
                                double_double_proxy(), CUP_COLOUR))
-    elif bracket is not None:
+    else:
         # the bracket and its screws take the place of the cups, so they start hidden
         br = tagged(doc, 'SnapWallBracket', 'Wall bracket (in place of the cups; screws or adhesive strips)',
                     bracket, PLATE_COLOUR)
@@ -1337,8 +1259,6 @@ def build(variant):
         render(doc, pic)
         if dd:
             render_double_double(doc, pic)
-        elif SIDE:
-            render_side_cups(doc, pic)
         else:
             render_bracket(doc)
     doc.saveAs(os.path.join(HERE, stem + '-Concept.FCStd'))
@@ -1346,8 +1266,8 @@ def build(variant):
 
 
 def main():
-    variants = os.environ.get('SNAP_VARIANTS', 'standard,double-double,side-cups').split(',')
-    return [build(v.strip()) for v in variants]
+    variants = os.environ.get('SNAP_VARIANTS', 'standard,double-double').split(',')
+    return [build(v.strip() == 'double-double') for v in variants]
 
 
 def _rgb_uint(r, g, b):
@@ -1466,21 +1386,6 @@ def render_double_double(doc, pic):
     preview(doc, pic + '-Exploded-Rear.png', names[:3] + ['SnapCupD'],
             App.Rotation(V(0, 1, 0), -35).multiply(App.Rotation(V(1, 0, 0), -20)),
             moves={'SnapDDScrew': V(0, 0, -40), 'SnapCupD': V(0, 30, -40)}, turned=True, colours=grey)
-
-
-def render_side_cups(doc, pic):
-    """The plate from the wall side with each cup at its entry, pulled back: the lower one goes in on the
-    left and slides right, the upper one goes in on the right and slides left (as seen from the front)."""
-    names = ['SnapBackplatePrinted', 'SnapBackplateTouch', 'SnapCupL', 'SnapCupU']
-    cam = App.Rotation(V(0, 1, 0), -30).multiply(App.Rotation(V(1, 0, 0), -20))
-    back = 30.0
-    r = cam.multVec(V(1, 0, 0))
-    c = back * r.z / r.x              # cancels the sideways shift the pull-back makes in this view, so each
-    moves = {}                        # cup shows right over its entry (the turn to the rear flips X)
-    for key in ('L', 'U'):
-        (sx, sy), (ex, ey) = cup_centres()[key], entry_centre(key)
-        moves['SnapCup' + key] = V(ex - sx + c, ey - sy, -back)
-    preview(doc, pic + '-Exploded-Rear.png', names, cam, moves=moves, turned=True)
 
 
 if __name__ == '__main__' or True:

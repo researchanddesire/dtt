@@ -57,22 +57,6 @@ under 6 mm thick).
   into the hex pocket, flat toward the bottom. The pocket locks the cup in.
 - Print the screw on its flat, black, no supports, at least 4 walls.
 
-## Side Cups version
-
-Both keyholes run sideways, in opposite directions, so pulling the case up
-and out can't drag the plate off its cups. Same size and lever as the
-standard one. No wall bracket for this one.
-
-![Side Cups](images/Snap-Backplate-Side-Cups-Hero.png)
-
-| Backplate | Wall side | Cups in from the back |
-| --- | --- | --- |
-| ![Part](images/Snap-Backplate-Side-Cups-Hero-Part.png) | ![Rear](images/Snap-Backplate-Side-Cups-Rear.png) | ![Cups](images/Snap-Backplate-Side-Cups-Exploded-Rear.png) |
-
-- Click both cups in before it goes on the wall. Seen from the front, the
-  lower cup goes in on the left and slides right, the upper one goes in on the
-  right and slides left.
-
 ## Source
 
 `build_snap_backplate.py` builds everything from
