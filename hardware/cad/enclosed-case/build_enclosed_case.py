@@ -92,7 +92,7 @@ PARAMS = {
     "cup_snap": (8.4, 190.0, 1.5),  # click pocket diameter, how much of its rim it keeps, lead-in
     "cup_land": 2.4,  # floor under the head, in the 2.5 mm groove
     "cup_head": (15.0, 3.0, 0.5),  # head diameter, thickness, room over it (the roof is bridged)
-    "cup_roof": (0.9, 0.8),  # roof over each chamber, up to the relief under the PCB, and its wall
+    "cup_roof": (0.9, 2.0, 0.5),  # roof over each chamber, up to the relief under the PCB; the wall its bridge lands on; clearance to the pegs and pins
     # The PCB's pegs and pins through to its back near the keyholes (x, y, hole
     # diameter, from the KiCad board): jack pegs, J4, S1 and USB-C shell legs.
     "cup_keepout": ((21.3, 4.7, 1.2), (21.3, 11.7, 1.2), (2.5, 80.8, 1.5), (5.0, 80.8, 1.5),
@@ -718,16 +718,22 @@ def cup_keyholes(zb):
     return cuts
 
 
+def stadium(k, r, z0, z1):
+    """What a disc of radius r sweeps sliding from a keyhole's entry to its click, from z0 to z1."""
+    c, _, e = cup_key(k)
+    return zcyl(e.x, e.y, 2 * r, z0, z1).fuse([zcyl(c.x, c.y, 2 * r, z0, z1), band(e, c, r, z0, z1)])
+
+
 def cup_roofs(zr):
     """Blocks that rise from the pocket floor to zr over each keyhole's head
-    chamber, so the chamber is roofed over and the PCB stays enclosed."""
-    re = P["cup_entry_d"] / 2 + P["cup_roof"][1]
+    chamber, so the chamber is roofed over and the PCB stays enclosed. Printed
+    rear face down, the roof is the only part of the keyhole that prints in
+    the air: a bridge across the chamber. Its wall is wide enough for the
+    bridge to land on solid, and it is cut back around the PCB's pegs and pins."""
+    _, wall, clear = P["cup_roof"]
     z0 = P["pcb_bottom_z"] - P["cover_pocket_depth"] - 0.1
-    out = []
-    for k in P["cup_keys"]:
-        c, _, e = cup_key(k)
-        out += [zcyl(e.x, e.y, 2 * re, z0, zr), zcyl(c.x, c.y, 2 * re, z0, zr), band(e, c, re, z0, zr)]
-    return out
+    pins = [zcyl(x, y, d + 2 * clear, z0 - 1, zr + 1) for x, y, d in P["cup_keepout"]]
+    return [stadium(k, P["cup_entry_d"] / 2 + wall, z0, zr).cut(pins).removeSplitter() for k in P["cup_keys"]]
 
 
 def suction_cup(x, y, zb):
@@ -774,6 +780,10 @@ def cup_checks(cover, cups, board, screws):
     roofs = rs[0].fuse(rs[1:])
     print("CHECK roofs to the PCB's pegs and pins %.2f mm" % min(
         roofs.distToShape(zcyl(x, y, d, zr - 2, zr + 1))[0] for x, y, d in P["cup_keepout"]))
+    _, wall, clear = P["cup_roof"]
+    chambers = [stadium(k, P["cup_entry_d"] / 2, zr - 2, zr) for k in P["cup_keys"]]
+    print("CHECK roof bridges land on a %.1f mm wall, %.2f mm at its thinnest, beside a peg or pin" % (wall, min([wall] + [
+        ch.distToShape(zcyl(x, y, d + 2 * clear, zr - 2, zr))[0] for ch in chambers for x, y, d in P["cup_keepout"]])))
     print("CHECK keyholes to the screw counterbores %.2f mm" % min(
         holes.distToShape(zcyl(x, y, P["cup_counterbore_d"], zb - 1, zb + P["cup_cover_extra"]))[0]
         for x, y in P["screw_axes"]))

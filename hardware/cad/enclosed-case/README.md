@@ -86,7 +86,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   a little softer than the 5.4 mm bar before. Its tray stays 5 mm clear of
   the screen board.
 - Suction-cup cover: the cups click in and sit tight (`cup_snap`, `cup_land`),
-  and the heads slide under the bridged roofs.
+  and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
+  2 mm walls (`cup_roof`); check it doesn't sag onto the heads.
 - The OLED clips: the module clicks in and its glass sits flat on the plate.
   The lips are set to lift the board 0.3 mm past its seat, so the beams stay
   sprung against it.
