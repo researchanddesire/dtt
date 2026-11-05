@@ -19,11 +19,12 @@ slides into the [snap backplate](../snap-backplate/).
 
 Swap the rear cover for `Rear-Cover-Cups-Black` to stick the case straight on
 a wall with two suction cups. Push each cup's head in through the round hole
-and slide it sideways until it clicks. The two slide in opposite directions,
-so the case can't come off its cups whichever way you pull it. The keyholes fit
-a stem with a Ø15 x 3 mm head and a Ø8.5 x 2.5 mm groove. The cover is 4 mm
-thicker so the heads fit under the PCB, with a roof over each, and the case
-no longer fits the snap backplate.
+and slide it along its slot until it clicks. The slots run sideways in
+opposite directions, so the case can't come off its cups whichever way you
+pull it. They rise 30° so both cups end up on the centreline and the case's
+weight keeps them clicked in. The keyholes fit a stem with a Ø15 x 3 mm head
+and a Ø8.5 x 2.5 mm groove. The cover is 4 mm thicker so the heads fit under
+the PCB, with a roof over each, and the case no longer fits the snap backplate.
 
 | | |
 | --- | --- |

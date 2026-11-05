@@ -253,8 +253,9 @@ def render(doc):
     show_only(doc, [n for n in assembled if n != "RearCover"] + ["RearCoverCups"] + [o.Name for o in cups])
     camera(view, (-1, 1.2, 1.0))
     view.saveImage(os.path.join(IMAGES, "Enclosed-Cups.png"), 1400, 1100, "White")
-    for o, (_, _, d) in zip(cups, B.P["cup_keys"]):
-        o.Placement = App.Placement(V(-d * B.P["cup_slot"], 0, -22), App.Rotation())
+    for o, k in zip(cups, B.P["cup_keys"]):
+        c, _, e = B.cup_key(k)
+        o.Placement = App.Placement(V(e.x - c.x, e.y - c.y, -22), App.Rotation())
     camera(view, (-1, 1.2, 1.0))
     view.saveImage(os.path.join(IMAGES, "Enclosed-Cups-Exploded.png"), 1400, 1100, "White")
     for o in cups:
