@@ -89,7 +89,7 @@ PARAMS = {
     "cup_slot": 12.0,  # entry to click end
     "cup_entry_d": 15.6,  # passes the 15 mm head
     "cup_slot_w": 8.9,  # free slot on the 8.5 mm groove
-    "cup_snap": (8.4, 190.0, 1.5),  # click pocket diameter, how much of its rim it keeps, lead-in
+    "cup_snap": (8.6, 8.0, 1.5),  # click pocket diameter, mouth width and lead-in: the 8.5 groove squeezes through the mouth and clicks into the pocket
     "cup_land": 2.4,  # floor under the head, in the 2.5 mm groove
     "cup_head": (15.0, 3.0, 0.5),  # head diameter, thickness, room over it (the roof is bridged)
     "cup_roof": (0.9, 2.0, 0.5),  # roof over each chamber, up to the relief under the PCB; the wall its bridge lands on; clearance to the pegs and pins
@@ -698,9 +698,9 @@ def cup_keyholes(zb):
     into a round pocket the stem clicks into, and over the land a chamber the
     head slides along, under the roof from cup_roofs()."""
     re, w = P["cup_entry_d"] / 2, P["cup_slot_w"] / 2
-    dp, wrap, lead = P["cup_snap"]
-    a = math.radians((360 - wrap) / 2)
-    m, ym = dp / 2 * math.sin(a), dp / 2 * math.cos(a)  # half mouth, and its offset from the pocket centre
+    dp, mouth, lead = P["cup_snap"]
+    m = mouth / 2
+    ym = math.sqrt((dp / 2) ** 2 - m ** 2)  # the mouth's offset from the pocket centre
     yl = ym + lead
     zl = zb + P["cup_land"]
     _, ht, hc = P["cup_head"]
@@ -768,6 +768,11 @@ def cup_checks(cover, cups, board, screws):
     for i, c in enumerate(cups):
         print("CHECK cup %d: %.2f mm3 in the cover at rest (the click), head %.2f mm under the PCB, %.2f mm from a screw" % (
             i + 1, rest[i], c.distToShape(board)[0], min(c.distToShape(s)[0] for s in screws)))
+    dp, mouth, _ = P["cup_snap"]
+    gd = P["cup_proxy"][2]
+    print("CHECK clicks: the %.1f mm groove squeezes %.2f mm through the %.2f mm mouth into the %.2f mm pocket, %.2f mm "
+          "loose there, which keeps %.0f degrees of its rim" % (gd, gd - mouth, mouth, dp, dp - gd,
+                                                              360 - 2 * math.degrees(math.asin(mouth / dp))))
     (x0, y0, _), (x1, y1, _) = P["cup_keys"]
     d = math.hypot(x1 - x0, y1 - y0)
     print("CHECK cups %.1f mm apart, %.1f mm between the rims of %.0f mm cups" % (d, d - P["cup_proxy"][0], P["cup_proxy"][0]))
