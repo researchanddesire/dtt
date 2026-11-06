@@ -1,10 +1,10 @@
 """Build the enclosed DTT case from ../DTT.FCStd.
 
 The housing is filled out to a new outline, tapered toward the jack or
-stepped to follow the PCB, a sliding switch cover drives S1, and a rear cover
-tray holds the PCB from its top face down. The original four PCB screws pass
-up through the tray and PCB into the housing bosses, with their heads sunk
-flush in the tray.
+stepped to follow the PCB, and takes the PCB in a pocket down to its back
+face, so the rear cover is a flat cap. A sliding switch cover drives S1. The
+original four PCB screws pass up through the cap and PCB into the housing
+bosses, with their heads sunk flush in the cap.
 
 Run with FreeCAD 1.1+ (GUI under xvfb keeps the colours in the saved file):
     xvfb-run -a freecad make_assembly.FCMacro
@@ -28,8 +28,11 @@ V = App.Vector
 
 PARAMS = {
     # Stack (verified from DTT.FCStd and the KiCad board).
-    "pcb_top_z": -3.5,  # also the seam between housing and rear cover
+    "pcb_top_z": -3.5,
     "pcb_bottom_z": -5.1,
+    "seam_z": -5.1,  # housing to rear cover: the PCB sits in a pocket in the housing and the cover is a flat cap
+    "pcb_usb_y": 92.98,  # the PCB's USB-C edge, flush with the receptacle
+    "usb_end_gap": 0.1,  # pocket to that edge, so a skin hides the PCB edge behind the plug recess
     "screw_axes": [(3.0, 76.0), (39.0, 76.0), (3.3, 27.5), (38.7, 27.5)],
     # Outer shape: full width at the USB-C end, then the sides curve in toward
     # the jack end on two large arcs ("taper"), or step in with the PCB's
@@ -66,8 +69,8 @@ PARAMS = {
     "wall_overlap": 0.6,  # bond depth into the original wall
     "top_overlap": 2.0,  # in the top plate, past the original edge chamfer
     "top_band_z": 12.4,  # just under the top plate (underside at 12.6)
-    "pcb_edge_gap": 0.3,  # PCB edge to rear cover wall
-    # Rear cover (a tray that holds the PCB).
+    "pcb_edge_gap": 0.3,  # PCB edge to the pocket wall
+    # Rear cover (a flat cap under the PCB).
     "cover_thickness": 3.0,  # floor under the PCB
     "cover_pocket_inset": 0.9,  # pocket edge inside the PCB outline
     "cover_pocket_depth": 1.3,  # clears USB shell legs and jack pegs
@@ -118,47 +121,77 @@ PARAMS = {
     "slider_clear": 0.15,
     "flange_t": 1.0,
     "grip_len": 5.0,
-    "flange_margin": 1.0,  # flange past the window above and below
+    "flange_margin": 1.0,  # flange past the window above it; the cap closes it below
     "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
     "grip_proud": 0.4,
-    "window_z": (-3.35, 0.7),  # grip, bottom 0.15 above the seam
-    # Connector openings.
+    "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
+    "act_lead": 0.6,  # the actuator pocket is open underneath, so S1's lever drops into it, with this lead-in
+    # Connector openings. The jack's hole is a plain round hole in the housing,
+    # with 1.3 mm of wall under it: the PCB goes in jack end first, tilted, nose
+    # into the hole. At USB-C a plug-sized opening, a room behind it for the
+    # receptacle, and a recess round it for the plug's overmould.
     "jack_axis": (20.9, -0.7),
     "jack_d": 6.2,
     "usb_center": (20.95, -2.155),
-    "usb_size": (12.6, 6.8),
-    "usb_r": 3.0,
-    "usb_recess": (16.0, 10.0, 1.2),  # oval pocket around USB-C: width, height, depth
-    # Tab on the rear cover that splits the jack hole across its middle.
-    "jack_tab_w": 10.2,
-    "jack_tab_y1": 0.6,  # inner face, short of the PCB pocket
-    "tab_clear": 0.1,
-    # Tongue on the rear cover rim, in a groove in the housing.
-    "groove": (0.8, 1.0, 1.1),  # inset from the outer face, width, depth
+    "usb_size": (9.2, 3.6),  # the receptacle face is 8.9 x 3.35, the plug 8.4 x 2.6
+    "usb_r": 1.8,
+    "usb_room": (16.2, 25.7, -0.18),  # x0, x1 and top z of the room for the receptacle, 0.3 clear
+    "usb_recess": (13.0, 7.0, 1.0),  # width, height, depth; the overmould stops 0.6 short of the receptacle
+    # Tongue on the cap's rim, in a groove in the housing, so the cap sits in
+    # place before the screws go in.
+    "groove": (0.75, 1.0, 1.9),  # inset from the outer face, width, depth
     "groove_y": (5.9, 89.1),
-    "tongue": (0.6, 0.6, 0.2),  # width, height, end clearance; centred in the groove (0.8 x 1.0 was too tight)
-    # Flexure button: a black bar from the top plate ending in a round pad over
-    # the original plunger post, freed by a U slot. Only the pad is blue.
-    "button_pad": (33.82, 68.64, 3.7),  # centre x, y (the post's) and radius; covers the post (r 3.5)
-    "button_bar": (16.0, 4.0),  # root x and width, on the pad's centreline
+    "tongue": (0.6, 1.6, 0.3),  # width, height, end clearance; centred in the groove (0.2 a side fitted on print 1)
+    # Flexure button: a black bar from the top plate ending in a round pad
+    # right over S2, freed by a U slot, with a straight post under the pad down
+    # to S2's plunger. Only the pad is blue.
+    "button_pad": (36.51, 64.65, 3.5),  # centre x, y (S2's) and radius
+    "button_bar": (18.69, 4.0),  # root x and width, on the pad's centreline
     "button_slot_w": 0.7,
+    "button_post": (4.0, 1.0),  # diameter and bottom z: 1.2 over S2's plunger (top at -0.2)
+    "button_clear": (29.9, 59.7, 41.0, 72.4),  # x0, y0, x1, y1: the original post and its offset stack, cleared
     # The R+D logo is tucked into the top left corner of the flat top, 1 mm in
     # from its edge: scale, then where the top left corner of its bounding box
     # goes (from 2.44, 90.29).
     "logo": (0.78, (-0.07, 90.67)),
     # Under the button, a U of walls round the slot holds a floor that stops
-    # its travel, 5 mm clear of the OLED board edge where its ribbon folds round.
-    "button_tray": (29.8, 0.8, 9.57, 10.57),  # fences to x, wall thickness, floor z
+    # its travel, 1.6 mm clear of the OLED board's end.
+    "button_tray": (32.7, 0.8, 9.57, 10.57),  # fences to x, wall thickness, floor z
     "plate_z": 12.57,  # top plate underside
     "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
+    # The screen's viewport, on its active area, with a 45 degree edge at the top face.
+    "viewport": (21.0, 43.8, 23.2, 12.2, 0.5, 0.5),  # centre x, y, width, height, corner radius, chamfer
+    "viewport_fill": (8.5, 38.2, 33.5, 52.9, 12.77),  # the old one: x0, y0, x1, y1, from z
     # Print-in-place snap clips for the OLED module: a beam either side of its
-    # board, bridged between posts beyond its ends, with a lip that catches the
+    # board, bridged between posts at its ends, with a lip that catches the
     # board's back and holds the glass on the plate.
     "oled_board": (7.25, 31.64, 34.75, 59.44, 9.57),  # x0, y0, x1, y1, back face z
     "clip_gap": 0.2,  # beams and end tabs to the board edges
     "clip_beam": (1.2, 8.77, 11.07),  # thickness, bottom z, top z (1.5 under the plate, so the bridge can sag)
     "clip_post": 2.0,  # post size in plan; the end tabs reach this far over the board corners
-    "clip_lip": (0.6, 8.0, 0.3),  # reach from the beam, length, how far it would lift the board at rest
+    "clip_lip": (0.7, 8.0, 0.1, 20.0),  # reach from the beam, length, how far it would lift the board at rest, catch face from flat (degrees)
+    "clip_tab_right": 34.5,  # the right end tab at the button end stops here, clear of the button's slot
+    # A rib under the plate where the ribbon would be if the module went in the
+    # wrong way round (it runs from the glass to the board at the button end).
+    "oled_key": (11.5, 33.2, 15.5, 37.2, 11.2),  # x0, y0, x1, y1, bottom z
+    # Distance sensor: its mount moves left, which centres its lenses on the
+    # case, and a rib beside its PCB stops it going in the wrong way round.
+    "sensor_shift": -1.7,
+    "sensor_mount": (5.0, 5.2, -2.0, 38.6, 24.2),  # box round the original mount: x0, y0, z0, x1, y1 (up to the plate)
+    "sensor_window": (12.0, 8.5, 33.5, 18.7),  # box round its window in the plate
+    "sensor_key": (9.5, 6.0, 0.6, 16.0, 8.0),  # rib x0, y0, z0, x1, y1, up to the plate
+    "jack_body_clear": (17.26, 3.16, 24.84, 15.83, 2.0),  # J5's body and 0.3: x0, y0, x1, y1, top z; the moved mount stays clear of it
+    # Battery: the cell drops in from the open back between two sprung beams
+    # and clicks past a lip on each, which holds it up against the cross bars
+    # over the bay. A block at the USB-C end and a gusset at the screen end
+    # stop it along Y.
+    "battery": (8.2, 54.7, 28.2, 89.7, 1.6, 8.6),  # cell x0, y0, x1, y1, z0, z1 (up against the cross bars)
+    "battery_ring": (6.5, 72.5, 31.0, 89.6),  # the original rings' sides and lower bars, cut away
+    "battery_beam": (0.8, 0.25, 0.5, 4.0),  # thickness, gap to the cell, bottom z, top z
+    "battery_posts": ((6.45, 61.6, 63.3), (30.0, 61.15, 62.65)),  # screen-end posts: outer x, y0, y1 (the right one hangs from the button's floor)
+    "battery_end": (6.5, 90.0, 30.0, 92.5),  # block at the USB-C end
+    "battery_lip": (0.9, 8.0, 0.15),  # reach from the beam, length, gap under the cell
+    "battery_gusset": (3.6, 53.0, 4.9, 54.3, 12.4),  # post x0, y0, x1, y1, and the gusset's foot to x
 }
 P = PARAMS
 
@@ -483,7 +516,7 @@ def outer_upper():
     too; without it the top edges get a plain fillet and the jack end keeps
     the original housing's sloped end, thickened."""
     y0 = P["outer"][1]
-    zs, zt = P["pcb_top_z"], P["top_z"]
+    zs, zt = P["seam_z"], P["top_z"]
     r = P["edge_fillet"]
     e = lofted_envelope(zs)
     if top_round() > 0:
@@ -541,11 +574,20 @@ def round_backing(outer):
     return inner_form(0.2, zc - 1.0).cut(inner_form(t, zc - 1.0)).common(ring).common(outer).removeSplitter()
 
 
+def usb_pocket_end():
+    return P["pcb_usb_y"] + P["usb_end_gap"]
+
+
 def connector_cuts():
+    """The jack's round hole; at USB-C a room for the receptacle behind a
+    plug-sized opening, and the recess for the plug's overmould."""
     jx, jz = P["jack_axis"]
     ux, uz = P["usb_center"]
+    x0, x1, z1 = P["usb_room"]
+    ye = usb_pocket_end()
     return [Part.makeCylinder(P["jack_d"] / 2, 6.0, V(jx, -3.5, jz), V(0, 1, 0)),
-            stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], 91.0, 97.0),
+            box(x0, ye - 4.1, P["pcb_top_z"] - 0.1, x1, ye, z1),
+            stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], ye - 0.1, P["outer"][3] + 1),
             usb_recess()]
 
 
@@ -556,17 +598,18 @@ def usb_recess():
     return stadium_y(ux, uz, w, h, h / 2 - 1e-3, y1 - d, y1 + 1)
 
 
-def jack_tab(grow=0.0):
-    jx, jz = P["jack_axis"]
-    w = P["jack_tab_w"] / 2 + grow
-    return box(jx - w, P["outer"][1] - 1, P["pcb_top_z"] - 0.01, jx + w, P["jack_tab_y1"] + grow, jz + grow)
+def pcb_pocket(pcb):
+    """The PCB's outline pcb_edge_gap out, but only usb_end_gap past its USB-C
+    edge: the pocket in the housing and the relief in the cap."""
+    f = Part.Face(pcb.makeOffset2D(P["pcb_edge_gap"]))
+    return f.cut(rect(-50, usb_pocket_end(), 100, 200)).Faces[0]
 
 
 def build_housing(H, board):
     pcb = outline(board)
     p0 = pcb.copy()
     p0.translate(V(0.08, 0.02, 0))  # original housing outline
-    zs, zt = P["pcb_top_z"], P["top_z"] + 1
+    zs, zt = P["seam_z"], P["top_z"] + 1
 
     # Fill between the original housing and the outer rectangle. Inside the
     # original wall keep the housing as it is, except above its sloped end,
@@ -583,14 +626,90 @@ def build_housing(H, board):
         h = fuse_checked(h, backing)
     h = h.common(box(-20, -20, zs, 70, 120, zt)).removeSplitter()
     h = solid(h.common(outer).removeSplitter())  # the round and the lean pass inside the original wall's top
+    h = move_sensor_mount(h, H)
 
     (a0, a1) = P["sw_body"]
-    cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])] + slider_cuts() + connector_cuts()
+    pocket = ext(pcb_pocket(pcb).OuterWire, zs - 1, P["pcb_top_z"])
+    cuts = [box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2]), pocket] + slider_cuts() + connector_cuts()
     h = solid(h.cut(cuts).removeSplitter())
+    h = battery_bay(h)
     clear, add, slot = button_slot(H)
     h = solid(h.cut(clear).fuse(add).cut(slot).removeSplitter())
+    h = viewport(h)
     h = solid(h.fuse(screen_clips()).removeSplitter())
     return h, pcb
+
+
+def move_sensor_mount(h, H):
+    """Move the distance sensor's mount and its window in the plate by
+    sensor_shift along X, and add the rib that keys it. The mount is what
+    hangs from the plate of the original housing H inside the sensor_mount
+    box without reaching its sides: the screw bosses, the ledges under the
+    sensor PCB's ends and edge, and the frame round its optical case. The
+    walls by the diffuser and the post on the main PCB run out of the box and
+    stay. (In the filled housing the pieces meet along the plate, so they are
+    picked from H.)"""
+    x0, y0, z0, x1, y1 = P["sensor_mount"]
+    wx0, wy0, wx1, wy1 = P["sensor_window"]
+    kx0, ky0, kz0, kx1, ky1 = P["sensor_key"]
+    zu, zt = P["plate_z"], P["top_z"]
+    d = V(P["sensor_shift"], 0, 0)
+    e = 0.02
+    sides = box(x0, y0, z0, x1, y1, zu).cut(box(x0 + e, y0 + e, z0 + e, x1 - e, y1 - e, zu + 1))
+    pieces = [s for s in H.common(box(x0, y0, z0, x1, y1, zu)).Solids if s.common(sides).Volume < 1e-6]
+    jack = box(*P["jack_body_clear"][:2], z0 - 1, *P["jack_body_clear"][2:])
+    mount = [s.translated(d).cut(jack) for s in pieces]
+    hole = box(wx0, wy0, zu - 0.5, wx1, wy1, zt + 1).cut(h).translated(d)
+    h = h.cut(pieces).fuse(box(wx0, wy0, zu - 0.01, wx1, wy1, zt))
+    h = solid(h.fuse(mount).removeSplitter())
+    h = h.cut(hole).fuse(box(kx0, ky0, kz0, kx1, ky1, zu + 0.3))
+    return solid(h.removeSplitter())
+
+
+def battery_bay(h):
+    """Cut away the original rings' sides and lower bars, keeping the cross
+    bars over the bay, and hang the clips: a beam either side of the cell
+    between a post at the screen end and a block at the USB-C end, each with a
+    lip in its middle that the cell clicks past, and a gusset in front of the
+    cell's screen end. Printed top face down, the beams are bridges, the
+    lips' catch faces short flat overhangs and the gusset a 45 degree slope."""
+    cx0, cy0, cx1, cy1, c0, c1 = P["battery"]
+    t, g, z0, z1 = P["battery_beam"]
+    reach, ll, lg = P["battery_lip"]
+    (lx, ly0, ly1), (rx, ry0, ry1) = P["battery_posts"]
+    ex0, ey0, ex1, ey1 = P["battery_end"]
+    zp = P["plate_z"] + 0.3
+    h = h.cut(box(*P["battery_ring"][:2], -1.0, *P["battery_ring"][2:], c1))
+    floor = P["button_tray"][2]
+    parts = [box(lx, ly0, z0, cx0 - g, ly1, zp),  # left post, from the plate
+             box(cx1 + g, ry0, z0, rx, ry1, floor + 0.3),  # right post, from the button's floor
+             box(ex0, ey0, z0, ex1, ey1, zp)]  # block at the USB-C end
+    zc = c0 - lg  # catch face, under the cell
+    for xi, out, ya in ((cx0 - g, -1, ly0), (cx1 + g, 1, ry0)):  # beam inner face, outward direction
+        xo = xi + out * t
+        parts.append(box(min(xi, xo), ya, z0, max(xi, xo), ey1, z1))
+        ym = (max(ly1, ry1) + ey0) / 2
+        prof = [V(xi + out * 0.01, ym - ll / 2, zc), V(xi - out * reach, ym - ll / 2, zc),
+                V(xi + out * 0.01, ym - ll / 2, zc - reach - 0.01)]
+        parts.append(Part.Face(Part.makePolygon(prof + prof[:1])).extrude(V(0, ll, 0)))
+    gx0, gy0, gx1, gy1, gf = P["battery_gusset"]
+    parts.append(box(gx0, gy0, z0, gx1, gy1, zp))
+    tri = [V(gx1 - 0.1, gy0, c1), V(gf, gy0, z0 + 0.6), V(gf, gy0, z0), V(gx1 - 0.1, gy0, z0)]
+    parts.append(Part.Face(Part.makePolygon(tri + tri[:1])).extrude(V(0, gy1 - gy0, 0)))
+    return solid(h.fuse(parts).removeSplitter())
+
+
+def viewport(h):
+    """Fill the old viewport and cut the new one over the screen's active
+    area, with a 45 degree edge round it at the top face."""
+    cx, cy, w, ht, r, c = P["viewport"]
+    x0, y0, x1, y1, zf = P["viewport_fill"]
+    zt = P["top_z"]
+    h = h.fuse(box(x0, y0, zf, x1, y1, zt))
+    rr = lambda d, z: rounded_rect(cx - w / 2 - d, cy - ht / 2 - d, cx + w / 2 + d, cy + ht / 2 + d, r + d, z).OuterWire
+    chamfer = Part.makeLoft([rr(0, zt - c), rr(c, zt)], True, True)
+    cuts = [ext(rr(0, 0), zf - 0.1, zt - c + 0.01), chamfer, ext(rr(c, 0), zt - 0.01, zt + 1)]
+    return solid(h.cut(cuts).removeSplitter())
 
 
 def slider_geom():
@@ -602,15 +721,17 @@ def slider_geom():
     m = P["flange_margin"]
     gl, t = P["grip_len"], P["travel"]
     fl = gl + 2 * c + 2 * t + 2 * P["flange_cover"]  # covers the whole window at either end of the travel
-    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0 - m, fz1=wz1 + m, gl=gl, fl=fl, c=c)
+    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0, fz1=wz1 + m, gl=gl, fl=fl, c=c)
 
 
 def slider_cuts():
-    """Channel for the flange (housing and rear cover) and the grip window."""
+    """Channel for the flange and the grip window, both in the housing, open
+    down to the seam; the cap closes them."""
     g = slider_geom()
     ya, t, c = P["act_y"], P["travel"], g["c"]
-    chan = box(g["xi"] - 0.2, ya - g["fl"] / 2 - c, g["fz0"] - c, g["xw"], ya + t + g["fl"] / 2 + c, g["fz1"] + c)
-    win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, P["pcb_top_z"] - 0.01, P["outer"][2] + 1,
+    zs = P["seam_z"]
+    chan = box(g["xi"] - 0.2, ya - g["fl"] / 2 - c, zs - 0.01, g["xw"], ya + t + g["fl"] / 2 + c, g["fz1"] + c)
+    win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, zs - 0.01, P["outer"][2] + 1,
               ya + t + g["gl"] / 2 + c, g["wz1"] + c)
     return [chan, win]
 
@@ -630,18 +751,25 @@ def build_slider():
     # Finger ridges across the grip face.
     for dy in (-1.5, 0.0, 1.5):
         s = s.cut(box(xo - 0.35, ya + dy - 0.3, g["wz0"] - 1, xo + 1, ya + dy + 0.3, g["wz1"] + 1))
-    # Pocket for the actuator.
+    # Pocket for the actuator, open underneath with a lead-in, so the cover
+    # sits in its channel first and S1's lever drops into it with the PCB.
     z0, z1 = P["act_z"]
     w = P["act_w"] + 0.4
-    s = s.cut(box(g["xi"] - 1, ya - w / 2, z0 - 0.25, P["act_tip_x"] + 0.4, ya + w / 2, z1 + 0.25))
+    f, xa, xb = P["act_lead"], g["xi"] - 1, P["act_tip_x"] + 0.4
+    s = s.cut(box(xa, ya - w / 2, g["fz0"] - 1, xb, ya + w / 2, z1 + 0.25))
+    zb = g["fz0"]
+    lead = [V(xa, ya - w / 2 - f - 0.5, zb - 0.5), V(xa, ya + w / 2 + f + 0.5, zb - 0.5),
+            V(xa, ya + w / 2, zb + f), V(xa, ya - w / 2, zb + f)]
+    s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(xb - xa, 0, 0)))
     return s.removeSplitter()
 
 
 def build_cover(pcb, extra=0.0):
-    """Rear cover: a tray from the seam at the PCB top down past the PCB back.
-    With extra, its floor is that much thicker, with the screw heads at their
-    usual depth in counterbores, and it takes the suction-cup keyholes."""
-    zs = P["pcb_top_z"]
+    """Rear cover: a flat cap from the seam at the PCB's back face down, with
+    a relief under the PCB, so it presses the PCB only at pads round the
+    screws. With extra, its floor is that much thicker, with the screw heads at
+    their usual depth in counterbores, and it takes the suction-cup keyholes."""
+    zs = P["seam_z"]
     zt = P["pcb_bottom_z"]
     zb = zt - P["cover_thickness"]
     zf = zb  # where the screw heads sit
@@ -653,14 +781,14 @@ def build_cover(pcb, extra=0.0):
     except Exception as e:
         print("cover chamfer skipped:", e)
     shell = cover.copy()
-    # PCB pocket, relief under the PCB and the central pocket.
-    cover = cover.cut(ext(pcb.makeOffset2D(P["pcb_edge_gap"]), zt - P["cover_relief"], zs + 1))
+    # Relief under the PCB and the central pocket.
+    cover = cover.cut(ext(pcb_pocket(pcb).OuterWire, zt - P["cover_relief"], zs + 1))
     cover = cover.cut(ext(pcb.makeOffset2D(-P["cover_pocket_inset"]), zt - P["cover_pocket_depth"], zs + 1))
     pads = [zcyl(x, y, P["cover_pad_d"], zt - P["cover_pocket_depth"] - 0.1, zt) for (x, y) in P["screw_axes"]]
     if extra:
         pads += cup_roofs(zt - P["cover_relief"])
     cover = cover.fuse(pads).common(shell)
-    cover = cover.cut(slider_cuts()[:1] + connector_cuts())
+    cover = cover.cut(connector_cuts())
     holes = []
     for (x, y) in P["screw_axes"]:
         holes.append(zcyl(x, y, P["screw_clear_d"], zb - 1, zt + 1))
@@ -848,16 +976,16 @@ def build_screw(x, y):
 
 
 def tongue(groove=False):
-    """Tongues on the rear cover rim along the two long sides, centred in grooves
-    in the housing; they follow the sides' curve. The end walls are too thin
-    beside the PCB for one."""
+    """Tongues on the cap's rim along the two long sides, centred in grooves
+    in the housing; they follow the sides' curve and locate the cap before the
+    screws go in. The end walls are too thin beside the jack and USB-C for one."""
     a, w, h = P["groove"]
     e = 0.0
     if not groove:
         w, h, e = P["tongue"]
         a += (P["groove"][1] - w) / 2
     ya, yb = P["groove_y"]
-    zs = P["pcb_top_z"]
+    zs = P["seam_z"]
     f = plan_outline()
     band = offset_face(f, -a).cut(offset_face(f, -a - w)).common(rect(-20, ya + e, 70, yb - e))
     t = band.extrude(V(0, 0, h + 0.01))
@@ -881,10 +1009,11 @@ def button_slot_face(z):
 
 
 def button_slot(H):
-    """The original button is smaller. Fill its slot and clear its tray, then
-    cut the U slot and stand a U of walls 0.05 outside it, fences along the two
-    channels and an end wall behind the root, down to a floor that stops the
-    button 2 mm down."""
+    """The original button is smaller and off to one side of S2, on an offset
+    stack. Fill its slot and clear its tray and stack, then cut the U slot with
+    the pad over S2, and stand a U of walls 0.05 outside it, fences along the
+    two channels and an end wall behind the root, down to a floor that stops
+    the bar 2 mm down. A straight post under the pad presses S2."""
     zu, zt = P["plate_z"], P["top_z"]
     px, py, pr = P["button_pad"]
     xr, bw = P["button_bar"]
@@ -894,16 +1023,19 @@ def button_slot(H):
            if s.BoundBox.XLength < 30 and s.BoundBox.isInside(V(25, 68.725, zt - 0.2))]
     assert len(old) == 1
     fill = ext(offset_face(Part.Face(old[0]), 0.1).OuterWire, zu, zt)
-    # Original walls x 13.35-29.95, y 60.5-72.23, and their floor.
-    clear = box(13.0, 60.0, f0 - 0.1, 29.95, 72.6, zu)
+    # Original walls x 13.35-29.95, y 60.5-72.23, and their floor; the post and stack.
+    cx0, cy0, cx1, cy1 = P["button_clear"]
+    clear = [box(13.0, 60.0, f0 - 0.1, 29.95, 72.6, zu), box(cx0, cy0, 0.0, cx1, cy1, zu)]
     g = 0.05
     xe = xr - w / 2 - g - t  # end wall behind the round slot ends
     yb, yt = py - bw / 2 - w - g, py + bw / 2 + w + g  # fence faces on the slot side
     u = rect(xe, yb - t, x1, yb).fuse([rect(xe, yt, x1, yt + t), rect(xe, yb - t, xe + t, yt + t)])
     walls = ext(merge_faces(u).OuterWire, f1 - 0.05, zu + 0.25)
-    floor = box(xe, yb - t, f0, 29.95, yt + t, f1)
+    floor = box(xe, yb - t, f0, x1 + 0.15, yt + t, f1)
+    d, z0 = P["button_post"]
+    post = zcyl(px, py, d, z0, zu + 0.3)
     slot = ext(button_slot_face(zu).OuterWire, zu, zt + 1)
-    return clear, [fill, floor, walls], slot
+    return clear, [fill, floor, walls, post], slot
 
 
 def button_inlay(grow=0.05):
@@ -934,34 +1066,42 @@ def logo_inlay(logo):
 
 def screen_clips():
     """A beam either side of the OLED board, bridged between two posts that
-    hang from the plate beyond the board's ends; tabs on the posts stop the
-    board along Y. A lip in the middle of each beam catches the board's back
-    with a 45 degree face that would lift the board clip_lip[2] past its seat,
-    so the beams stay sprung and press the glass onto the plate. Printed top
-    face down, the beams are bridges and the lips' faces are 45 degree slopes,
-    so nothing needs support."""
+    hang from the plate at the board's ends; tabs stop the board along Y. The
+    right beam's post at the button end stands beside the board, so the
+    button's slot stays clear. A lip in the middle of each beam catches the
+    board's back on a face clip_lip[3] degrees from flat, near self-locking,
+    that would lift the board clip_lip[2] past its seat, so the beams stay
+    sprung and press the glass onto the plate. Printed top face down, the
+    beams are bridges and the lips short overhangs. A rib under the plate keys
+    the module the right way round."""
     bx0, by0, bx1, by1, zb = P["oled_board"]
     g, s = P["clip_gap"], P["clip_post"]
     t, z0, z1 = P["clip_beam"]
-    reach, ll, dz = P["clip_lip"]
+    reach, ll, dz, ang = P["clip_lip"]
+    k = math.tan(math.radians(ang))
     zp = P["plate_z"] + 0.33  # into the plate
-    zr = zb + dz + g  # catch face at the beam
+    zr = zb + dz + g * k  # catch face at the beam
+    za = zr - reach * k  # its inner edge
     ym = (by0 + by1) / 2
     ya, yb = by0 - g, by1 + g  # post faces toward the board
     parts = []
     for xi, out in ((bx0 - g, -1), (bx1 + g, 1)):  # beam inner face, outward direction
         xs = lambda d: xi + out * d  # d: distance outward from the inner face
+        right = out > 0
+        y_end = yb if right else yb + s  # the right beam ends at its post beside the board
         xlo, xhi = sorted((xs(0), xs(t)))
-        parts.append(box(xlo, ya - s, z0, xhi, yb + s, z1))
+        parts.append(box(xlo, ya - s, z0, xhi, y_end, z1))
         plo, phi = sorted((xs(0), xs(s)))  # posts, outside the beam line
         tlo, thi = sorted((xs(0), xs(-s)))  # end tabs, over the board corners
-        for y0, y1 in ((ya - s, ya), (yb, yb + s)):
+        for y0, y1 in ((ya - s, ya), (y_end - s, y_end)):
             parts.append(box(plo, y0, z0, phi, y1, zp))
         for y0, y1 in ((ya - 1.0, ya), (yb, yb + 1.0)):
-            parts.append(box(tlo, y0, zb, thi, y1, zp))  # down to the board back, clear of the battery
-        lip = Part.Face(Part.makePolygon([V(xs(0.01), ym - ll / 2, zr), V(xs(-reach), ym - ll / 2, zr - reach),
-                                          V(xs(0.01), ym - ll / 2, zr - 2 * reach), V(xs(0.01), ym - ll / 2, zr)]))
-        parts.append(lip.extrude(V(0, ll, 0)))
+            x1 = min(thi, P["clip_tab_right"]) if right and y0 > ym else thi
+            parts.append(box(tlo, y0, zb, x1, y1, zp))  # down to the board back, clear of the battery
+        prof = [V(xs(0.01), ym - ll / 2, zr), V(xs(-reach), ym - ll / 2, za), V(xs(0.01), ym - ll / 2, za - reach)]
+        parts.append(Part.Face(Part.makePolygon(prof + prof[:1])).extrude(V(0, ll, 0)))
+    kx0, ky0, kx1, ky1, kz = P["oled_key"]
+    parts.append(box(kx0, ky0, kz, kx1, ky1, zp))
     return parts[0].fuse(parts[1:]).removeSplitter()
 
 
@@ -974,11 +1114,6 @@ def build_all(doc):
     slider = build_slider()
     cover = build_cover(pcb)
     cup_cover = build_cover(pcb, P["cup_cover_extra"])
-    # The part of the end wall below the jack axis moves to the rear cover.
-    tab = housing.common(jack_tab())
-    cover = solid(cover.fuse(tab).removeSplitter())
-    cup_cover = solid(cup_cover.fuse(tab).removeSplitter())
-    housing = solid(housing.cut(jack_tab(P["tab_clear"])).removeSplitter())
     cover = solid(cover.fuse(tongue()).removeSplitter())
     cup_cover = solid(cup_cover.fuse(tongue()).removeSplitter())
     button = solid(housing.common(button_inlay()).removeSplitter())

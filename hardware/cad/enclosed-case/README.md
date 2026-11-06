@@ -1,10 +1,11 @@
 # Enclosed case
 
 The DTT case, 50 mm wide at the USB-C end and curving in to 44 mm at the jack,
-with a 5 mm round all round the top edge, a blue switch cover that slides S1 and a
-rear cover tray that holds the PCB from its top face down. The original four PCB screws hold it together,
-flush in countersinks in the rear cover. It replaces the loop backing, and
-slides into the [snap backplate](../snap-backplate/).
+with a 5 mm round all round the top edge and a blue switch cover that slides S1.
+The PCB drops into a pocket in the housing, so the rear cover is a flat cap. A
+tongue along each long side holds it in place until the original four PCB
+screws go in, flush in its countersinks. It replaces the loop backing, and slides into
+the [snap backplate](../snap-backplate/).
 
 | | |
 | --- | --- |
@@ -12,6 +13,7 @@ slides into the [snap backplate](../snap-backplate/).
 | <img src="images/Enclosed-Exploded.png" width="320"> | <img src="images/Enclosed-Switch-Side.png" width="320"> |
 | <img src="images/Part-SwitchCover.png" width="320"> | <img src="images/Part-RearCover.png" width="320"> |
 | <img src="images/Detail-Jack.png" width="320"> | <img src="images/Detail-USB.png" width="320"> |
+| <img src="images/Part-Housing-Inside.png" width="320"> | <img src="images/Enclosed-Inside.png" width="320"> |
 
 <img src="images/Enclosed-Sections.png" width="560">
 
@@ -48,12 +50,20 @@ the PCB, with a roof over each, and the case no longer fits the snap backplate.
 
 ## Assemble
 
-1. With the housing upside down, push the OLED module in, glass first, until
-   the two clips click over its board. No glue.
-2. Drop the switch cover into its slot from inside, grip outwards.
-3. Fit the PCB so the S1 actuator enters the pocket in the switch cover.
-4. Fit the rear cover and drive the four screws into the original bosses.
-   Snug them; do not strip the bosses.
+1. With the housing upside down, push the OLED module in, glass first and
+   header toward the jack, until both clips click over its board. A rib under
+   the plate stops it going in the other way round. No glue.
+2. Screw the distance sensor onto its bosses, connector toward the screen. A
+   rib by the jack stops it going in the other way round.
+3. Push the battery in between its two clips until it clicks, leads toward
+   the screen.
+4. Drop the switch cover into its channel, grip outwards, at the same end as
+   S1's lever.
+5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
+   tilted, with the jack's nose in its hole, then lower the USB-C end into the
+   pocket. S1's lever drops into the switch cover from underneath.
+6. Press the cap on; its tongues hold it. Drive the four screws into the
+   original bosses. Snug them; do not strip the bosses.
 
 Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup cover).
 
@@ -69,6 +79,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
 - `make_assembly.FCMacro` writes `DTT-Enclosed.FCStd`, `DTT-Enclosed.step`,
   `parts/` and `images/`: `xvfb-run -a freecad make_assembly.FCMacro`.
 - The PCB is unchanged; the screws use its existing 3.6 mm holes.
+- The housing's PCB pocket, the clips, keys and posts inside it are in
+  `build_housing()`; their sizes are in `PARAMS` beside the part they hold.
 
 ## Check on a test print
 
@@ -77,20 +89,27 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   switch model put the actuator 5 mm further along, so check the real part.
 - The switch cover slides freely (0.15 mm clearance), stays in the window,
   and its base hides the window at both ends of its travel.
-- The rear cover's tongue drops into the housing groove without forcing
-  (0.2 mm a side).
+- The PCB drops into its pocket (0.3 mm a side, 0.1 at the USB-C end) with the
+  jack tilted in, and the 0.5 mm skin in front of its USB-C edge prints.
+- The cap's 0.6 x 1.6 mm tongues drop into their grooves without forcing (0.2 mm
+  a side) and hold the cap on before the screws.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
-- USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls.
-- The button feel: a 4 mm black bar to a blue round pad over the plunger,
-  a little softer than the 5.4 mm bar before. Its tray stays 5 mm clear of
-  the screen board.
+- USB-C: a plug passes the 9.2 x 3.6 mm opening and seats fully. Its overmould
+  stops 0.6 mm short of the receptacle, in a 13 x 7 mm recess.
+- 3.5 mm jack: a plug seats fully through the 1.3 mm wall.
+- The button: a 4 mm black bar to a blue round pad right over S2. The post
+  under the pad is 1.2 mm above S2's plunger, as before.
+- The viewport (23.2 x 12.2 mm) frames the screen's lit area.
+- The OLED clips: the module clicks in and its glass sits flat on the plate.
+  The lips' catch faces are 20° from flat, so they hardly let go, and set to
+  lift the board 0.1 mm past its seat, so the beams stay sprung against it.
+- The battery clicks past the two lips (0.65 mm over its edges) and sits
+  against the cross bars; a gusset and an end block stop it lengthwise.
+- The sensor's lenses sit on the case's centreline.
 - Suction-cup cover: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
   2 mm walls (`cup_roof`); check it doesn't sag onto the heads.
-- The OLED clips: the module clicks in and its glass sits flat on the plate.
-  The lips are set to lift the board 0.3 mm past its seat, so the beams stay
-  sprung against it.
 
 The CAD checks are geometric only. Clamp force, thread hold and drop
 strength need a physical test.
