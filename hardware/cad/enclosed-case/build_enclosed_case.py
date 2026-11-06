@@ -121,7 +121,7 @@ PARAMS = {
     "slider_clear": 0.15,
     "flange_t": 1.0,
     "grip_len": 5.0,
-    "flange_margin": 1.0,  # flange past the window above it; the cap closes it below
+    "flange_margin": 1.0,  # flange past the window above and below, in grooves in the housing and the cap
     "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
     "grip_proud": 0.4,
     "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
@@ -721,16 +721,17 @@ def slider_geom():
     m = P["flange_margin"]
     gl, t = P["grip_len"], P["travel"]
     fl = gl + 2 * c + 2 * t + 2 * P["flange_cover"]  # covers the whole window at either end of the travel
-    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0, fz1=wz1 + m, gl=gl, fl=fl, c=c)
+    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0 - m, fz1=wz1 + m, gl=gl, fl=fl, c=c)
 
 
 def slider_cuts():
-    """Channel for the flange and the grip window, both in the housing, open
-    down to the seam; the cap closes them."""
+    """Channel for the flange, a groove in the housing above the window and
+    one in the cap below it, and the grip window, open down to the seam; the
+    cap closes it."""
     g = slider_geom()
     ya, t, c = P["act_y"], P["travel"], g["c"]
     zs = P["seam_z"]
-    chan = box(g["xi"] - 0.2, ya - g["fl"] / 2 - c, zs - 0.01, g["xw"], ya + t + g["fl"] / 2 + c, g["fz1"] + c)
+    chan = box(g["xi"] - 0.2, ya - g["fl"] / 2 - c, g["fz0"] - c, g["xw"], ya + t + g["fl"] / 2 + c, g["fz1"] + c)
     win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, zs - 0.01, P["outer"][2] + 1,
               ya + t + g["gl"] / 2 + c, g["wz1"] + c)
     return [chan, win]
@@ -788,7 +789,7 @@ def build_cover(pcb, extra=0.0):
     if extra:
         pads += cup_roofs(zt - P["cover_relief"])
     cover = cover.fuse(pads).common(shell)
-    cover = cover.cut(connector_cuts())
+    cover = cover.cut(connector_cuts() + slider_cuts()[:1])  # and the switch cover's lower groove
     holes = []
     for (x, y) in P["screw_axes"]:
         holes.append(zcyl(x, y, P["screw_clear_d"], zb - 1, zt + 1))

@@ -15,7 +15,7 @@ the [snap backplate](../snap-backplate/).
 | <img src="images/Detail-Jack.png" width="320"> | <img src="images/Detail-USB.png" width="320"> |
 | <img src="images/Part-Housing-Inside.png" width="320"> | <img src="images/Enclosed-Inside.png" width="320"> |
 
-<img src="images/Enclosed-Sections.png" width="560">
+<img src="images/Enclosed-Sections.png" width="800">
 
 ## Suction-cup rear cover
 
@@ -89,8 +89,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
 - S1 actuator position and travel. The cover follows the KiCad F.Fab drawing
   (actuator at Y 82.4, 1.5 mm wide) and allows 3.2 mm of travel. The old CAD
   switch model put the actuator 5 mm further along, so check the real part.
-- The switch cover slides freely (0.15 mm clearance), stays in the window,
-  and its base hides the window at both ends of its travel.
+- The switch cover slides freely (0.15 mm clearance) in its grooves in the
+  housing and the cap, and its base hides the window at both ends of its travel.
 - The PCB drops into its pocket (0.3 mm a side, 0.1 at the USB-C end) with the
   jack tilted in, and the 0.5 mm skin in front of its USB-C edge prints.
 - The cap's 0.6 x 1.6 mm tongues drop into their grooves without forcing (0.2 mm
