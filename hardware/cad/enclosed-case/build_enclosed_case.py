@@ -162,15 +162,18 @@ PARAMS = {
     # The screen's viewport, on its active area, with a 45 degree edge at the top face.
     "viewport": (21.0, 43.8, 23.2, 12.2, 0.5, 0.5),  # centre x, y, width, height, corner radius, chamfer
     "viewport_fill": (8.5, 38.2, 33.5, 52.9, 12.77),  # the old one: x0, y0, x1, y1, from z
-    # Print-in-place snap clips for the OLED module: a beam either side of its
-    # board, bridged between posts at its ends, with a lip that catches the
-    # board's back and holds the glass on the plate.
+    # Print-in-place snap clips for the OLED module: a spring strip either side
+    # of its board, bridged between blocks at its ends that run out into the
+    # side wall, with a lip that catches the board's back and holds the glass on
+    # the plate. Behind each strip a wall fills out to the side wall, past a
+    # slot that lets the strip bend out and stops it bending too far.
     "oled_board": (7.25, 31.64, 34.75, 59.44, 9.57),  # x0, y0, x1, y1, back face z
-    "clip_gap": 0.2,  # beams and end tabs to the board edges
-    "clip_beam": (1.2, 8.77, 11.07),  # thickness, bottom z, top z (1.5 under the plate, so the bridge can sag)
-    "clip_post": 2.0,  # post size in plan; the end tabs reach this far over the board corners
-    "clip_lip": (0.7, 8.0, 0.1, 20.0),  # reach from the beam, length, how far it would lift the board at rest, catch face from flat (degrees)
+    "clip_gap": 0.2,  # strips and end tabs to the board edges
+    "clip_beam": (1.2, 8.77, 11.07),  # strip thickness, bottom z, top z (1.5 under the plate, so the bridge can sag)
+    "clip_post": 2.0,  # end block length; the end tabs reach this far over the board corners
+    "clip_lip": (0.7, 8.0, 0.1, 20.0),  # reach from the strip, length, how far it would lift the board at rest, catch face from flat (degrees)
     "clip_tab_right": 34.5,  # the right end tab at the button end stops here, clear of the button's slot
+    "clip_backing": (0.95, 0.0, 42.0),  # slot behind each strip (it bends 0.5 to let the board in), and x the walls run out to, inside the side walls
     # A rib under the plate where the ribbon would be if the module went in the
     # wrong way round (it runs from the glass to the board at the button end).
     "oled_key": (11.5, 33.2, 15.5, 37.2, 11.2),  # x0, y0, x1, y1, bottom z
@@ -188,10 +191,10 @@ PARAMS = {
     "battery": (8.2, 54.7, 28.2, 89.7, 1.6, 8.6),  # cell x0, y0, x1, y1, z0, z1 (up against the cross bars)
     "battery_ring": (6.5, 72.5, 31.0, 89.6),  # the original rings' sides and lower bars, cut away
     "battery_beam": (0.8, 0.25, 0.5, 4.0),  # thickness, gap to the cell, bottom z, top z
-    "battery_posts": ((6.45, 61.6, 63.3), (30.0, 61.15, 62.65)),  # screen-end posts: outer x, y0, y1 (the right one hangs from the button's floor)
+    "battery_posts": ((0.0, 61.6, 63.3), (30.0, 61.15, 62.65)),  # screen-end posts: outer x, y0, y1 (the left one a web from the side wall, the right one hangs from the button's floor)
     "battery_end": (6.5, 90.0, 30.0, 92.5),  # block at the USB-C end
     "battery_lip": (0.9, 8.0, 0.15),  # reach from the beam, length, gap under the cell
-    "battery_gusset": (3.6, 53.0, 4.9, 54.3, 12.4),  # post x0, y0, x1, y1, and the gusset's foot to x
+    "battery_gusset": (0.0, 53.0, 4.9, 54.3, 12.4),  # web from the side wall x0, y0, x1, y1, and the gusset's foot to x
 }
 P = PARAMS
 
@@ -669,10 +672,11 @@ def move_sensor_mount(h, H):
 def battery_bay(h):
     """Cut away the original rings' sides and lower bars, keeping the cross
     bars over the bay, and hang the clips: a beam either side of the cell
-    between a post at the screen end and a block at the USB-C end, each with a
-    lip in its middle that the cell clicks past, and a gusset in front of the
-    cell's screen end. Printed top face down, the beams are bridges, the
-    lips' catch faces short flat overhangs and the gusset a 45 degree slope."""
+    between a post at the screen end (on the left a web from the side wall)
+    and a block at the USB-C end, each with a lip in its middle that the cell
+    clicks past, and a gusset in front of the cell's screen end, on a web from
+    the side wall. Printed top face down, the beams are bridges, the lips'
+    catch faces short flat overhangs and the gusset a 45 degree slope."""
     cx0, cy0, cx1, cy1, c0, c1 = P["battery"]
     t, g, z0, z1 = P["battery_beam"]
     reach, ll, lg = P["battery_lip"]
@@ -681,7 +685,7 @@ def battery_bay(h):
     zp = P["plate_z"] + 0.3
     h = h.cut(box(*P["battery_ring"][:2], -1.0, *P["battery_ring"][2:], c1))
     floor = P["button_tray"][2]
-    parts = [box(lx, ly0, z0, cx0 - g, ly1, zp),  # left post, from the plate
+    parts = [box(lx, ly0, z0, cx0 - g, ly1, zp),  # left post, a web from the side wall and the plate
              box(cx1 + g, ry0, z0, rx, ry1, floor + 0.3),  # right post, from the button's floor
              box(ex0, ey0, z0, ex1, ey1, zp)]  # block at the USB-C end
     zc = c0 - lg  # catch face, under the cell
@@ -1066,36 +1070,41 @@ def logo_inlay(logo):
 
 
 def screen_clips():
-    """A beam either side of the OLED board, bridged between two posts that
-    hang from the plate at the board's ends; tabs stop the board along Y. The
-    right beam's post at the button end stands beside the board, so the
-    button's slot stays clear. A lip in the middle of each beam catches the
-    board's back on a face clip_lip[3] degrees from flat, near self-locking,
-    that would lift the board clip_lip[2] past its seat, so the beams stay
-    sprung and press the glass onto the plate. Printed top face down, the
-    beams are bridges and the lips short overhangs. A rib under the plate keys
-    the module the right way round."""
+    """A spring strip either side of the OLED board, bridged between two end
+    blocks that run out into the side wall; tabs stop the board along Y.
+    Between the blocks a wall fills out to the side wall too, behind a slot
+    that lets the strip bend out to let the board in and stops it short of
+    bending too far. The right strip's block at the button end stands beside
+    the board, so the button's slot stays clear. A lip in the middle of each
+    strip catches the board's back on a face clip_lip[3] degrees from flat,
+    near self-locking, that would lift the board clip_lip[2] past its seat,
+    so the strips stay sprung and press the glass onto the plate. Printed top
+    face down, the strips are bridges and the lips short overhangs. A rib
+    under the plate keys the module the right way round."""
     bx0, by0, bx1, by1, zb = P["oled_board"]
     g, s = P["clip_gap"], P["clip_post"]
     t, z0, z1 = P["clip_beam"]
     reach, ll, dz, ang = P["clip_lip"]
+    slot, xwl, xwr = P["clip_backing"]
     k = math.tan(math.radians(ang))
     zp = P["plate_z"] + 0.33  # into the plate
-    zr = zb + dz + g * k  # catch face at the beam
+    zr = zb + dz + g * k  # catch face at the strip
     za = zr - reach * k  # its inner edge
     ym = (by0 + by1) / 2
-    ya, yb = by0 - g, by1 + g  # post faces toward the board
+    ya, yb = by0 - g, by1 + g  # end block faces toward the board
     parts = []
-    for xi, out in ((bx0 - g, -1), (bx1 + g, 1)):  # beam inner face, outward direction
+    for xi, out, xw in ((bx0 - g, -1, xwl), (bx1 + g, 1, xwr)):  # strip inner face, outward direction, side wall
         xs = lambda d: xi + out * d  # d: distance outward from the inner face
         right = out > 0
-        y_end = yb if right else yb + s  # the right beam ends at its post beside the board
+        y_end = yb if right else yb + s  # the right strip ends at its block beside the board
         xlo, xhi = sorted((xs(0), xs(t)))
         parts.append(box(xlo, ya - s, z0, xhi, y_end, z1))
-        plo, phi = sorted((xs(0), xs(s)))  # posts, outside the beam line
+        plo, phi = sorted((xs(0), xw))  # end blocks, out into the side wall
+        wlo, whi = sorted((xs(t + slot), xw))  # the wall behind the slot
         tlo, thi = sorted((xs(0), xs(-s)))  # end tabs, over the board corners
         for y0, y1 in ((ya - s, ya), (y_end - s, y_end)):
             parts.append(box(plo, y0, z0, phi, y1, zp))
+        parts.append(box(wlo, ya - 0.01, z0, whi, y_end - s + 0.01, zp))
         for y0, y1 in ((ya - 1.0, ya), (yb, yb + 1.0)):
             x1 = min(thi, P["clip_tab_right"]) if right and y0 > ym else thi
             parts.append(box(tlo, y0, zb, x1, y1, zp))  # down to the board back, clear of the battery

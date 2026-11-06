@@ -308,7 +308,7 @@ def sections(doc):
     cuts = [("S1's lever in the switch cover", Y, B.P["act_y"], (34, 48), (-9, 4)),
             ("Switch cover in its grooves", Y, B.P["act_y"] + 2.0, (34, 48), (-9, 4)),
             ("PCB in its pocket, screw, battery clip", Y, 76.0, (-5, 14), (-9, 10)),
-            ("Screen clip snaps under the OLED board", Y, (by0 + by1) / 2, (3.5, 11.5), (7.6, 14.6)),
+            ("Screen clip: strip, slot, wall behind", Y, (by0 + by1) / 2, (-4.5, 10.5), (6.1, 14.6)),
             ("Button post straight over S2", Y, py, (27, 46), (-9, 15)),
             ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
             ("USB-C opening and plug recess", X, B.P["usb_center"][0], (84, 96), (-9, 4)),

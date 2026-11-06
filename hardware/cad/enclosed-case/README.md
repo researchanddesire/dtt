@@ -104,8 +104,10 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   under the pad is 1.2 mm above S2's plunger, as before.
 - The viewport (23.2 x 12.2 mm) frames the screen's lit area.
 - The OLED clips: the module clicks in and its glass sits flat on the plate.
+  Each clip is a spring strip in a slot in a wall that runs out to the side
+  wall. It bends 0.5 mm to let the board in; the wall stops it at 0.95 mm.
   The lips' catch faces are 20° from flat, so they hardly let go, and set to
-  lift the board 0.1 mm past its seat, so the beams stay sprung against it.
+  lift the board 0.1 mm past its seat, so the strips stay sprung against it.
 - The battery clicks past the two lips (0.65 mm over its edges) and sits
   against the cross bars; a gusset and an end block stop it lengthwise.
 - The sensor's lenses sit on the case's centreline.
