@@ -47,14 +47,16 @@ the PCB, with a roof over each, and the case no longer fits the snap backplate.
 | Qty | Part |
 | --- | --- |
 | 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" Torx flat head) |
+| - | Hot glue, for the sensor |
 
 ## Assemble
 
 1. With the housing upside down, push the OLED module in, glass first and
    header toward the jack, until both clips click over its board. A rib under
    the plate stops it going in the other way round. No glue.
-2. Screw the distance sensor onto its bosses, connector toward the screen. A
-   rib by the jack stops it going in the other way round.
+2. Press the distance sensor into its mount, connector toward the screen,
+   pushing on its two silver screws until it sits flush. Hot-glue it. A rib
+   by the jack stops it going in the other way round.
 3. Push the battery in between its two clips until it clicks, leads toward
    the screen.
 4. Drop the switch cover into its channel, grip outwards, at the same end as
