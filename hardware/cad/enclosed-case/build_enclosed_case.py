@@ -136,7 +136,7 @@ PARAMS = {
     "usb_size": (9.2, 3.6),  # the receptacle face is 8.9 x 3.35, the plug 8.4 x 2.6
     "usb_r": 1.8,
     "usb_room": (16.2, 25.7, -0.18),  # x0, x1 and top z of the room for the receptacle, 0.3 clear
-    "usb_recess": (13.0, 7.0, 1.0),  # width, height, depth; the overmould stops 0.6 short of the receptacle
+    "usb_recess": (13.0, 7.0, 1.0, 1.0),  # width, height, depth, corner radius; the overmould stops 0.6 short of the receptacle. Small corners, as round ends stopped most plugs 1 mm short
     # Tongue on the cap's rim, in a groove in the housing, so the cap sits in
     # place before the screws go in.
     "groove": (0.75, 1.0, 1.9),  # inset from the outer face, width, depth
@@ -596,9 +596,9 @@ def connector_cuts():
 
 def usb_recess():
     ux, uz = P["usb_center"]
-    w, h, d = P["usb_recess"]
+    w, h, d, r = P["usb_recess"]
     y1 = P["outer"][3]
-    return stadium_y(ux, uz, w, h, h / 2 - 1e-3, y1 - d, y1 + 1)
+    return stadium_y(ux, uz, w, h, r, y1 - d, y1 + 1)
 
 
 def pcb_pocket(pcb):

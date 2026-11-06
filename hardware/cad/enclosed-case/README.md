@@ -98,7 +98,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
 - USB-C: a plug passes the 9.2 x 3.6 mm opening and seats fully. Its overmould
-  stops 0.6 mm short of the receptacle, in a 13 x 7 mm recess.
+  stops 0.6 mm short of the receptacle, in a 13 x 7 mm recess with 1 mm
+  corners, so square overmoulds up to 12.4 x 6.5 mm seat too.
 - 3.5 mm jack: a plug seats fully through the 1.3 mm wall.
 - The button: a 4 mm black bar to a blue round pad right over S2. The post
   under the pad is 1.2 mm above S2's plunger, as before.
