@@ -39,17 +39,26 @@ def comps(off=(0, 0, 0)):
 
 def main():
     os.makedirs(IMG, exist_ok=True)
-    H, B, C, S, Dif = L("Housing-Black"), L("Housing-Shot2-Blue"), L("Cap-Cups-Black"), L("Switch-Cover-Blue"), L("Diffuser-White")
+    H, C, S = L("Housing-Black"), L("Cap-Cups-Black"), L("Switch-Cover-Blue")
+    ov = [M.part(L("Overlay-Black"), (0.1, 0.1, 0.11)), M.part(L("Overlay-Blue"), BLUE), M.part(L("Overlay-White"), WHITE),
+          M.part(L("Overlay-Clear"), (0.6, 0.7, 0.8), alpha=0.35), M.part(L("Overlay-Diffuser"), (0.97, 0.97, 0.95))]
     cups = [M.part(L("Cup%d" % i, REF), (0.85, 0.85, 0.9), alpha=0.55) for i in (1, 2)]
-    shell = [M.part(H, BLACK), M.part(B, BLUE), M.part(S, BLUE), M.part(Dif, WHITE)]
+    shell = [M.part(H, BLACK), M.part(S, BLUE)] + ov
     M.render(shell + [M.part(C, BLACK)], os.path.join(IMG, "Molded-Front.png"), size=(1000, 800), dir_=(-1, 1.2, -1.0))
     M.render(shell + [M.part(C, BLACK)] + cups, os.path.join(IMG, "Molded-Rear.png"), size=(1000, 800), dir_=(-1, 1.2, 0.9))
     # exploded
     up = 30.0
-    ex = [M.part(H, BLACK, offset=(0, 0, up)), M.part(B, BLUE, offset=(0, 0, up + 12)), M.part(Dif, WHITE, offset=(0, 0, up - 6)),
-          M.part(S, BLUE, offset=(14, 0, up * 0.5)), M.part(C, BLACK, offset=(0, 0, -up))] + comps((0, 0, -up * 0.45))
+    oe = []
+    for p, dz in zip(ov, (12, 12, 12, 12, 6)):
+        q = dict(p)
+        q["v"] = p["v"] + np.array([0, 0, up + dz], np.float32)
+        oe.append(q)
+    ex = [M.part(H, BLACK, offset=(0, 0, up)), M.part(S, BLUE, offset=(14, 0, up * 0.5)),
+          M.part(C, BLACK, offset=(0, 0, -up))] + oe + comps((0, 0, -up * 0.45))
     M.render(ex, os.path.join(IMG, "Molded-Exploded.png"), size=(1000, 1100), dir_=(-1, 1.25, -0.75))
-    M.render([M.part(H, BLACK), M.part(B, BLUE)], os.path.join(IMG, "Part-Housing-Inside.png"), size=(1000, 800), dir_=(-1, 1.2, 1.0))
+    M.render(ov, os.path.join(IMG, "Part-Overlay.png"), size=(1000, 700), dir_=(-0.35, 0.5, -1.0))
+    M.render([M.part(H, BLACK)], os.path.join(IMG, "Part-Housing-Top.png"), size=(1000, 800), dir_=(-1, 1.2, -1.0))
+    M.render([M.part(H, BLACK)], os.path.join(IMG, "Part-Housing-Inside.png"), size=(1000, 800), dir_=(-1, 1.2, 1.0))
     M.render([M.part(C, BLACK)], os.path.join(IMG, "Part-CapCups-Inside.png"), size=(1000, 800), dir_=(-1, 1.2, -1.0))
     M.render([M.part(L("Cap-Black"), BLACK)], os.path.join(IMG, "Part-Cap-Inside.png"), size=(1000, 800), dir_=(-1, 1.2, -1.0))
     # moldability maps, after

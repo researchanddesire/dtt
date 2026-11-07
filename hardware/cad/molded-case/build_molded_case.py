@@ -63,10 +63,9 @@ PARAMS = {
     "sensor_boss": (3.8, 1.6),  # OD, pilot (assumed M2 thread-forming; the original screws are unknown)
     "sensor_window": (11.4, 9.6, 30.6, 17.6, 0.15),  # optical case x0, y0, x1, y1, clearance
     "sensor_key": (9.5, 7.0, 16.0, 8.0, 0.6),  # x0, y0, x1, y1, bottom z
-    # LED light bar: a window with a ledge for the white diffuser, which goes
+    # LED light bar: an open window under the overlay's white print, and a
     # in from inside, and a chimney round the LEDs.
     "diffuser_throat": (7.0, 20.5, 35.0, 27.5),
-    "diffuser_seat": (6.0, 19.5, 36.0, 28.5, 13.57),
     "chimney": 4.0,  # bottom z of a rib-thick wall round the seat, clear of the sensor PCB and the harness
     # Battery: located by ribs, held on two strips of double-sided tape on
     # the lands over it (printed clips are undercuts).
@@ -80,8 +79,19 @@ PARAMS = {
     # now 0.3 over S2's plunger, since a moulding holds that tolerance.
     "button_post_gap": 0.3,
     "s2_top": -0.2,
-    # Blue second shot (two-shot moulding): the logo and the button pad, 0.8 deep.
-    "shot2_depth": 0.8,
+    # Top overlay: one printed polycarbonate film over the whole flat top, in
+    # a shallow recess so its edge can't catch. Back-printed black, with the
+    # product blue (logo, button pad), a white diffuser window over the LEDs
+    # and a clear window over the screen. Die-cut holes over the sensor's
+    # lenses (a film across them carries IR from emitter to detector) and
+    # along the button's U slot, so the flexure moves free.
+    "overlay": (0.25, 0.3, 0.8, 0.15),  # film with adhesive, recess depth, recess inset from the flat top's edge, film to recess wall
+    "overlay_slot_grow": 0.2,  # film cut past the moulded slot, a side (the film can shift 0.15 in its recess)
+    "overlay_clear_grow": 0.5,  # clear window past the viewport, so the print edge hides the cut
+    # Second layer just over the LEDs: an opal light-diffusing PC film laminated
+    # under the overlay's white window (two hits of white ink), sitting down in
+    # the window through the plate, so the three LEDs read as one even bar.
+    "diffuser_layer": (0.25, 0.2),  # thickness, clearance to the window walls
     # Connector openings run down to the parting line (U notches), so no
     # slides: the B half forms them from below. The cap fills them back up.
     "notch_clear": 0.05,
@@ -233,14 +243,12 @@ def sensor_mount():
 def light_bar():
     zu = plate_under()
     tx0, ty0, tx1, ty1 = P["diffuser_throat"]
-    sx0, sy0, sx1, sy1, sz = P["diffuser_seat"]
     cz = P["chimney"]
     t = P["rib"]
-    outer = dprism(rect(sx0 - t, sy0 - t, sx1 + t, sy1 + t), zu + 0.3, cz)
-    inner = dprism(rect(sx0, sy0, sx1, sy1), zu + 1, cz - 1, -P["rib_draft"])  # opens toward the core
+    outer = dprism(rect(tx0 - t, ty0 - t, tx1 + t, ty1 + t), zu + 0.3, cz)
+    inner = dprism(rect(tx0, ty0, tx1, ty1), zu + 1, cz - 1, -P["rib_draft"])  # opens toward the core
     chimney = outer.cut(inner)
-    cuts = [box(tx0, ty0, zu - 1, tx1, ty1, E["top_z"] + 1), box(sx0, sy0, zu - 1, sx1, sy1, sz)]
-    return chimney, cuts
+    return chimney, [box(tx0, ty0, zu - 1, tx1, ty1, E["top_z"] + 1)]
 
 
 def battery_ribs():
@@ -268,14 +276,67 @@ def button():
     return slot, post
 
 
-def shot2(logo):
-    """Blue second shot: the logo's outline and the button pad, shot2_depth deep."""
-    zt, d = E["top_z"], P["shot2_depth"]
-    tops = [f for f in logo.Faces if f.normalAt(0, 0).z > 0.99 and abs(f.CenterOfMass.z - zt) < 1e-3]
-    blue = [f.extrude(V(0, 0, -d)) for f in tops]
+def flat_top():
+    """The flat top face, inside the top round."""
+    zt = E["top_z"]
+    return ENC.outline_at(zt, 0.0, drafted_round_inset(zt))
+
+
+def button_cut():
+    """The film's cut along the button's U slot, overlay_slot_grow wider a
+    side, so the film never hangs over the gap however it lands in the recess."""
     px, py, pr = E["button_pad"]
-    blue.append(zcyl(px, py, 2 * pr, zt - d, zt))
-    return blue
+    xr, bw = E["button_bar"]
+    w, h, g = E["button_slot_w"], bw / 2, P["overlay_slot_grow"]
+    outer = ENC.merge_faces(rect(xr - g, py - h - w - g, px, py + h + w + g).fuse(disc(px, py, pr + w + g)))
+    inner = ENC.merge_faces(rect(xr - g - 1, py - h + g, px, py + h - g).fuse(disc(px, py, pr - g)))
+    return outer.cut(inner)
+
+
+def overlay_faces(logo):
+    """The overlay's 2D layers at z 0: die-cut outline and holes, and the
+    clear, white and blue print areas (black is everything else)."""
+    t, depth, inset, gap = P["overlay"]
+    recess = ENC.offset_face(flat_top(), -inset)
+    outline = ENC.offset_face(recess, -gap)
+    zt = E["top_z"]
+    x0, y0, x1, y1, c = P["sensor_window"]
+    holes = [rect(x0 - c, y0 - c, x1 + c, y1 + c), button_cut()]
+    cx, cy, w, ht, r, _ = E["viewport"]
+    g = P["overlay_clear_grow"]
+    clear = ENC.rounded_rect(cx - w / 2 - g, cy - ht / 2 - g, cx + w / 2 + g, cy + ht / 2 + g, r + g)
+    tx0, ty0, tx1, ty1 = P["diffuser_throat"]
+    white = rect(tx0, ty0, tx1, ty1)
+    blue = []
+    for f in logo.Faces:
+        if f.normalAt(0, 0).z > 0.99 and abs(f.CenterOfMass.z - zt) < 1e-3:
+            f = f.copy()
+            f.translate(V(0, 0, -zt))
+            blue.append(f)
+    px, py, pr = E["button_pad"]
+    blue.append(disc(px, py, pr))
+    for f in [outline, recess] + holes + [clear, white]:
+        f.translate(V(0, 0, -f.BoundBox.ZMin))
+    dt, dc = P["diffuser_layer"]
+    diffuser = rect(tx0 + dc, ty0 + dc, tx1 - dc, ty1 - dc)
+    return dict(recess=recess, outline=outline, holes=holes, clear=clear, white=white, blue=blue, diffuser=diffuser)
+
+
+def build_overlay(L):
+    """The film as solids, one per print colour, for the assembly and renders."""
+    t, depth, _, _ = P["overlay"]
+    z0 = E["top_z"] - depth
+    sol = lambda f: f.extrude(V(0, 0, t)).translated(V(0, 0, z0))
+    cut = Part.makeCompound([sol(h) for h in L["holes"]])
+    film = sol(L["outline"]).cut(cut)
+    clear = film.common(sol(L["clear"]))
+    white = film.common(sol(L["white"]))
+    blue = film.common(Part.makeCompound([sol(f) for f in L["blue"]]))
+    black = film.cut([sol(L["clear"]), sol(L["white"])] + [sol(f) for f in L["blue"]])
+    dt = P["diffuser_layer"][0]
+    diffuser = L["diffuser"].extrude(V(0, 0, dt)).translated(V(0, 0, z0 - dt))
+    return dict(black=black.removeSplitter(), blue=blue.removeSplitter(), white=white.removeSplitter(),
+                clear=clear.removeSplitter(), diffuser=diffuser)
 
 
 def connector_notches():
@@ -320,15 +381,15 @@ def build_housing(board, logo, comps):
             box(a0[0], a0[1], a0[2] - 1, a1[0], a1[1], a1[2])]
     cuts += ENC.slider_cuts() + connector_notches() + boss_holes + sens_holes + [sens_win] + bar_cuts
     cuts += [slot, glass_pocket(), housing_lip_cut()]
-    cx, cy, w, ht, r, c = E["viewport"]
+    cx, cy, w, ht, r, _ = E["viewport"]
     zt = E["top_z"]
-    rr = lambda d, z: ENC.rounded_rect(cx - w / 2 - d, cy - ht / 2 - d, cx + w / 2 + d, cy + ht / 2 + d, r + d, z).OuterWire
-    cuts += [ext(rr(0, 0), plate_under() - 1, zt - c + 0.01), Part.makeLoft([rr(0, zt - c), rr(c, zt)], True, True),
-             ext(rr(c, 0), zt - 0.01, zt + 1)]
+    cuts.append(ext(ENC.rounded_rect(cx - w / 2, cy - ht / 2, cx + w / 2, cy + ht / 2, r).OuterWire,
+                    plate_under() - 1, zt + 1))  # no chamfer: the film spans the edge
+    L = overlay_faces(logo)
+    _, depth, _, _ = P["overlay"]
+    cuts.append(ext(L["recess"].OuterWire, zt - depth, zt + 1))
     h = ENC.solid(h.cut(cuts).removeSplitter())
-    blue = Part.makeCompound(shot2(logo)).common(h)
-    h = ENC.solid(h.cut(blue).removeSplitter())
-    return h, blue.removeSplitter(), pcb
+    return h, L, pcb
 
 
 # --- Cap -------------------------------------------------------------------
@@ -495,23 +556,26 @@ def build_all():
     board = doc.getObject("BoardRev4").Shape
     logo = doc.getObject("LogoInlay").Shape
     comps = components(doc)
-    housing, blue, pcb = build_housing(board, logo, comps)
+    housing, layers, pcb = build_housing(board, logo, comps)
+    overlay = build_overlay(layers)
     cap = build_cap(pcb)
     cup_cap = build_cap(pcb, cups=True)
     slider = build_slider()
-    diffuser = doc.getObject("Diffuser").Shape.copy()
     screws = [doc.getObject("PCBMountScrew%d" % i).Shape.copy() for i in range(1, 5)]
     cups = [doc.getObject("SuctionCup%d" % i).Shape.copy() for i in (1, 2)]
-    return dict(housing=housing, blue=blue, cap=cap, cup_cap=cup_cap, slider=slider, diffuser=diffuser,
+    return dict(housing=housing, layers=layers, overlay=overlay, cap=cap, cup_cap=cup_cap, slider=slider,
                 screws=screws, cups=cups, comps=comps, doc=doc)
 
 
 def checks(g):
     out = []
-    for k in ("housing", "blue", "cap", "cup_cap", "slider"):
+    for k in ("housing", "cap", "cup_cap", "slider"):
         s = g[k]
         out.append("CHECK %s valid %s, %d solids, %.1f cm3" % (k, s.isValid(), len(s.Solids), s.Volume / 1000))
-    parts = {"housing": g["housing"], "blue": g["blue"], "cap": g["cap"], "cup_cap": g["cup_cap"], "slider": g["slider"]}
+    film = Part.makeCompound(list(g["overlay"].values()))
+    out.append("CHECK overlay to housing %.3f mm3 overlap, film top %.2f under the top face" % (
+        film.common(g["housing"]).Volume, E["top_z"] - film.BoundBox.ZMax))
+    parts = {"housing": g["housing"], "overlay": film, "cap": g["cap"], "cup_cap": g["cup_cap"], "slider": g["slider"]}
     for name, (label, s) in g["comps"].items():
         for pn, p in parts.items():
             try:
@@ -528,11 +592,31 @@ def checks(g):
     return out
 
 
+def overlay_json(L, path):
+    """Polylines of the overlay's layers, for overlay_dxf.py."""
+    import json
+
+    def loops(faces):
+        out = []
+        for f in faces:
+            for w in f.Wires:
+                pts = w.discretize(Deflection=0.01)
+                out.append([(round(p.x, 4), round(p.y, 4)) for p in pts])
+        return out
+
+    data = {"CUT_OUTLINE": loops([L["outline"]]), "CUT_HOLES": loops(L["holes"]), "PRINT_CLEAR": loops([L["clear"]]),
+            "PRINT_WHITE": loops([L["white"]]), "PRINT_BLUE": loops(L["blue"]), "RECESS": loops([L["recess"]]),
+            "NO_ADHESIVE": loops([L["clear"], L["white"]]),
+            "DIFFUSER_LAYER": loops([L["diffuser"]])}
+    json.dump(data, open(path, "w"))
+
+
 def export(g):
     os.makedirs(PARTS, exist_ok=True)
     import Mesh
-    files = {"Housing-Black": g["housing"], "Housing-Shot2-Blue": g["blue"], "Cap-Black": g["cap"],
-             "Cap-Cups-Black": g["cup_cap"], "Switch-Cover-Blue": g["slider"], "Diffuser-White": g["diffuser"]}
+    files = {"Housing-Black": g["housing"], "Cap-Black": g["cap"], "Cap-Cups-Black": g["cup_cap"],
+             "Switch-Cover-Blue": g["slider"]}
+    files.update({"Overlay-" + k.capitalize(): s for k, s in g["overlay"].items()})
     for n, s in files.items():
         s.exportStep(os.path.join(PARTS, n + ".step"))
         m = Mesh.Mesh(s.tessellate(0.02))
@@ -548,7 +632,8 @@ def export(g):
         Mesh.Mesh(s.tessellate(0.1)).write(os.path.join(ref, "Cup%d.stl" % (i + 1)))
     keep = ("BoardRev4", "OLEDPCB", "Part__Feature005", "SensorPCB", "SensorOpticalCase", "BatteryPouch", "Part__Feature002",
             "PCB_J5", "Part__Feature006", "PCB_S2", "PCB_M1")
-    asm = [g["housing"], g["blue"], g["cup_cap"], g["slider"], g["diffuser"]] + g["screws"] + g["cups"]
+    overlay_json(g["layers"], os.path.join(PARTS, "Overlay-Layers.json"))
+    asm = [g["housing"], g["cup_cap"], g["slider"]] + list(g["overlay"].values()) + g["screws"] + g["cups"]
     asm += [g["comps"][n][1] for n in keep if n in g["comps"]]
     Part.makeCompound(asm).exportStep(os.path.join(HERE, "DTT-Molded.step"))
 

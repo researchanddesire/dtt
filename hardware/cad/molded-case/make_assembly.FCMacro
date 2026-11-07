@@ -35,11 +35,15 @@ def add(group, name, label, shape, col, vis=True, transp=0):
 case = doc.addObject("App::Part", "MoldedCase")
 case.Label = "Molded case - moulded parts"
 add(case, "Housing", "Housing - black PC/ABS", g["housing"], BLACK)
-add(case, "Shot2", "Housing second shot - blue (logo, button pad)", g["blue"], BLUE)
 add(case, "CapCups", "Cap with suction-cup keyholes - black", g["cup_cap"], BLACK)
 add(case, "Cap", "Plain cap - black (swap for the cup cap)", g["cap"], BLACK, vis=False)
 add(case, "SwitchCover", "Switch cover - blue", g["slider"], BLUE)
-add(case, "Diffuser", "Diffuser - white", g["diffuser"], WHITE)
+ov = doc.addObject("App::Part", "Overlay")
+ov.Label = "Top overlay - printed film (see parts/Overlay.dxf)"
+for k, label, col, tr in (("black", "Overlay - black print", (0.08, 0.08, 0.09), 0), ("blue", "Overlay - blue print", BLUE, 0),
+                          ("white", "Overlay - white diffuser print", WHITE, 0), ("clear", "Overlay - clear screen window", (0.6, 0.7, 0.8), 60),
+                          ("diffuser", "Diffuser patch - opal film laminated under the white window", (0.97, 0.97, 0.95), 0)):
+    add(ov, "Overlay" + k.capitalize(), label, g["overlay"][k], col, transp=tr)
 
 hw = doc.addObject("App::Part", "Hardware")
 hw.Label = "Screws and suction cups"
