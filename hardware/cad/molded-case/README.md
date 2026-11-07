@@ -28,6 +28,8 @@ Undercuts (red), before and after:
 | Tongue and groove | Lip joint on the long sides |
 | Solid 3 mm / 7 mm cap | 1.6 mm tray with bosses |
 | Button tray | Gone; S2 stops the pad, post now 0.3 mm over it |
+| Switch cover pocket open below for S1's lever | Closed pocket; the cover goes on S1 before the PCB drops in |
+| Round OLED standoffs | Clipped flat on the screen side; room for a real 26.7 x 19.3 glass (the CAD glass is smaller) |
 | Blue inlays, white diffuser part | One printed top overlay |
 
 ## Top overlay
@@ -77,8 +79,9 @@ against one colour standard.
 1. OLED onto its posts, heat-stake the 4 posts.
 2. Sensor: two screws into its bosses.
 3. Battery onto its lands with tape.
-4. Switch cover in its channel; plug in the battery and harness.
-5. PCB straight down (the jack and USB-C notches are open below).
+4. Plug in the battery and harness.
+5. Switch cover onto S1's lever, then the PCB straight down, carrying the
+   cover into its channel (the jack and USB-C notches are open below).
 6. Cap, then the 4 screws.
 7. Peel and stick the overlay into its recess.
 

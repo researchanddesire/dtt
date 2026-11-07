@@ -40,7 +40,10 @@ PARAMS = {
     "rib": 1.0,  # rib thickness, about 60 % of the wall, so no sink on the top face
     # The top plate is a full wall thick (underside 12.57, as before); the
     # OLED glass, whose face is at 12.77, gets a shallow pocket.
-    "glass_pocket": (8.1, 37.8, 33.9, 53.2, 0.2, 12.82),  # glass x0, y0, x1, y1, clearance round it, pocket ceiling z
+    # The CAD glass is 25.8 x 15.4, but a real 0.96" module's glass is about
+    # 26.7 x 19.3, so leave room for that: the pocket and the clear zone
+    # between the standoffs.
+    "glass_pocket": (7.6, 35.2, 34.4, 56.3, 0.0, 12.82),  # x0, y0, x1, y1, clearance round it, pocket ceiling z
     # PCB screw bosses: the original 0408LTFB (#4) thread-forming screws.
     "boss_od": 5.6,  # about 2 x the 2.84 mm thread
     "boss_hole": 2.5,  # pilot; check the screw maker's chart for PC/ABS (often 0.8 x d = 2.3)
@@ -54,8 +57,8 @@ PARAMS = {
     "oled_board_top": 10.77,
     "oled_board_back": 9.57,
     "stake": (1.8, 0.8),  # post diameter (OLED hole about 2.0), length past the board's back (0.97 to the cell under the button-end holes)
-    "standoff_d": 3.2,
-    "oled_key": (11.5, 34.7, 15.5, 35.7, 11.2),  # rib where the flex would be if the module went in turned round
+    "standoff_d": 3.2,  # clipped flat on the screen side, clear of the glass_pocket zone
+    "oled_key": (11.5, 34.0, 15.5, 35.0, 11.2),  # rib where the flex would be if the module went in turned round
     # Distance sensor: its own two screws into bosses, a window round its
     # optical case, and a key rib.
     "sensor_pcb_top": 3.67,
@@ -97,6 +100,8 @@ PARAMS = {
     # Connector openings run down to the parting line (U notches), so no
     # slides: the B half forms them from below. The cap fills them back up.
     "notch_clear": 0.05,
+    # Switch cover: a closed pocket round S1's lever, this much clear above and below.
+    "slider_lever_clear": 0.25,
     # Cap.
     "cap_floor": 1.6,
     "cap_edge_draft": 1.0,
@@ -216,7 +221,8 @@ def oled_mount():
     d, past = P["stake"]
     parts = []
     for x, y in P["oled_holes"]:
-        parts.append(dpost(x, y, P["standoff_d"], zu + 0.3, zt))
+        x0, y0, x1, y1 = P["glass_pocket"][:4]
+        parts.append(dpost(x, y, P["standoff_d"], zu + 0.3, zt).cut(box(x0, y0, zt - 1, x1, y1, zu + 1)))
         parts.append(dpost(x, y, d, zt + 0.01, zb - past, 0.25))
     kx0, ky0, kx1, ky1, kz = P["oled_key"]
     parts.append(drib(kx0, ky0, kx1, ky1, zu + 0.3, kz))
@@ -533,8 +539,22 @@ def keyhole_housings(zb, zr):
 
 
 def build_slider():
-    """PR #13's switch cover; it already pulls straight along X. Draft still to add."""
-    return ENC.build_slider()
+    """PR #13's switch cover, with a closed pocket for S1's lever: the cover
+    goes on the switch before the PCB drops in, so the pocket needs no slot
+    open underneath. It pulls straight along X. Draft still to add."""
+    g = ENC.slider_geom()
+    ya = E["act_y"]
+    xo = E["outer"][2] + E["grip_proud"]
+    flange = box(g["xi"], ya - g["fl"] / 2, g["fz0"], g["xf"], ya + g["fl"] / 2, g["fz1"])
+    grip = box(g["xf"] - 0.01, ya - g["gl"] / 2, g["wz0"], xo, ya + g["gl"] / 2, g["wz1"])
+    outer = [e for e in grip.Edges if abs(e.BoundBox.XMin - xo) < 1e-6 and abs(e.BoundBox.XMax - xo) < 1e-6]
+    s = flange.fuse(grip.makeFillet(0.6, outer))
+    for dy in (-1.5, 0.0, 1.5):  # finger ridges
+        s = s.cut(box(xo - 0.35, ya + dy - 0.3, g["wz0"] - 1, xo + 1, ya + dy + 0.3, g["wz1"] + 1))
+    z0, z1 = E["act_z"]
+    w, c = E["act_w"] + 0.4, P["slider_lever_clear"]
+    s = s.cut(box(g["xi"] - 1, ya - w / 2, z0 - c, E["act_tip_x"] + 0.4, ya + w / 2, z1 + c))
+    return s.removeSplitter()
 
 
 # --- Build -----------------------------------------------------------------
