@@ -67,8 +67,9 @@ Undercuts (red), before and after:
 `build_molded_case.py` (FreeCAD 1.1, `freecadcmd build_molded_case.py`)
 imports the enclosed case's builder for the outline and positions; sizes are
 in `PARAMS`. `dfm_check.py` / `dfm_maps.py` give the draft and undercut
-maps; `render_molded.py` makes the renders. `DTT-Molded.step` is the
-assembly with the cup cap.
+maps; `render_molded.py` makes the renders. `DTT-Molded.FCStd` (from
+`xvfb-run -a freecad make_assembly.FCMacro`) and `DTT-Molded.step` are the
+assembly with the cup cap; the plain cap is hidden in the FCStd.
 
 ## Still open
 
