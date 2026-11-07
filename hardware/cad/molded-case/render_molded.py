@@ -70,7 +70,7 @@ def main():
             p = "/tmp/dfma_%d_%d.png" % (i, j)
             M.render([M.part(m, face_colors=D.colours(cls))], p, size=(800, 640), dir_=d,
                      title="%s  undercut %.0f mm²" % (n, res["undercut"]) if j == 0 else None,
-                     legend=[(D.COL[k], s) for k, s in (("undercut", "undercut"), ("nodraft", "no draft"), ("low", "0.5-1 deg"),
+                     legend=[(D.COL[k], s) for k, s in (("undercut", "undercut"), ("nodraft", "no draft"), ("low", "0.4-1 deg"),
                                                         ("ok", ">= 1 deg"), ("flat", "flat to pull"))] if (i == 0 and j == 1) else None)
             paths.append(p)
     M.grid(paths, os.path.join(IMG, "DFM-After.png"))

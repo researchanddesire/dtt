@@ -1,6 +1,6 @@
 """Write DTT-Molded.FCStd (coloured, editable view of the molded case).
 
-    xvfb-run -a freecad make_assembly.FCMacro
+    freecadcmd build_molded_case.py && xvfb-run -a freecad make_assembly.FCMacro
 """
 import os
 import sys
@@ -15,7 +15,16 @@ import build_molded_case as B  # noqa: E402
 BLACK, BLUE, WHITE = (0.13, 0.13, 0.14), (0.09, 0.42, 0.93), (0.92, 0.92, 0.88)
 GREEN, GREY, METAL, CLEAR = (0.05, 0.3, 0.15), (0.35, 0.35, 0.38), (0.7, 0.7, 0.72), (0.85, 0.85, 0.9)
 
-g = B.build_all()
+import Part  # noqa: E402
+
+# The moulded parts as freecadcmd build_molded_case.py exported them (run that
+# first); the reference parts straight from the enclosed case's assembly.
+R = lambda n: Part.read(os.path.join(B.PARTS, n + ".step"))
+src = App.openDocument(B.ASSY)
+g = dict(housing=R("Housing-Black"), cup_cap=R("Cap-Cups-Black"), cap=R("Cap-Black"), slider=R("Switch-Cover-Blue"),
+         overlay={k: R("Overlay-" + k.capitalize()) for k in ("black", "blue", "white", "clear", "diffuser")},
+         screws=[src.getObject("PCBMountScrew%d" % i).Shape.copy() for i in range(1, 5)],
+         cups=[src.getObject("SuctionCup%d" % i).Shape.copy() for i in (1, 2)], comps=B.components(src))
 doc = App.newDocument("DTT_Molded")
 
 

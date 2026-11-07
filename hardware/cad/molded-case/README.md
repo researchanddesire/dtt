@@ -29,7 +29,7 @@ Undercuts (red), before and after:
 | Solid 3 mm / 7 mm cap | 1.6 mm tray with bosses |
 | Button tray | Gone; S2 stops the pad, post now 0.3 mm over it |
 | Switch cover pocket open below for S1's lever | Closed pocket; the cover goes on S1 before the PCB drops in |
-| Round OLED standoffs | Clipped flat on the screen side; room for a real 26.7 x 19.3 glass (the CAD glass is smaller) |
+| Round OLED standoffs | Two crossed fins round each stake, clipped clear of a real 26.7 x 19.3 glass (the CAD glass is smaller) |
 | Blue inlays, white diffuser part | One printed top overlay |
 
 ## Top overlay
@@ -64,6 +64,27 @@ against one colour standard.
 - Gate: sub gate inside the USB-C end wall (housing), centre of the floor
   inside (caps). Ejectors on the bosses, rib ends and the rim.
 - Shrink 0.5-0.7 % (PC/ABS); sizes here are the moulded part.
+- Draft: 1° outside and on openings, 0.5° on ribs, posts and sliding fits,
+  3° on shut-offs (the connector U notches, the cup-cap windows). The switch
+  cover is drafted toward its grip.
+- 0.4 mm fillets where ribs, bosses and posts meet the plate or cap floor.
+- Cored: the button post from its tip, the screw bosses up to 0.6 mm under
+  the plate (pilot, then a 1.6 mm relief core).
+- Steel safe: the lip, switch channel, PCB pocket, battery ribs, cup clicks
+  (8.2 mm mouth), pilots and stakes start loose or light. Tighten by taking
+  steel out after first shots.
+
+## Print check (Form 2, ABS-like resin)
+
+Print the housing, cup cap and switch cover from `parts/*.stl` to check fit
+before tooling.
+
+- Housing and caps open side up, tilted about 20°, supports on the outside
+  only; the switch cover on its flange's inner face, no supports in the
+  lever pocket.
+- Resin won't heat-stake: put a drop of CA on each stake instead.
+- Drive the screws slowly; resin cracks easier than PC/ABS.
+- The fits are steel safe, so expect them loose. Note which ones to tighten.
 
 ## Hardware
 
@@ -91,12 +112,13 @@ against one colour standard.
 imports the enclosed case's builder for the outline and positions; sizes are
 in `PARAMS`. `dfm_check.py` / `dfm_maps.py` give the draft and undercut
 maps; `overlay_dxf.py` writes the overlay drawing; `render_molded.py` makes the renders. `DTT-Molded.FCStd` (from
-`xvfb-run -a freecad make_assembly.FCMacro`) and `DTT-Molded.step` are the
+`xvfb-run -a freecad make_assembly.FCMacro`, after the build) and `DTT-Molded.step` are the
 assembly with the cup cap; the plain cap is hidden in the FCStd.
 
 ## Still open
 
-- Draft on cut openings (viewport, windows, PCB pocket) and the switch cover.
+- Root fillets: 8 of 50 housing features are still sharp where the kernel
+  wouldn't fillet them.
 - Boss and pilot sizes from the screw maker; OLED hole size for the stakes.
 - Light bleed from the LEDs into the sensor (the chimney stops at z 4).
 - Overlay proofs: 2-3 diffuser densities over the real LEDs; press feel over the

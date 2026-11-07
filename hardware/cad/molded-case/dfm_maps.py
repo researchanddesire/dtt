@@ -10,7 +10,7 @@ import trimesh
 import dfm_check as D
 import mrender as M
 
-LEG = [(D.COL["undercut"], "undercut"), (D.COL["nodraft"], "no draft"), (D.COL["low"], "0.5-1 deg"),
+LEG = [(D.COL["undercut"], "undercut"), (D.COL["nodraft"], "no draft"), (D.COL["low"], "0.4-1 deg"),
        (D.COL["ok"], ">= 1 deg"), (D.COL["flat"], "flat to pull")]
 
 

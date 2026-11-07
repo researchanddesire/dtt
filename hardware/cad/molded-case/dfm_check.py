@@ -7,8 +7,8 @@ along it, one each way):
   red      undercut: the ray along the pull, on the side the face looks to,
            hits the part, so neither half can release it (needs a slide,
            lifter or pass-through core)
-  orange   no draft (under 0.5 degrees)
-  yellow   0.5 to 1 degree
+  orange   no draft (under 0.4 degrees)
+  yellow   0.4 to 1 degree (0.5 is the rib and post draft)
   green    1 degree or more
   grey     flat to the pull
 Wall thickness: a ray inward along each face's normal. Over 2.6 mm is flagged
@@ -41,7 +41,7 @@ def analyse(mesh, pull=(0, 0, 1), thick=2.6, thin=0.8):
     side = np.where(d > 1e-3, ~up, np.where(d < -1e-3, ~dn, ~up | ~dn))
     cls = np.full(len(c), "ok", dtype=object)
     cls[draft < 0.9] = "low"
-    cls[draft < 0.5] = "nodraft"
+    cls[draft < 0.4] = "nodraft"
     cls[draft > 85] = "flat"
     cls[~side] = "undercut"
     # wall thickness: first hit inward
