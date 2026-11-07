@@ -82,11 +82,13 @@ PARAMS = {
     # Top overlay: one printed polycarbonate film over the whole flat top, in
     # a shallow recess so its edge can't catch. Back-printed black, with the
     # product blue (logo, button pad), a white diffuser window over the LEDs
-    # and a clear window over the screen. Die-cut holes over the sensor's
-    # lenses (a film across them carries IR from emitter to detector) and
-    # along the button's U slot, so the flexure moves free.
+    # and a clear window over the screen. A die-cut hole over the sensor's
+    # lenses (a film across them carries IR from emitter to detector). The
+    # film runs solid over the button (nothing to line up, and it seals the
+    # slot): bonded to the pad and bar, no adhesive in a band over the U slot
+    # so the film can bend there as the pad moves.
     "overlay": (0.25, 0.3, 0.8, 0.15),  # film with adhesive, recess depth, recess inset from the flat top's edge, film to recess wall
-    "overlay_slot_grow": 0.2,  # film cut past the moulded slot, a side (the film can shift 0.15 in its recess)
+    "overlay_hinge": 1.0,  # no-adhesive band past each side of the button's U slot
     "overlay_clear_grow": 0.5,  # clear window past the viewport, so the print edge hides the cut
     # Second layer just over the LEDs: an opal light-diffusing PC film laminated
     # under the overlay's white window (two hits of white ink), sitting down in
@@ -282,12 +284,12 @@ def flat_top():
     return ENC.outline_at(zt, 0.0, drafted_round_inset(zt))
 
 
-def button_cut():
-    """The film's cut along the button's U slot, overlay_slot_grow wider a
-    side, so the film never hangs over the gap however it lands in the recess."""
+def button_hinge():
+    """The no-adhesive band over the button's U slot, overlay_hinge past each
+    side of it. The film stays bonded to the middle of the bar and the pad."""
     px, py, pr = E["button_pad"]
     xr, bw = E["button_bar"]
-    w, h, g = E["button_slot_w"], bw / 2, P["overlay_slot_grow"]
+    w, h, g = E["button_slot_w"], bw / 2, P["overlay_hinge"]
     outer = ENC.merge_faces(rect(xr - g, py - h - w - g, px, py + h + w + g).fuse(disc(px, py, pr + w + g)))
     inner = ENC.merge_faces(rect(xr - g - 1, py - h + g, px, py + h - g).fuse(disc(px, py, pr - g)))
     return outer.cut(inner)
@@ -301,7 +303,8 @@ def overlay_faces(logo):
     outline = ENC.offset_face(recess, -gap)
     zt = E["top_z"]
     x0, y0, x1, y1, c = P["sensor_window"]
-    holes = [rect(x0 - c, y0 - c, x1 + c, y1 + c), button_cut()]
+    holes = [rect(x0 - c, y0 - c, x1 + c, y1 + c)]
+    hinge = button_hinge()
     cx, cy, w, ht, r, _ = E["viewport"]
     g = P["overlay_clear_grow"]
     clear = ENC.rounded_rect(cx - w / 2 - g, cy - ht / 2 - g, cx + w / 2 + g, cy + ht / 2 + g, r + g)
@@ -315,11 +318,12 @@ def overlay_faces(logo):
             blue.append(f)
     px, py, pr = E["button_pad"]
     blue.append(disc(px, py, pr))
-    for f in [outline, recess] + holes + [clear, white]:
+    for f in [outline, recess] + holes + [clear, white, hinge]:
         f.translate(V(0, 0, -f.BoundBox.ZMin))
     dt, dc = P["diffuser_layer"]
     diffuser = rect(tx0 + dc, ty0 + dc, tx1 - dc, ty1 - dc)
-    return dict(recess=recess, outline=outline, holes=holes, clear=clear, white=white, blue=blue, diffuser=diffuser)
+    return dict(recess=recess, outline=outline, holes=holes, clear=clear, white=white, blue=blue, diffuser=diffuser,
+                hinge=hinge)
 
 
 def build_overlay(L):
@@ -606,7 +610,7 @@ def overlay_json(L, path):
 
     data = {"CUT_OUTLINE": loops([L["outline"]]), "CUT_HOLES": loops(L["holes"]), "PRINT_CLEAR": loops([L["clear"]]),
             "PRINT_WHITE": loops([L["white"]]), "PRINT_BLUE": loops(L["blue"]), "RECESS": loops([L["recess"]]),
-            "NO_ADHESIVE": loops([L["clear"], L["white"]]),
+            "NO_ADHESIVE": loops([L["clear"], L["white"], L["hinge"]]),
             "DIFFUSER_LAYER": loops([L["diffuser"]])}
     json.dump(data, open(path, "w"))
 

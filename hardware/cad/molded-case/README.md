@@ -43,10 +43,12 @@ plain one-shot black moulding (no two-shot, no diffuser part).
 - Under the white window, a die-cut opal diffuser film (e.g. Makrofol DE,
   Lexan 8B35) is laminated in. It drops into the light window, so the three
   LEDs read as one bar.
-- Die cuts: the outline, a hole over the distance sensor (a film over it
-  would ruin the reading), and the button's U slot 0.2 mm wider a side so the
-  flexure moves free.
-- 3M 467/468 adhesive, none under the windows.
+- Die cuts: the outline and a hole over the distance sensor (a film over it
+  would ruin the reading).
+- Solid over the button, so nothing has to line up and the slot is sealed.
+  The film is bonded to the pad and bar, with no adhesive in a band 1 mm past
+  each side of the U slot, so it bends there. The pad moves about 0.5 mm.
+- 3M 467/468 adhesive, none under the windows or over the button slot.
 - `parts/Overlay.dxf` has one layer per cut, print colour, diffuser patch
   and no-adhesive area.
 
@@ -94,8 +96,8 @@ assembly with the cup cap; the plain cap is hidden in the FCStd.
 - Draft on cut openings (viewport, windows, PCB pocket) and the switch cover.
 - Boss and pilot sizes from the screw maker; OLED hole size for the stakes.
 - Light bleed from the LEDs into the sensor (the chimney stops at z 4).
-- Overlay proofs: 2-3 diffuser densities over the real LEDs; press feel and
-  sealing at the button cut; adhesion on the recess floor (polish it, SPI B-1).
+- Overlay proofs: 2-3 diffuser densities over the real LEDs; press feel over the
+  button (film thickness, no-adhesive band width); adhesion on the recess floor (polish it, SPI B-1).
 - Distance sensor: the CAD models the Sharp IR sensor, the docs say
   ultrasonic. The die-cut hole suits either.
 - A moulder's review: gate, cooling, and a mould-flow run.
