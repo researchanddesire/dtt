@@ -9,6 +9,7 @@
 # Keep the released DTT assembly downloadable without Git LFS.
 hardware/cad/DTT.step -filter -diff -merge -text
 hardware/cad/enclosed-case/** -filter -diff -merge -text
+hardware/cad/molded-case/** -filter -diff -merge -text
 hardware/production-exports/cad/snap-backplate/* -filter -diff -merge -text
 
 # Keep the editable PCB and browser preview directly downloadable.
