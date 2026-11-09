@@ -55,21 +55,21 @@ the STLs.
 | --- | --- |
 | 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" Torx flat head) |
 | 1 | Double-sided foam tape, about 20 × 20 × 0.8 mm, for the battery |
-| - | Hot glue, for the sensor |
 
 ## Assemble
 
 1. With the housing upside down, push the OLED module in, glass first and
    header toward the jack, until both clips click over its board. No glue.
 2. Press the distance sensor into its collar, connector toward the screen,
-   until it sits flush with its two silver screws' ends in their holes.
-   Hot-glue it.
+   until its three snaps click under its board, with its two silver screws'
+   ends in their holes. No glue.
 3. Stick the foam tape on the battery and press it onto its shelf, leads
    toward the screen, its other end against the stop.
-4. Drop the switch cover into its channel from inside, grip outwards.
+4. Push the switch cover onto S1's lever on the PCB, grip outwards, its wider
+   side down past the PCB's edge.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
-   pocket. S1's lever drops into the switch cover from underneath.
+   pocket, with the switch cover going into its channel.
 6. Press the cap on; its tongue holds it in place. Drive the four screws into
    the original bosses. Snug them; do not strip the bosses.
 
@@ -98,7 +98,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   switch model put the actuator 5 mm further along, so check the real part.
 - The switch cover slides freely (0.15 mm clearance), stays in the window,
   and its base hides the window at both ends of its travel.
-- The PCB goes in nose first and drops flat into its pocket.
+- The PCB goes in nose first, with the switch cover on S1's lever, and drops
+  flat into its pocket.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
   (0.2 mm a side) and holds the cap before the screws go in.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
@@ -108,9 +109,11 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   1.5 mm at USB-C). The USB-C opening is 9.2 × 3.6 mm, in a 13 × 7 × 1 mm
   recess for the plug's overmould.
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
-  plain post 1.2 mm above its plunger, as before.
+  plain post 1.2 mm above its plunger, as before. A floor under the bar stops
+  it 2 mm down.
 - The screen window (23.4 × 12.4 mm) sits on the lit area, and the distance
-  sensor's lenses on the centreline.
+  sensor's lenses on the centreline. The sensor's three snaps click under its
+  board and hold it against its collar.
 - The tape holds the battery on its shelf, against the stop.
 - Suction-cup cap: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto

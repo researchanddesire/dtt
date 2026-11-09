@@ -134,7 +134,6 @@ PARAMS = {
     "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
     "grip_proud": 0.4,
     "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
-    "act_lead": 0.6,  # the actuator pocket is open underneath, so S1's lever drops into it, with this lead-in
     # Connector openings. The jack's hole is a plain round hole in the housing:
     # the PCB goes in jack end first, tilted, nose into the hole. At USB-C a
     # plug-sized opening in a recess for the plug's overmould.
@@ -156,6 +155,9 @@ PARAMS = {
     "button_bar": (18.69, 4.0),  # root x and width, on the pad's centreline
     "button_slot_w": 0.7,
     "button_post": (4.0, 1.0),  # diameter and bottom z: 1.2 over S2's plunger (top at -0.2), as the original post
+    # Under the button, a U of walls round the slot holds a floor that stops
+    # the bar 2 mm down, 1.6 mm clear of the OLED board's end.
+    "button_tray": (32.7, 0.8, 9.57, 10.57),  # fences' end x, wall thickness, floor bottom and top z
     # The R+D logo is tucked into the top left corner of the flat top, 1 mm in
     # from its edge: scale, then where the top left corner of its bounding box
     # goes (from 2.44, 90.29).
@@ -189,6 +191,16 @@ PARAMS = {
     "sensor_collar": 1.2,  # wall round the window
     "sensor_screws": ((11.0, 16.92), (34.4, 10.32)),  # before the shift; their ends stand 2.5 above the sensor's PCB
     "sensor_boss": (4.6, 2.2, 3.0),  # boss diameter, clearance hole diameter and depth
+    # Flexure snaps that hook under the sensor's PCB, as in the original
+    # housing: one at each end, moved with the sensor, and one on its edge
+    # toward the jack, left where it was so it clears the jack. Each: the way
+    # its hook points, the beam's inner face (x before the shift, or y), the
+    # middle of its width, its thickness and width, and whether its root
+    # flares out 1.5 into the plate as in the original (not by the screw
+    # boss, where a flare would leave a crevice).
+    "sensor_snaps": (("+x", 8.6, 12.942, 2.0, 4.0, False),
+                     ("-x", 36.9, 13.924, 1.6, 2.398, False),
+                     ("+y", 7.617, 27.6, 2.0, 4.0, True)),
     # Battery, at its original height: double-sided foam tape on its top
     # sticks it to a shelf under the plate, and a stop stands in front of its
     # USB-C end. Both run out into the end wall.
@@ -713,6 +725,55 @@ def button_post():
     return zcyl(px, py, d, z0, P["plate_z"] + 0.5)
 
 
+def button_stop():
+    """Under the button's bar, a U of walls just outside its slot (a fence
+    along each side and an end wall behind its root) holds a floor that stops
+    the bar 2 mm down."""
+    _, py, _ = P["button_pad"]
+    xr, bw = P["button_bar"]
+    x1, t, f0, f1 = P["button_tray"]
+    w, g = P["button_slot_w"], 0.05
+    xe = xr - w / 2 - g - t
+    yb, yt = py - bw / 2 - w - g, py + bw / 2 + w + g
+    z1 = P["plate_z"] + 0.5
+    walls = [box(xe, yb - t, f1 - 0.05, x1, yb, z1), box(xe, yt, f1 - 0.05, x1, yt + t, z1),
+             box(xe, yb - t, f1 - 0.05, xe + t, yt + t, z1)]
+    return box(xe, yb - t, f0, x1 + 0.15, yt + t, f1).fuse(walls).removeSplitter()
+
+
+def sensor_snaps():
+    """Flexure snaps hanging from the plate that hook under the sensor's PCB,
+    as in the original housing. Each beam ends in a hook reaching 1.0 in from
+    its inner face: a 45 degree catch 0.1 to 0.3 under the PCB, a flat 0.2, a
+    tip, and a 45 degree lead-in, so it prints without support and the PCB
+    pushes it aside on the way in."""
+    zp = P["sensor_case"][4] - 1.5  # the PCB's underside
+    z1, zf = P["plate_z"] + 0.5, P["plate_z"]
+    s = P["sensor_shift"]
+    snaps = []
+    for d, f, m, t, w, flare in P["sensor_snaps"]:
+        # the hook's profile across the beam: u from the inner face toward the PCB
+        prof = [(-t, z1), (-t, zp - 2.8), (0.2, zp - 2.8), (1.0, zp - 2.0), (1.0, zp - 0.3),
+                (0.8, zp - 0.3), (0.0, zp + 0.5), (0.0, z1)]
+        sec = Part.Face(Part.makePolygon([V(u, -w / 2, z) for u, z in prof + prof[:1]]))
+        snap = sec.extrude(V(0, w, 0))
+        if flare:
+            r = [(-w / 2, zf - 1.5), (w / 2, zf - 1.5), (w / 2 + 1.5, zf), (w / 2 + 1.5, z1),
+                 (-w / 2 - 1.5, z1), (-w / 2 - 1.5, zf)]
+            root = Part.Face(Part.makePolygon([V(-t, v, z) for v, z in r + r[:1]]))
+            snap = snap.fuse(root.extrude(V(t, 0, 0)))
+        if d == "+x":
+            snap.translate(V(f + s, m, 0))
+        elif d == "-x":
+            snap.rotate(V(0, 0, 0), V(0, 0, 1), 180)
+            snap.translate(V(f + s, m, 0))
+        else:
+            snap.rotate(V(0, 0, 0), V(0, 0, 1), 90)
+            snap.translate(V(m, f, 0))
+        snaps.append(snap)
+    return snaps[0].fuse(snaps[1:]).removeSplitter()
+
+
 def viewport():
     """The screen's viewport over its active area, with a 45 degree edge round
     it at the top face."""
@@ -757,8 +818,10 @@ def build_housing(board, diffuser):
     kept = [("Screw bosses", screw_bosses()),
             ("Screen clips", screen_clips()),
             ("Sensor collar", sensor_collar()),
+            ("Sensor snaps", sensor_snaps()),
             ("Battery shelf and stop", battery_shelf()),
-            ("Button post", button_post())]
+            ("Button post", button_post()),
+            ("Button travel stop", button_stop())]
     holes = [("Screw pilot holes", screw_pilots()),
              ("Sensor window and screw ends", sensor_cuts()),
              ("Diffuser", [diffuser]),
@@ -815,16 +878,12 @@ def build_slider():
     # Finger ridges across the grip face.
     for dy in (-1.5, 0.0, 1.5):
         s = s.cut(box(xo - 0.35, ya + dy - 0.3, g["wz0"] - 1, xo + 1, ya + dy + 0.3, g["wz1"] + 1))
-    # Pocket for the actuator, open underneath with a lead-in, so the cover
-    # sits in its channel first and S1's lever drops into it with the PCB.
+    # Pocket for S1's lever, closed all round: the cover goes onto the lever
+    # before the PCB goes in, and goes into its channel with the PCB.
     z0, z1 = P["act_z"]
     w = P["act_w"] + 0.4
-    f, xa, xb = P["act_lead"], g["xi"] - 1, P["act_tip_x"] + 0.4
-    s = s.cut(box(xa, ya - w / 2, g["fz0"] - 1, xb, ya + w / 2, z1 + 0.25))
-    zb = g["fz0"]
-    lead = [V(xa, ya - w / 2 - f - 0.5, zb - 0.5), V(xa, ya + w / 2 + f + 0.5, zb - 0.5),
-            V(xa, ya + w / 2, zb + f), V(xa, ya - w / 2, zb + f)]
-    s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(xb - xa, 0, 0)))
+    xa, xb = g["xi"] - 1, P["act_tip_x"] + 0.4
+    s = s.cut(box(xa, ya - w / 2, z0 - 0.25, xb, ya + w / 2, z1 + 0.25))
     return s.removeSplitter()
 
 

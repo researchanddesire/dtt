@@ -315,7 +315,7 @@ def sections(doc):
             ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
             ("USB-C opening and plug recess", X, B.P["usb_center"][0], (84, 96), (-9, 4)),
             ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4)),
-            ("Sensor in its collar, screw end", Y, B.P["sensor_screws"][0][1], (4, 38), (-6, 15)),
+            ("Sensor in its collar, snaps under its ends", Y, 13.5, (3, 39), (-6, 15)),
             ("Battery taped under its shelf", X, 18.2, (50, 96), (-6, 15))]
     fig, axs = plt.subplots(2, 5, figsize=(22, 8.8))
     for ax, (title, n, off, xlim, ylim) in zip(axs.flat, cuts):
