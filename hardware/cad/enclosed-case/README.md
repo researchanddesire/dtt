@@ -42,6 +42,15 @@ the PCB, with a roof over each, and the case no longer fits the snap backplate.
 | Suction-cup rear cover (instead) | `parts/Rear-Cover-Cups-Black.stl` | black | outer face down |
 | Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flange face down |
 
+Or open [`print/DTT-Enclosed-Print.3mf`](print/DTT-Enclosed-Print.3mf) in Bambu
+Studio: plate 1 is the case with both rear covers (delete the one you don't
+need), plate 2 the snap backplate and wall bracket, already turned to their
+print faces. Blue is filament 1, the white diffuser 2 and black 3; it takes
+your current printer and process presets. `print/make_3mf.py` rebuilds it from
+the STLs.
+
+<img src="print/Plates.png" width="640">
+
 ## Hardware
 
 | Qty | Part |
