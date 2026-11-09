@@ -1114,9 +1114,9 @@ MODULE_PARTS = ['Part__Feature001', 'RearCover', 'SwitchCover', 'Diffuser', 'Log
 def plug_proxies():
     """(3.5 mm plug, USB-C plug): a 9 mm plug body out of the jack end, and a USB-C overmold the size
     of the case's USB-C recess, the largest that seats, out of the USB-C end."""
-    jx, jz = ENC.P['jack_axis']; ux, uz = ENC.P['usb_center']; w, h, d = ENC.P['usb_recess']
+    jx, jz = ENC.P['jack_axis']; ux, uz = ENC.P['usb_center']; w, h, d, r = ENC.P['usb_recess']
     jack = Part.makeCylinder(4.5, 60.0, V(jx, P['DeviceBottomY'], jz), V(0, -1, 0))
-    usb = ENC.stadium_y(ux, uz, w - 0.2, h - 0.2, (h - 0.2) / 2 - 1e-3, P['DeviceTopY'] - d + 0.1, P['DeviceTopY'] + 60)
+    usb = ENC.stadium_y(ux, uz, w - 0.2, h - 0.2, r - 0.1, P['DeviceTopY'] - d + 0.1, P['DeviceTopY'] + 60)
     return jack, usb
 
 
