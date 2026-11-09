@@ -54,17 +54,18 @@ the STLs.
 | Qty | Part |
 | --- | --- |
 | 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" Torx flat head) |
-| 1 | Double-sided foam tape, about 20 × 30 × 0.8 mm, for the battery |
+| 1 | Double-sided foam tape, about 20 × 20 × 0.8 mm, for the battery |
 | - | Hot glue, for the sensor |
 
 ## Assemble
 
 1. With the housing upside down, push the OLED module in, glass first and
    header toward the jack, until both clips click over its board. No glue.
-2. Press the distance sensor into its mount, connector toward the screen,
-   pushing on its two silver screws until it sits flush. Hot-glue it.
-3. Stick the foam tape on the battery and press it into its bay, leads toward
-   the screen, its other end against the stop.
+2. Press the distance sensor into its collar, connector toward the screen,
+   until it sits flush with its two silver screws' ends in their holes.
+   Hot-glue it.
+3. Stick the foam tape on the battery and press it onto its shelf, leads
+   toward the screen, its other end against the stop.
 4. Drop the switch cover into its channel from inside, grip outwards.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
@@ -79,10 +80,13 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
 - `build_enclosed_case.py` builds the parts from `../DTT.FCStd`. Dimensions are
   in `PARAMS`. `top_round` is the round along the top edge. It turns into a
   45° face for its last 1.5 mm (`round_stop`), so it prints top face down
-  without support. Under it the walls are filled out to 1.6 mm from inside. Set `outline` to `"conformal"`
+  without support. The inside stays 1.2 mm in from it (`round_wall`). Set `outline` to `"conformal"`
   for walls that follow the PCB's three widths (50 / 48 / 44 mm); its step
   corners keep a 1.2 mm fillet. Set `lean` to `(3.0, 2.5)` for sides that
   curve in 3 mm toward the top. The snap backplate only fits the upright taper.
+- The housing is built from nothing but its outer shape and the parts that go
+  in it, as a short list of features in order (`build_housing`). The hidden
+  "Housing features" group in `DTT-Enclosed.FCStd` shows each one.
 - `make_assembly.FCMacro` writes `DTT-Enclosed.FCStd`, `DTT-Enclosed.step`,
   `parts/` and `images/`: `xvfb-run -a freecad make_assembly.FCMacro`.
 - The PCB is unchanged; the screws use its existing 3.6 mm holes.
@@ -99,14 +103,14 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   (0.2 mm a side) and holds the cap before the screws go in.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses.
-- USB-C and 3.5 mm plugs seat fully through the 1.6 mm thicker end walls. The
-  USB-C opening is 9.2 × 3.6 mm, in a 13 × 7 × 1 mm recess for the plug's
-  overmould.
+- USB-C and 3.5 mm plugs seat fully through the end walls (1.3 mm at the jack,
+  1.5 mm at USB-C). The USB-C opening is 9.2 × 3.6 mm, in a 13 × 7 × 1 mm
+  recess for the plug's overmould.
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
   plain post 1.2 mm above its plunger, as before.
 - The screen window (23.4 × 12.4 mm) sits on the lit area, and the distance
   sensor's lenses on the centreline.
-- The battery sits snug between the posts and the tape holds it.
+- The tape holds the battery on its shelf, against the stop.
 - Suction-cup cap: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
   2 mm walls (`cup_roof`); check it doesn't sag onto the heads.

@@ -66,18 +66,28 @@ def remove(doc, name):
 
 
 def move_parts(doc):
-    """The distance sensor moves with its mount, and the cell sits taped up
-    against the cross bars over the battery bay; their exploded copies move too."""
-    t, zb = B.P["battery_tape"]
-    dz = zb - t - doc.getObject("BatteryPouch").Shape.BoundBox.ZMax
-    moves = [(n, V(B.P["sensor_shift"], 0, 0)) for n in ("SensorPCB", "SensorOpticalCase", "SensorLenses",
-                                                          "SensorConnector", "SensorScrew1", "SensorScrew2")]
-    moves += [(n, V(0, 0, dz)) for n in ("BatteryPouch", "BatteryTape")]
-    for n, d in moves:
+    """The distance sensor moves to the centreline with its window; its
+    exploded copies move too."""
+    d = V(B.P["sensor_shift"], 0, 0)
+    for n in ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector", "SensorScrew1", "SensorScrew2"):
         for name in (n, "Exploded_" + n):
             o = doc.getObject(name)
             if o is not None:
                 o.Placement = App.Placement(d, App.Rotation()).multiply(o.Placement)
+
+
+def feature_tree(doc, features):
+    """The housing's features in build order, in a hidden group, so each can
+    be shown on its own: what it adds (blue) or removes (red)."""
+    grp = doc.addObject("App::DocumentObjectGroup", "HousingFeatures")
+    grp.Label = "Housing features - build order"
+    sign = {"base": "", "add": " (+)", "cut": " (-)"}
+    colour = {"base": BLACK, "add": BLUE, "cut": (0.86, 0.27, 0.22)}
+    for i, (name, op, shape) in enumerate(features, 1):
+        o = feature(doc, "HousingFeature%02d" % i, "%02d %s%s" % (i, name, sign[op]), shape, colour[op], grp)
+        if op == "cut":
+            o.ViewObject.Transparency = 40
+        o.Visibility = False
 
 
 def assemble():
@@ -137,6 +147,7 @@ def assemble():
     for o in screws:
         exploded(doc, o, V(0, 0, EXPLODE["screws"]))
 
+    feature_tree(doc, g["features"])
     doc.getObject("Cover___V3_v5").Label = "Housing - black shell, white diffuser, blue switch cover"
     fasteners.Label = "Fasteners - 4 PCB screws, 2 sensor screws"
     for n in ("Cover___V3_v5", "Part", "LoopBacking", "Fasteners"):
@@ -290,7 +301,9 @@ def sections(doc):
              ("PCB_S2", "#b5b5b5", None), ("Part__Feature006", "#b5b5b5", None), ("PCB_J5", "#b5b5b5", None),
              ("Part__Feature003", "#b5b5b5", None), ("PCBMountScrew1", "#c9a227", "Screw"),
              ("PCBMountScrew2", "#c9a227", None), ("OLEDPCB", "#3f9d6a", "OLED board"),
-             ("Part__Feature005", "#33415e", "OLED glass"), ("BatteryPouch", "#c8b88a", "Battery")]
+             ("Part__Feature005", "#33415e", "OLED glass"), ("BatteryPouch", "#c8b88a", "Battery"),
+             ("SensorPCB", "#7a5bb5", "Sensor"), ("SensorOpticalCase", "#7a5bb5", None),
+             ("SensorScrew1", "#c9a227", None), ("SensorScrew2", "#c9a227", None)]
     bx0, by0, bx1, by1, _ = B.P["oled_board"]
     py = B.P["button_pad"][1]
     X, Y = V(1, 0, 0), V(0, 1, 0)
@@ -301,8 +314,10 @@ def sections(doc):
             ("Button post straight over S2", Y, py, (27, 46), (-9, 15)),
             ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
             ("USB-C opening and plug recess", X, B.P["usb_center"][0], (84, 96), (-9, 4)),
-            ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4))]
-    fig, axs = plt.subplots(2, 4, figsize=(18, 8.8))
+            ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4)),
+            ("Sensor in its collar, screw end", Y, B.P["sensor_screws"][0][1], (4, 38), (-6, 15)),
+            ("Battery taped under its shelf", X, 18.2, (50, 96), (-6, 15))]
+    fig, axs = plt.subplots(2, 5, figsize=(22, 8.8))
     for ax, (title, n, off, xlim, ylim) in zip(axs.flat, cuts):
         for name, col, _ in parts:
             try:
@@ -321,7 +336,7 @@ def sections(doc):
         for sp in ax.spines.values():
             sp.set_visible(False)
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, c, lab in parts if lab]
-    fig.legend(handles, [lab for _, _, lab in parts if lab], loc="lower center", ncol=9, frameon=False, fontsize=9)
+    fig.legend(handles, [lab for _, _, lab in parts if lab], loc="lower center", ncol=10, frameon=False, fontsize=9)
     plt.tight_layout(rect=(0, 0.05, 1, 1))
     plt.savefig(os.path.join(IMAGES, "Enclosed-Sections.png"), dpi=110)
 
