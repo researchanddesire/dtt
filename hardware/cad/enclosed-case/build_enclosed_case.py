@@ -73,7 +73,13 @@ PARAMS = {
     "round_wall": 1.2,  # the inside stays this far in from the outer faces, so the top round keeps a wall
     "plate_z": 12.57,  # top plate underside
     # A boss round each PCB screw, run out sideways into the nearest side wall.
-    "boss": (6.5, 2.52, 6.5, 3.35, 0.5),  # diameter, pilot diameter, pilot end z (the screws end at 4.6), lead-in diameter and depth
+    "boss": (6.5, 6.5),  # diameter, pilot hole end z (the screws end at 4.6)
+    # Pilot holes as in the original bosses: 2.65 with four ribs reaching in
+    # to 2.30 for the screw's thread to form in, plain below the ribs, with a
+    # cone lead-in.
+    "pilot": (2.65, 2.30, -0.33),  # hole, across the ribs, z where the ribs start
+    "pilot_rib": (0.30, 0.35),  # rib width between the centres of its round sides, their radius
+    "pilot_lead": (3.85, -3.33, -1.33),  # cone diameter at that z, z where it meets the hole
     # Rear cover (a flat cap under the PCB).
     "cover_thickness": 3.0,  # floor under the PCB
     "cover_pocket_inset": 0.9,  # pocket edge inside the PCB outline
@@ -612,11 +618,50 @@ def screw_bosses():
     return parts[0].fuse(parts[1:]).removeSplitter()
 
 
+def pilot_section(x, y, z):
+    """A pilot hole's section where it has ribs, as in the original bosses:
+    each of the four ribs is an arc round the axis between two round sides,
+    which meet it tangentially."""
+    d, dr, _ = P["pilot"]
+    w, rs = P["pilot_rib"]
+    R, r = d / 2, dr / 2
+    rc = r + rs  # the round sides' centres
+    ac = math.atan2(w / 2, math.sqrt(rc * rc - w * w / 4))  # their angle off the rib's middle
+    ae = ac + math.acos((R * R + rc * rc - rs * rs) / (2 * R * rc))  # where they meet the hole
+
+    def pt(rad, a):
+        return V(x + rad * math.cos(a), y + rad * math.sin(a), z)
+
+    def side(k, sgn):
+        a = k * math.pi / 2 + sgn * ac
+        c, t, e = pt(rc, a), pt(r, a), pt(R, k * math.pi / 2 + sgn * ae)
+        at, ae_ = math.atan2(t.y - c.y, t.x - c.x), math.atan2(e.y - c.y, e.x - c.x)
+        am = at + math.remainder(ae_ - at, 2 * math.pi) / 2
+        return t, V(c.x + rs * math.cos(am), c.y + rs * math.sin(am), z), e
+
+    edges = []
+    for k in range(4):
+        tm, mm, em = side(k, -1)
+        tp, mp, ep = side(k, 1)
+        en = side(k + 1, -1)
+        a = k * math.pi / 2
+        edges += [Part.Arc(tm, pt(r, a), tp).toShape(), Part.Arc(tp, mp, ep).toShape(),
+                  Part.Arc(ep, pt(R, a + math.pi / 4), en[2]).toShape(), Part.Arc(en[2], en[1], en[0]).toShape()]
+    return Part.Face(Part.Wire(edges))
+
+
 def screw_pilots():
-    """Pilot holes up the bosses for the self-tapping screws, with a lead-in."""
-    _, dp, zp, dl, hl = P["boss"]
-    z0 = P["pcb_top_z"]
-    return [s for x, y in P["screw_axes"] for s in (zcyl(x, y, dp, z0 - 1, zp), zcyl(x, y, dl, z0 - 1, z0 + hl))]
+    """Pilot holes up the bosses for the self-tapping screws, as in the
+    original bosses: ribbed, plain below the ribs, and a cone lead-in."""
+    d, _, zr = P["pilot"]
+    dl, zl, zh = P["pilot_lead"]
+    z0, ze = P["pcb_top_z"] - 1, P["boss"][1]
+    rl = d / 2 + (dl - d) / 2 * (zh - z0) / (zh - zl)  # the cone carried on down to z0
+    out = []
+    for x, y in P["screw_axes"]:
+        out += [pilot_section(x, y, zr).extrude(V(0, 0, ze - zr)), zcyl(x, y, d, z0, zr),
+                Part.makeCone(rl, d / 2, zh - z0, V(x, y, z0))]
+    return out
 
 
 def sensor_window():

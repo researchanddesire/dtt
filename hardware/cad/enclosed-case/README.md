@@ -102,7 +102,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
   (0.2 mm a side) and holds the cap before the screws go in.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
-  reach 8 mm into the bosses.
+  reach 8 mm into the bosses, whose pilot holes have the original's four ribs
+  (2.65 mm, 2.30 across the ribs).
 - USB-C and 3.5 mm plugs seat fully through the end walls (1.3 mm at the jack,
   1.5 mm at USB-C). The USB-C opening is 9.2 × 3.6 mm, in a 13 × 7 × 1 mm
   recess for the plug's overmould.
