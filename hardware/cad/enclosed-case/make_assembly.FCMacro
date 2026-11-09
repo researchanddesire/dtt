@@ -65,27 +65,12 @@ def remove(doc, name):
             doc.removeObject(n)
 
 
-def move_parts(doc):
-    """The distance sensor moves with its mount, and the cell sits up against
-    the cross bars over the battery bay; their exploded copies move too."""
-    dz = B.P["battery"][5] - doc.getObject("BatteryPouch").Shape.BoundBox.ZMax
-    moves = [(n, V(B.P["sensor_shift"], 0, 0)) for n in ("SensorPCB", "SensorOpticalCase", "SensorLenses",
-                                                          "SensorConnector", "SensorScrew1", "SensorScrew2")]
-    moves += [(n, V(0, 0, dz)) for n in ("BatteryPouch", "BatteryTape")]
-    for n, d in moves:
-        for name in (n, "Exploded_" + n):
-            o = doc.getObject(name)
-            if o is not None:
-                o.Placement = App.Placement(d, App.Rotation()).multiply(o.Placement)
-
-
 def assemble():
     doc = App.openDocument(B.SOURCE)
     g = B.build_all(doc)
     for k in ("housing", "slider", "cover"):
         s = g[k]
         print(k, s.isValid(), len(s.Solids), round(s.Volume, 1))
-    move_parts(doc)
 
     # The logo body is bound to the housing and would re-pad against the new
     # shape, so replace it with the moved inlay as a plain part.
@@ -258,18 +243,6 @@ def render(doc):
         show_only(doc, [name])
         camera(view, d)
         view.saveImage(os.path.join(IMAGES, "Part-" + name + ".png"), 1200, 1000, "White")
-    # Inside the housing, bare, then with the screen, sensor, battery and
-    # switch cover in, before the PCB.
-    inside = (-0.45, 0.7, 1.0)
-    show_only(doc, ["Part__Feature001", "Diffuser"])
-    camera(view, inside)
-    view.saveImage(os.path.join(IMAGES, "Part-Housing-Inside.png"), 1200, 1300, "White")
-    fitted = ["OLEDPCB", "Part__Feature005", "OLEDHeader", "OLEDHeaderPins", "OLEDFlex", "OLEDRearICs",
-              "OLEDTraces", "OLEDHolePlating", "BatteryPouch", "BatteryTape", "SensorPCB", "SensorOpticalCase",
-              "SensorLenses", "SensorConnector", "SensorScrew1", "SensorScrew2", "SwitchCover"]
-    show_only(doc, ["Part__Feature001", "Diffuser"] + fitted)
-    camera(view, inside)
-    view.saveImage(os.path.join(IMAGES, "Enclosed-Inside.png"), 1200, 1300, "White")
     # Suction-cup rear cover from the wall side, then on the case with its cups
     # clicked in, then with the cups pulled back off their entries.
     doc.getObject("SuctionCupBack").Visibility = True
@@ -295,26 +268,17 @@ def sections(doc):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    parts = [("Part__Feature001", "#2a2a2c", "Housing"), ("ButtonInlay", "#176bee", None),
-             ("RearCover", "#6b6b72", "Rear cover"), ("SwitchCover", "#176bee", "Switch cover, button"),
-             ("BoardRev4", "#1f6b3a", "PCB"), ("Part__Feature002", "#b5b5b5", "Switches, connectors"),
-             ("PCB_S2", "#b5b5b5", None), ("Part__Feature006", "#b5b5b5", None), ("PCB_J5", "#b5b5b5", None),
-             ("Part__Feature003", "#b5b5b5", None), ("PCBMountScrew1", "#c9a227", "Screw"),
+    parts = [("Part__Feature001", "#2a2a2c", "Housing"), ("RearCover", "#6b6b72", "Rear cover"),
+             ("SwitchCover", "#176bee", "Switch cover"), ("BoardRev4", "#1f6b3a", "PCB"),
+             ("Part__Feature002", "#b5b5b5", "S1 switch"), ("PCBMountScrew1", "#c9a227", "Screw"),
              ("PCBMountScrew2", "#c9a227", None), ("OLEDPCB", "#3f9d6a", "OLED board"),
-             ("Part__Feature005", "#33415e", "OLED glass"), ("BatteryPouch", "#c8b88a", "Battery")]
+             ("Part__Feature005", "#33415e", "OLED glass")]
     bx0, by0, bx1, by1, _ = B.P["oled_board"]
-    py = B.P["button_pad"][1]
-    X, Y = V(1, 0, 0), V(0, 1, 0)
-    cuts = [("S1's lever in the switch cover", Y, B.P["act_y"], (34, 48), (-9, 4)),
-            ("Switch cover in its grooves", Y, B.P["act_y"] + 2.0, (34, 48), (-9, 4)),
-            ("PCB in its pocket, screw, battery clip", Y, 76.0, (-5, 14), (-9, 10)),
-            ("Screen clip: strip, slot, wall behind", Y, (by0 + by1) / 2, (-4.5, 10.5), (6.1, 14.6)),
-            ("Button post straight over S2", Y, py, (27, 46), (-9, 15)),
-            ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
-            ("USB-C opening and plug recess", X, B.P["usb_center"][0], (84, 96), (-9, 4)),
-            ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4))]
-    fig, axs = plt.subplots(2, 4, figsize=(18, 8.8))
-    for ax, (title, n, off, xlim, ylim) in zip(axs.flat, cuts):
+    cuts = [("Switch cover slides S1", V(0, 1, 0), B.P["act_y"], (34, 48), (-9, 4)),
+            ("Screw, flush in the rear cover", V(0, 1, 0), 76.0, (-4, 10), (-9, 7)),
+            ("Screen clip snaps under the OLED board", V(0, 1, 0), (by0 + by1) / 2, (3.5, 11.5), (7.6, 14.6))]
+    fig, axs = plt.subplots(1, 3, figsize=(14, 4.2))
+    for ax, (title, n, off, xlim, ylim) in zip(axs, cuts):
         for name, col, _ in parts:
             try:
                 wires = doc.getObject(name).Shape.slice(n, off)
@@ -322,7 +286,7 @@ def sections(doc):
                 continue
             for w in wires:
                 pts = w.discretize(Deflection=0.01)
-                ax.fill([p.y if n == X else p.x for p in pts], [p.z for p in pts], color=col, lw=0.4, ec="white")
+                ax.fill([p.x for p in pts], [p.z for p in pts], color=col, lw=0.4, ec="white")
         ax.set_aspect("equal")
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
@@ -332,8 +296,8 @@ def sections(doc):
         for sp in ax.spines.values():
             sp.set_visible(False)
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, c, lab in parts if lab]
-    fig.legend(handles, [lab for _, _, lab in parts if lab], loc="lower center", ncol=9, frameon=False, fontsize=9)
-    plt.tight_layout(rect=(0, 0.05, 1, 1))
+    fig.legend(handles, [lab for _, _, lab in parts if lab], loc="lower center", ncol=8, frameon=False, fontsize=9)
+    plt.tight_layout(rect=(0, 0.08, 1, 1))
     plt.savefig(os.path.join(IMAGES, "Enclosed-Sections.png"), dpi=110)
 
 
