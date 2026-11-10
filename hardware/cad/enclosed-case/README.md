@@ -105,7 +105,9 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   onto the lever, or up to 0.3 mm short of that.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
   (0.2 mm a side) and holds the cap before the screws go in. The cap closes
-  over the switch cover's flange wherever it sits in that play.
+  over the switch cover's flange wherever it sits in that play, and a 45°
+  lead-in on the flange's lower inner edge lets it push a leaning cover
+  square.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
@@ -114,8 +116,8 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   corners at 45°, takes the plug's overmould right back to the PCB's edge,
   0.2 mm from the receptacle's face, as the original housing's end face did.
   Above the PCB a wall closes the recess, with a notch round the receptacle
-  (0.4 mm beside it, 0.3 above). Boxy overmoulds over about 10 × 6 mm stop on
-  the recess's rim.
+  (0.4 mm beside it, 0.3 above). Boxy overmoulds over about 10.5 × 6 mm, or
+  9.5 × 6.5 mm, stop on the recess's rim.
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
   plain post 1.2 mm above its plunger, as before. A floor under the bar stops
   it 2 mm down.

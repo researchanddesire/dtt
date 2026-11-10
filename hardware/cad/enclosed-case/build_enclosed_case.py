@@ -139,6 +139,9 @@ PARAMS = {
     # PCB to one side of its pocket, the cover is off its groove; the slopes
     # bring it in as the PCB goes in. The flange's top end edges are cut back
     # too: tilted in, the PCB carries them up to 0.4 past the channel's ends.
+    # So is its bottom inner edge: a flange cammed out at its top leans in at
+    # its bottom, up to 0.55, and the rib beside the cap's groove pushes it
+    # square as the cap closes.
     "flange_lead": 0.6,
     "channel_lead": 0.4,  # more thins the wall at the channel's USB end
     # The cap's groove is wider on each face and longer at each end than the
@@ -169,8 +172,8 @@ PARAMS = {
     "usb_surround": (8.0, 1.0, 0.3),  # half-width, thickness back from the PCB's edge, clearance above the PCB
     # A pill round the port: 0.25 above and below the largest overmould USB
     # allows (12.35 x 6.5) and 0.5 beside it, as the PCB's play in its pocket
-    # can put the port 0.4 to one side. Boxy overmoulds over about 10 x 6 stop
-    # on its rim. Its lower edge is in the cap.
+    # can put the port 0.4 to one side. Boxy overmoulds over about 10.5 x 6,
+    # or 9.5 x 6.5, stop on its rim. Its lower edge is in the cap.
     "usb_recess": (13.4, 7.0, 1.62, 3.5),  # width, height, depth (back to the PCB's edge), corner radius
     # The boss beside S1 is cut back from the switch's jack end, as in the
     # original housing, so the PCB seats when it sits toward the jack end of
@@ -1012,12 +1015,14 @@ def build_slider():
     w = P["act_w"] + 0.4
     xa, xb = g["xi"] - 1, P["act_tip_x"] + 0.4
     s = s.cut(box(xa, ya - w / 2, z0 - 0.25, xb, ya + w / 2, z1 + 0.25))
-    # Lead-ins on the flange's top inner edge and on its top end edges.
+    # Lead-ins on the flange's top and bottom inner edges and on its top end
+    # edges.
     k = P["flange_lead"]
-    xi, zt = g["xi"], g["fz1"]
+    xi, zt, zb = g["xi"], g["fz1"], g["fz0"]
     y0, y1 = ya - g["fl"] / 2, ya + g["fl"] / 2
-    lead = [V(xi - 1, y0 - 1, zt - k - 1), V(xi + k + 1, y0 - 1, zt + 1), V(xi - 1, y0 - 1, zt + 1)]
-    s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(0, y1 - y0 + 2, 0)))
+    for ze, d in ((zt, 1), (zb, -1)):
+        lead = [V(xi - 1, y0 - 1, ze - d * (k + 1)), V(xi + k + 1, y0 - 1, ze + d), V(xi - 1, y0 - 1, ze + d)]
+        s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(0, y1 - y0 + 2, 0)))
     for ye, d in ((y0, 1), (y1, -1)):
         lead = [V(xi - 1, ye - d, zt - k - 1), V(xi - 1, ye + d * (k + 1), zt + 1), V(xi - 1, ye - d, zt + 1)]
         s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(g["xf"] - xi + 2, 0, 0)))
