@@ -67,9 +67,12 @@ def remove(doc, name):
 
 def move_parts(doc):
     """The distance sensor moves to the centreline with its window; its
-    exploded copies move too."""
+    exploded copies move too. The source model's two sensor mounting screws
+    go: the posts' pins take the holes they sat in."""
     d = V(B.P["sensor_shift"], 0, 0)
-    for n in ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector", "SensorScrew1", "SensorScrew2"):
+    for n in ("SensorScrew1", "SensorScrew2"):
+        remove(doc, n)
+    for n in ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector"):
         for name in (n, "Exploded_" + n):
             o = doc.getObject(name)
             if o is not None:
@@ -149,7 +152,7 @@ def assemble():
 
     feature_tree(doc, g["features"])
     doc.getObject("Cover___V3_v5").Label = "Housing - black shell, white diffuser, blue switch cover"
-    fasteners.Label = "Fasteners - 4 PCB screws, 2 sensor screws"
+    fasteners.Label = "Fasteners - 4 PCB screws"
     for n in ("Cover___V3_v5", "Part", "LoopBacking", "Fasteners"):
         doc.getObject(n).Visibility = True
     p = doc.getObject("AssemblyParameters")
@@ -302,8 +305,7 @@ def sections(doc):
              ("Part__Feature003", "#b5b5b5", None), ("PCBMountScrew1", "#c9a227", "Screw"),
              ("PCBMountScrew2", "#c9a227", None), ("OLEDPCB", "#3f9d6a", "OLED board"),
              ("Part__Feature005", "#33415e", "OLED glass"), ("BatteryPouch", "#c8b88a", "Battery"),
-             ("SensorPCB", "#7a5bb5", "Sensor"), ("SensorOpticalCase", "#7a5bb5", None),
-             ("SensorScrew1", "#c9a227", None), ("SensorScrew2", "#c9a227", None)]
+             ("SensorPCB", "#7a5bb5", "Sensor"), ("SensorOpticalCase", "#7a5bb5", None)]
     bx0, by0, bx1, by1, _ = B.P["oled_board"]
     py = B.P["button_pad"][1]
     X, Y = V(1, 0, 0), V(0, 1, 0)
@@ -315,9 +317,12 @@ def sections(doc):
             ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
             ("USB-C opening and plug recess", X, B.P["usb_center"][0], (84, 96), (-9, 4)),
             ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4)),
-            ("Sensor in its collar, snaps under its ends", Y, 13.5, (3, 39), (-6, 15)),
+            ("Sensor in its window, snaps under its ends", Y, 13.5, (3, 39), (-6, 15)),
+            ("Sensor's ear on its post, pin in its hole", Y, B.P["sensor_holes"][0][1], (2, 20), (-1, 15)),
             ("Battery taped under its shelf", X, 18.2, (50, 96), (-6, 15))]
-    fig, axs = plt.subplots(2, 5, figsize=(22, 8.8))
+    fig, axs = plt.subplots(3, 4, figsize=(17.6, 13.2))
+    for ax in axs.flat[len(cuts):]:
+        ax.axis("off")
     for ax, (title, n, off, xlim, ylim) in zip(axs.flat, cuts):
         for name, col, _ in parts:
             try:
@@ -337,7 +342,7 @@ def sections(doc):
             sp.set_visible(False)
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, c, lab in parts if lab]
     fig.legend(handles, [lab for _, _, lab in parts if lab], loc="lower center", ncol=10, frameon=False, fontsize=9)
-    plt.tight_layout(rect=(0, 0.05, 1, 1))
+    plt.tight_layout(rect=(0, 0.04, 1, 1))
     plt.savefig(os.path.join(IMAGES, "Enclosed-Sections.png"), dpi=110)
 
 

@@ -60,9 +60,9 @@ the STLs.
 
 1. With the housing upside down, push the OLED module in, glass first and
    header toward the jack, until both clips click over its board. No glue.
-2. Press the distance sensor into its collar, connector toward the screen,
-   with its two silver screws' ends in their slots, until its board sits on
-   the collar and its three snaps click under it. No glue.
+2. Press the distance sensor into its window, connector toward the screen,
+   until its two mounting ears sit on their posts, a pin in each ear's hole,
+   and its three snaps click under its board. No glue.
 3. Stick the foam tape on the battery and press it onto its shelf, leads
    toward the screen, its other end against the stop.
 4. Push the switch cover onto S1's lever on the PCB, grip outwards, its wider
@@ -114,9 +114,9 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   plain post 1.2 mm above its plunger, as before. A floor under the bar stops
   it 2 mm down.
 - The screen window (23.4 × 12.4 mm) sits on the lit area, and the distance
-  sensor's lenses on the centreline. The sensor goes all the way in, its
-  board on the collar, and its three snaps click under the board. The window
-  grips its case only in its top 4 mm, as in the original.
+  sensor's lenses on the centreline. The sensor seats as in the original
+  housing: its case in the window, its two mounting ears on pinned posts, and
+  its three snaps clicked under its board, lenses flush with the top face.
 - The tape holds the battery on its shelf, against the stop.
 - Suction-cup cap: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto

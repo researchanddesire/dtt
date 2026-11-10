@@ -187,30 +187,31 @@ PARAMS = {
     "clip_post": 2.0,  # end block length; the end tabs reach this far over the board corners
     "clip_lip": (0.7, 8.0, 0.1, 20.0),  # reach from the strip, length, how far it would lift the board at rest, catch face from flat (degrees)
     "clip_backing": 0.95,  # slot behind each strip: it bends 0.5 to let the board in, and the wall behind stops it
-    # Distance sensor, moved left by sensor_shift, which centres its lenses on
-    # the case. Its optical case fits a window through the plate, the same fit
-    # as the original, and a collar round the window from the top of the
-    # sensor's PCB up stops it flush, with a boss for each of its two screws'
-    # ends merged into the collar.
+    # Distance sensor (GP2Y0A51SK0F), moved left by sensor_shift, which centres
+    # its lenses on the case. It seats as in the original housing: its optical
+    # case in a window through the plate and a pad under it, and the two
+    # mounting ears of its case each against a post, with a pin in the ear's
+    # hole.
     "sensor_shift": -1.7,
-    "sensor_case": (13.10, 9.62, 32.30, 17.62, 3.67),  # optical case before the shift: x0, y0, x1, y1; top z of its PCB
+    "sensor_case": (13.10, 9.617, 32.30, 17.617, 3.67),  # optical case before the shift: x0, y0, x1, y1; top z of its PCB
     "sensor_fit": (0.28, 0.1),  # window round the case, a side, in x and y
-    # The window grips the case only from this z up, its top 4 mm, as in the
-    # original; below it the collar clears the case by this much more in y.
-    "sensor_grip": (10.1, 0.3),
-    "sensor_collar": 1.2,  # wall round the window
-    "sensor_screws": ((11.0, 16.92), (34.4, 10.32)),  # before the shift; their ends stand 2.5 above the sensor's PCB
-    "sensor_boss": (4.6, 3.0, 3.3),  # boss diameter; the screw end's slot width and depth (the ends are 2.0 across)
+    "sensor_pad": (2.9, 1.5, 10.07, 0.6),  # pad past the case in x and y, its underside z; the window's 45 degree lead-in
+    "sensor_holes": ((11.0, 16.917, -1, 1), (34.4, 10.317, 1, -1)),  # the ears' holes before the shift; which way is outward in x and y
+    "sensor_post": (3.3, 3.77, 1.8, 0.4, 0.5),  # post diameter, shoulder z (0.1 off the ears); pin diameter, straight length, 45 degree tip
+    # Each post's root flares into the plate on its outward side: a fillet of
+    # this radius from this z, kept to a block reaching this far out from the
+    # post's axis, with this fillet where the block meets the post.
+    "sensor_flare": (7.67, 3.0, 4.0, 1.0),
     # Flexure snaps that hook under the sensor's PCB, as in the original
     # housing: one at each end, moved with the sensor, and one on its edge
     # toward the jack, left where it was so it clears the jack. Each: the way
     # its hook points, the beam's inner face (x before the shift, or y), the
-    # middle of its width, its thickness and width, and whether its root
-    # flares out 1.5 into the plate as in the original (not by the screw
-    # boss, where a flare would leave a crevice).
-    "sensor_snaps": (("+x", 8.6, 12.942, 2.0, 4.0, False),
-                     ("-x", 36.9, 13.924, 1.6, 2.398, False),
-                     ("+y", 7.617, 27.6, 2.0, 4.0, True)),
+    # middle of its width, its thickness and width, and how its root flares
+    # out 1.5 into the plate, as in the original: 0 not at all, 1 on both
+    # sides, 2 on both sides and its back.
+    "sensor_snaps": (("+x", 8.6, 12.942, 2.0, 4.0, 2),
+                     ("-x", 36.9, 13.924, 1.6, 2.398, 0),
+                     ("+y", 7.617, 27.6, 2.0, 4.0, 1)),
     # Battery, at its original height: double-sided foam tape on its top
     # sticks it to a shelf under the plate, and a stop stands in front of its
     # USB-C end. Both run out into the end wall.
@@ -694,35 +695,56 @@ def sensor_window():
     return x0 + s - fx, y0 - fy, x1 + s + fx, y1 + fy
 
 
-def sensor_collar():
-    """A collar round the sensor's window, from the top of the sensor's PCB up
-    into the plate, with a boss merged into it for each of its screws' ends.
-    The window is cut through it afterwards."""
-    x0, y0, x1, y1 = sensor_window()
-    w = P["sensor_collar"]
-    zb, z1 = P["sensor_case"][4], P["plate_z"] + 0.5
-    d = P["sensor_boss"][0]
+def sensor_pad():
+    """A pad under the plate round the sensor's window, as in the original
+    housing, so the window grips the optical case over 3.5 mm above a 45
+    degree lead-in. The window itself is cut afterwards."""
+    x0, y0, x1, y1 = P["sensor_case"][:4]
+    px, py, zp, c = P["sensor_pad"]
     s = P["sensor_shift"]
-    return box(x0 - w, y0 - w, zb, x1 + w, y1 + w, z1).fuse(
-        [zcyl(x + s, y, d, zb, z1) for x, y in P["sensor_screws"]]).removeSplitter()
+    wx0, wy0, wx1, wy1 = sensor_window()
+    lead = Part.makeLoft([rect(wx0 - c - 1, wy0 - c - 1, wx1 + c + 1, wy1 + c + 1, zp - 1).OuterWire,
+                          rect(wx0, wy0, wx1, wy1, zp + c).OuterWire], True, True)
+    return box(x0 + s - px, y0 - py, zp, x1 + s + px, y1 + py, P["plate_z"] + 0.5).cut(lead)
+
+
+def sensor_posts(ystop):
+    """The sensor's seat, as in the original housing: a post from the plate
+    down onto each mounting ear of the sensor's case, ending in a pin that
+    enters the ear's hole. Each post's root flares into the plate on its
+    outward side; a flare stops at ystop, the diffuser's edge."""
+    d, zs, dp, lp, lc = P["sensor_post"]
+    zf, rf, reach, rc = P["sensor_flare"]
+    z1 = P["plate_z"] + 0.5
+    s = P["sensor_shift"]
+    r = d / 2
+    m = rf * (1 - math.sqrt(0.5))
+    far = reach * 1.5 + 1
+    posts = []
+    for x, y, sx, sy in P["sensor_holes"]:
+        x += s
+        post = zcyl(x, y, d, zs, z1).fuse([zcyl(x, y, dp, zs - lp, zs),
+                                           Part.makeCone(dp / 2 - lc, dp / 2, lc, V(x, y, zs - lp - lc))])
+        # the flare: a fillet of radius rf round the post, from zf up
+        pts = [V(x, y, zf), V(x + r, y, zf), V(x + r + rf, y, zf + rf), V(x + far, y, zf + rf), V(x + far, y, z1), V(x, y, z1)]
+        prof = [Part.LineSegment(pts[0], pts[1]), Part.Arc(pts[1], V(x + r + m, y, zf + rf - m), pts[2])]
+        prof += [Part.LineSegment(pts[i], pts[(i + 1) % 6]) for i in range(2, 6)]
+        flare = Part.Face(Part.Wire([e.toShape() for e in prof])).revolve(V(x, y, 0), V(0, 0, 1), 360)
+        # kept to a block on the post's outward side, filleted into the post
+        xa, xb = sorted((x, x + sx * reach))
+        ya, yb = sorted((y - sy * r, y + sy * reach))
+        dy = math.sqrt((r + rc) ** 2 - rc ** 2)
+        cx, cy = x - sx * rc, y + sy * dy
+        web = Part.Face(Part.makePolygon([V(x, y, zf), V(cx, cy, zf), V(x, cy, zf), V(x, y, zf)])).cut(disc(cx, cy, rc, zf))
+        block = box(xa, ya, zf, xb, min(yb, ystop), z1).fuse(web.Faces[0].extrude(V(0, 0, z1 - zf)))
+        posts.append(post.fuse(block.common(flare)))
+    return posts[0].fuse(posts[1:]).removeSplitter()
 
 
 def sensor_cuts():
-    """The sensor's window: it grips the case from sensor_grip's z up, and is
-    roomier below it, down through the collar. For each screw's end, a slot up
-    its boss, open into the window so no thin wall is left between them."""
+    """The sensor's window, through the pad and the plate."""
     x0, y0, x1, y1 = sensor_window()
-    zb = P["sensor_case"][4]
-    _, dh, hh = P["sensor_boss"]
-    s = P["sensor_shift"]
-    zg, cy = P["sensor_grip"]
-    cuts = [box(x0, y0, zg, x1, y1, P["top_z"] + 1), box(x0, y0 - cy, zb - 1, x1, y1 + cy, zg + 0.01)]
-    for x, y in P["sensor_screws"]:
-        x += s
-        xe = x0 + 0.1 if x < (x0 + x1) / 2 else x1 - 0.1
-        ya, yb = max(y - dh / 2, y0 - cy), min(y + dh / 2, y1 + cy)  # within the window, so the collar keeps its wall
-        cuts += [zcyl(x, y, dh, zb - 1, zb + hh), box(min(x, xe), ya, zb - 1, max(x, xe), yb, zb + hh)]
-    return cuts
+    return [box(x0, y0, P["sensor_pad"][2] - 1, x1, y1, P["top_z"] + 1)]
 
 
 def battery_shelf():
@@ -785,11 +807,15 @@ def sensor_snaps():
                 (0.8, zp - 0.3), (0.0, zp + 0.5), (0.0, z1)]
         sec = Part.Face(Part.makePolygon([V(u, -w / 2, z) for u, z in prof + prof[:1]]))
         snap = sec.extrude(V(0, w, 0))
-        if flare:
+        if flare == 1:
             r = [(-w / 2, zf - 1.5), (w / 2, zf - 1.5), (w / 2 + 1.5, zf), (w / 2 + 1.5, z1),
                  (-w / 2 - 1.5, z1), (-w / 2 - 1.5, zf)]
             root = Part.Face(Part.makePolygon([V(-t, v, z) for v, z in r + r[:1]]))
             snap = snap.fuse(root.extrude(V(t, 0, 0)))
+        elif flare == 2:
+            root = Part.makeLoft([rect(-t, -w / 2, 0, w / 2, zf - 1.5).OuterWire,
+                                  rect(-t - 1.5, -w / 2 - 1.5, 0, w / 2 + 1.5, zf).OuterWire], True, True)
+            snap = snap.fuse([root, box(-t - 1.5, -w / 2 - 1.5, zf, 0, w / 2 + 1.5, z1)])
         if d == "+x":
             snap.translate(V(f + s, m, 0))
         elif d == "-x":
@@ -845,14 +871,15 @@ def build_housing(board, diffuser):
     room = inside(pcb, diffuser)
     kept = [("Screw bosses", screw_bosses()),
             ("Screen clips", screen_clips()),
-            ("Sensor collar", sensor_collar()),
+            ("Sensor pad", sensor_pad()),
+            ("Sensor posts", sensor_posts(diffuser.BoundBox.YMin)),
             ("Sensor snaps", sensor_snaps()),
             ("Battery shelf and stop", battery_shelf()),
             ("Button post", button_post()),
             ("Button travel stop", button_stop()),
             ("Switch track", switch_track())]
     holes = [("Screw pilot holes", screw_pilots()),
-             ("Sensor window and screw ends", sensor_cuts()),
+             ("Sensor window", sensor_cuts()),
              ("Diffuser", [diffuser]),
              ("Screen viewport", viewport()),
              ("Button slot", [button_slot()]),
