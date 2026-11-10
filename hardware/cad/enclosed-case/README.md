@@ -65,8 +65,8 @@ the STLs.
    and its three snaps click under its board. No glue.
 3. Stick the foam tape on the battery and press it onto its shelf, leads
    toward the screen, its other end against the stop.
-4. Push the switch cover onto S1's lever on the PCB as far as it goes, grip
-   outwards, its wider side down past the PCB's edge.
+4. With S1's lever at its jack end, push the switch cover onto it as far as
+   it goes, grip outwards, its wider side down past the PCB's edge.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
    pocket. Let go of the switch cover as it goes into its channel.
@@ -100,9 +100,9 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   and its base hides the window at both ends of its travel. Its flange runs
   in a track walled on both faces, in the housing above and the cap below.
 - The PCB goes in nose first, with the switch cover on S1's lever, and drops
-  flat into its pocket. 45° lead-ins on the flange's top inner edge and on
-  the channel's mouth bring the cover into its track when it is pushed fully
-  onto the lever, or up to 0.6 mm short of that.
+  flat into its pocket. 45° lead-ins on the flange's top edges and on the
+  channel's mouth bring the cover into its track when it is pushed fully
+  onto the lever, or up to 0.3 mm short of that.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
   (0.2 mm a side) and holds the cap before the screws go in. The cap closes
   over the switch cover's flange wherever it sits in that play.

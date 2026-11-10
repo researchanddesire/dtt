@@ -137,7 +137,8 @@ PARAMS = {
     # outer edge of the channel's mouth in the housing. Pushed onto S1's lever
     # as far as the PCB's edge, a little short of that or askew, or with the
     # PCB to one side of its pocket, the cover is off its groove; the slopes
-    # bring it in as the PCB goes in.
+    # bring it in as the PCB goes in. The flange's top end edges are cut back
+    # too: tilted in, the PCB carries them up to 0.4 past the channel's ends.
     "flange_lead": 0.6,
     "channel_lead": 0.4,  # more thins the wall at the channel's USB end
     # The cap's groove is wider on each face and longer at each end than the
@@ -1011,11 +1012,15 @@ def build_slider():
     w = P["act_w"] + 0.4
     xa, xb = g["xi"] - 1, P["act_tip_x"] + 0.4
     s = s.cut(box(xa, ya - w / 2, z0 - 0.25, xb, ya + w / 2, z1 + 0.25))
-    # Lead-in on the flange's top inner edge.
+    # Lead-ins on the flange's top inner edge and on its top end edges.
     k = P["flange_lead"]
-    xi, zt, y0 = g["xi"], g["fz1"], ya - g["fl"] / 2 - 1
-    lead = [V(xi - 1, y0, zt - k - 1), V(xi + k + 1, y0, zt + 1), V(xi - 1, y0, zt + 1)]
-    s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(0, g["fl"] + 2, 0)))
+    xi, zt = g["xi"], g["fz1"]
+    y0, y1 = ya - g["fl"] / 2, ya + g["fl"] / 2
+    lead = [V(xi - 1, y0 - 1, zt - k - 1), V(xi + k + 1, y0 - 1, zt + 1), V(xi - 1, y0 - 1, zt + 1)]
+    s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(0, y1 - y0 + 2, 0)))
+    for ye, d in ((y0, 1), (y1, -1)):
+        lead = [V(xi - 1, ye - d, zt - k - 1), V(xi - 1, ye + d * (k + 1), zt + 1), V(xi - 1, ye - d, zt + 1)]
+        s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(g["xf"] - xi + 2, 0, 0)))
     return s.removeSplitter()
 
 
