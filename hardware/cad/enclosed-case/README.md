@@ -100,16 +100,19 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   and its base hides the window at both ends of its travel. Its flange runs
   in a track walled on both faces, in the housing above and the cap below.
 - The PCB goes in nose first, with the switch cover on S1's lever, and drops
-  flat into its pocket.
+  flat into its pocket. A 45° lead-in on the flange's top inner edge brings
+  the cover into its track, however far it was pushed onto the lever.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
   (0.2 mm a side) and holds the cap before the screws go in.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
-- USB-C and 3.5 mm plugs seat fully through the end walls (1.3 mm at the jack,
-  1.5 mm at USB-C). The USB-C opening is 9.2 × 3.6 mm, in a 13 × 7 × 1 mm
-  pill-shaped recess for the plug's overmould. Boxy overmoulds wider than
-  about 11 × 6 mm stop on its rim.
+- USB-C and 3.5 mm plugs seat fully and the USB-C plug latches. The jack's
+  end wall is 1.3 mm. At USB-C a 13 × 7 mm pill-shaped recess takes the plug's
+  overmould right back to the PCB's edge, 0.2 mm from the receptacle's face,
+  as the original housing's end face did. Above the PCB a wall closes the
+  recess, with a notch round the receptacle (0.4 mm beside it, 0.3 above).
+  Boxy overmoulds wider than about 11 × 6 mm stop on the recess's rim.
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
   plain post 1.2 mm above its plunger, as before. A floor under the bar stops
   it 2 mm down.

@@ -34,8 +34,8 @@ PARAMS = {
     "pcb_top_z": -3.5,
     "pcb_bottom_z": -5.1,
     "seam_z": -5.1,  # housing to rear cover: the PCB sits in a pocket in the housing and the cover is a flat cap
-    "pcb_usb_y": 92.98,  # the PCB's USB-C edge, flush with the receptacle
-    "usb_end_gap": 0.1,  # pocket to that edge, so a skin hides the PCB edge behind the plug recess
+    "pcb_usb_y": 92.98,  # the PCB's USB-C edge; the receptacle's face is 0.2 behind it
+    "usb_end_gap": 0.1,  # pocket to that edge
     "screw_axes": [(3.0, 76.0), (39.0, 76.0), (3.3, 27.5), (38.7, 27.5)],
     # Outer shape: full width at the USB-C end, then the sides curve in toward
     # the jack end on two large arcs ("taper"), or step in with the PCB's
@@ -133,23 +133,40 @@ PARAMS = {
     "flange_margin": 1.0,  # flange past the window above and below, in grooves in the housing and the cap
     "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
     "grip_proud": 0.4,
+    # The flange's top inner edge is cut back at 45 degrees. Pushed onto S1's
+    # lever as far as the PCB's edge, or with the PCB to one side of its
+    # pocket, the cover sits inside its groove; the slope brings it out as the
+    # PCB goes in.
+    "flange_lead": 0.6,
     "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
     # A wall inside the channel above the window, so the flange's top runs in
     # a groove walled on both faces, as its bottom does in the cap. It hangs
     # from the plate and stops 0.3 above S1 (top at 0.2).
     "track": (1.5, 0.5),  # wall thickness, bottom z
     # Connector openings. The jack's hole is a plain round hole in the housing:
-    # the PCB goes in jack end first, tilted, nose into the hole. At USB-C a
-    # plug-sized opening in a recess for the plug's overmould.
+    # the PCB goes in jack end first, tilted, nose into the hole.
     "jack_axis": (20.9, -0.7),
     "jack_d": 6.2,
-    "usb_center": (20.95, -2.155),
-    "usb_size": (9.2, 3.6),  # the receptacle face is 8.9 x 3.35, the plug 8.4 x 2.6
-    "usb_r": 1.8,
-    # The recess is a pill round the port, like the opening: rounded overmoulds
-    # up to 13 x 7 seat 0.6 short of the receptacle; boxy ones over about
-    # 11 x 6 stop on its rim.
-    "usb_recess": (13.0, 7.0, 1.0, 3.5),  # width, height, depth, corner radius
+    # USB-C (J1, HRO TYPE-C-31-M-12, from the KiCad board and its drawing): the
+    # receptacle stands 3.26 on the PCB, its opening's centre 1.67 up. A plug
+    # is fully in when its overmould is about 0.45 from the receptacle's face,
+    # so nothing may stop the overmould in front of the PCB's edge. The recess
+    # for the overmould goes right back to that edge, as the original
+    # housing's end face did. Above the PCB a surround closes the recess, with
+    # a notch round the receptacle, as in the original housing.
+    "usb_center": (21.0, -1.83),  # the port's axis
+    "usb_shell": (8.94, 3.26),  # the receptacle's shell: width, height off the PCB
+    "usb_model_shift": (0.05, -0.19, 0.33),  # DTT.FCStd draws the receptacle sunk into the PCB and flush with its edge
+    "usb_notch": (0.4, 0.3, 1.1),  # notch round the shell: clearance beside (the PCB has 0.3 of play) and above it, 45 degree top corners
+    "usb_surround": (7.2, 1.0, 0.3),  # half-width, thickness back from the PCB's edge, clearance above the PCB
+    # A pill round the port: rounded overmoulds up to 13 x 7 go in; boxy ones
+    # over about 11 x 6 stop on its rim.
+    "usb_recess": (13.0, 7.0, 1.62, 3.5),  # width, height, depth (back to the PCB's edge), corner radius
+    "usb_recess_cap": 1.0,  # depth of the recess's lower edge in the cap, which stays closed under the PCB
+    # The boss beside S1 is cut back from the switch's jack end, as in the
+    # original housing, so the PCB seats when it sits toward the jack end of
+    # its pocket.
+    "s1_relief": (78.84, 0.5),  # the boss's face toward S1 (0.6 from the switch), up to this z
     # Tongue on the cap's rim, in a groove in the housing, so the cap sits in
     # place before the screws go in.
     "groove": (0.75, 1.0, 1.9),  # inset from the outer face, width, depth
@@ -757,6 +774,15 @@ def battery_shelf():
     return box(x0, y0, zs, x1, y1, z1).fuse(box(x0, ys, zb, x1, y1, z1)).removeSplitter()
 
 
+def usb_surround():
+    """A wall above the PCB at the USB-C end, back over the PCB's edge, that
+    closes the plug recess round the receptacle. It runs up into the battery
+    stop and out into the end wall; the receptacle's notch is cut afterwards."""
+    ux, _ = P["usb_center"]
+    hw, t, c = P["usb_surround"]
+    return box(ux - hw, P["pcb_usb_y"] - t, P["pcb_top_z"] + c, ux + hw, P["outer"][3] + 5, P["battery_stop"][1] + 0.5)
+
+
 def button_post():
     """The post under the button's pad, down to just over S2's plunger."""
     px, py, _ = P["button_pad"]
@@ -844,21 +870,37 @@ def button_slot():
 
 
 def connector_cuts():
-    """The jack's round hole; at USB-C a plug-sized opening in a recess for
-    the plug's overmould."""
+    """The jack's round hole; at USB-C the receptacle's notch in the surround
+    and the recess for the plug's overmould."""
     jx, jz = P["jack_axis"]
-    ux, uz = P["usb_center"]
-    ye = usb_pocket_end()
-    return [Part.makeCylinder(P["jack_d"] / 2, 6.0, V(jx, -3.5, jz), V(0, 1, 0)),
-            stadium_y(ux, uz, P["usb_size"][0], P["usb_size"][1], P["usb_r"], ye - 0.1, P["outer"][3] + 1),
-            usb_recess()]
+    return [Part.makeCylinder(P["jack_d"] / 2, 6.0, V(jx, -3.5, jz), V(0, 1, 0)), usb_notch(), usb_recess()]
 
 
-def usb_recess():
+def usb_notch():
+    """The receptacle's notch: open toward the PCB, with 45 degree top
+    corners, through the surround."""
+    ux, _ = P["usb_center"]
+    w, h = P["usb_shell"]
+    cx, cz, k = P["usb_notch"]
+    x0, x1 = ux - w / 2 - cx, ux + w / 2 + cx
+    z0, z1 = P["pcb_top_z"], P["pcb_top_z"] + h + cz
+    y0, y1 = P["pcb_usb_y"] - P["usb_surround"][1] - 1, P["outer"][3] + 1
+    pts = [V(x0, y0, z0), V(x1, y0, z0), V(x1, y0, z1 - k), V(x1 - k, y0, z1), V(x0 + k, y0, z1), V(x0, y0, z1 - k)]
+    return Part.Face(Part.makePolygon(pts + pts[:1])).extrude(V(0, y1 - y0, 0))
+
+
+def usb_recess(depth=None):
     ux, uz = P["usb_center"]
     w, h, d, r = P["usb_recess"]
     y1 = P["outer"][3]
-    return stadium_y(ux, uz, w, h, r, y1 - d, y1 + 1)
+    return stadium_y(ux, uz, w, h, r, y1 - (depth or d), y1 + 1)
+
+
+def s1_relief():
+    """The boss beside S1, cut back from the switch's jack end."""
+    y0, z1 = P["s1_relief"]
+    x0 = max(x for x, _ in P["screw_axes"]) - P["boss"][0] / 2 - 1
+    return box(x0, y0, P["pcb_top_z"] - 1, slider_geom()["xi"], y0 + 2.0, z1)
 
 
 def build_housing(board, diffuser):
@@ -877,14 +919,16 @@ def build_housing(board, diffuser):
             ("Battery shelf and stop", battery_shelf()),
             ("Button post", button_post()),
             ("Button travel stop", button_stop()),
-            ("Switch track", switch_track())]
+            ("Switch track", switch_track()),
+            ("USB-C surround", usb_surround())]
     holes = [("Screw pilot holes", screw_pilots()),
              ("Sensor window", sensor_cuts()),
              ("Diffuser", [diffuser]),
              ("Screen viewport", viewport()),
              ("Button slot", [button_slot()]),
-             ("Jack hole, USB-C opening and recess", connector_cuts()),
+             ("Jack hole, USB-C notch and recess", connector_cuts()),
              ("Switch channel and window", slider_cuts()),
+             ("S1 relief", [s1_relief()]),
              ("Cap groove", [tongue(groove=True)])]
     h = solid(outer.cut(room.cut([s for _, s in kept])).removeSplitter())
     h = solid(h.cut([s for _, ss in holes for s in ss]).removeSplitter())
@@ -940,6 +984,11 @@ def build_slider():
     w = P["act_w"] + 0.4
     xa, xb = g["xi"] - 1, P["act_tip_x"] + 0.4
     s = s.cut(box(xa, ya - w / 2, z0 - 0.25, xb, ya + w / 2, z1 + 0.25))
+    # Lead-in on the flange's top inner edge.
+    k = P["flange_lead"]
+    xi, zt, y0 = g["xi"], g["fz1"], ya - g["fl"] / 2 - 1
+    lead = [V(xi - 1, y0, zt - k - 1), V(xi + k + 1, y0, zt + 1), V(xi - 1, y0, zt + 1)]
+    s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(0, g["fl"] + 2, 0)))
     return s.removeSplitter()
 
 
@@ -967,7 +1016,7 @@ def build_cover(pcb, extra=0.0):
     if extra:
         pads += cup_roofs(zt - P["cover_relief"])
     cover = cover.fuse(pads).common(shell)
-    cover = cover.cut(slider_cuts()[:1] + connector_cuts())  # and the switch cover's lower groove
+    cover = cover.cut(slider_cuts()[:1] + [usb_recess(P["usb_recess_cap"])])  # and the switch cover's lower groove
     holes = []
     for (x, y) in P["screw_axes"]:
         holes.append(zcyl(x, y, P["screw_clear_d"], zb - 1, zt + 1))

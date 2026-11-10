@@ -68,15 +68,18 @@ def remove(doc, name):
 def move_parts(doc):
     """The distance sensor moves to the centreline with its window; its
     exploded copies move too. The source model's two sensor mounting screws
-    go: the posts' pins take the holes they sat in."""
-    d = V(B.P["sensor_shift"], 0, 0)
+    go: the posts' pins take the holes they sat in. The USB-C receptacle's
+    model moves to where the KiCad board and the part's drawing put it."""
+    moves = [(V(B.P["sensor_shift"], 0, 0), ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector")),
+             (V(*B.P["usb_model_shift"]), ("Part__Feature006", "USBCTongue", "USBCContacts"))]
     for n in ("SensorScrew1", "SensorScrew2"):
         remove(doc, n)
-    for n in ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector"):
-        for name in (n, "Exploded_" + n):
-            o = doc.getObject(name)
-            if o is not None:
-                o.Placement = App.Placement(d, App.Rotation()).multiply(o.Placement)
+    for d, names in moves:
+        for n in names:
+            for name in (n, "Exploded_" + n):
+                o = doc.getObject(name)
+                if o is not None:
+                    o.Placement = App.Placement(d, App.Rotation()).multiply(o.Placement)
 
 
 def feature_tree(doc, features):
@@ -315,7 +318,7 @@ def sections(doc):
             ("Screen clip: strip, slot, wall behind", Y, (by0 + by1) / 2, (-4.5, 10.5), (6.1, 14.6)),
             ("Button post straight over S2", Y, py, (27, 46), (-9, 15)),
             ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
-            ("USB-C opening and plug recess", X, B.P["usb_center"][0], (84, 96), (-9, 4)),
+            ("USB-C recess, back to the PCB's edge", X, B.P["usb_center"][0], (84, 96), (-9, 4)),
             ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4)),
             ("Sensor in its window, snaps under its ends", Y, 13.5, (3, 39), (-6, 15)),
             ("Sensor's ear on its post, pin in its hole", Y, B.P["sensor_holes"][0][1], (2, 20), (-1, 15)),
