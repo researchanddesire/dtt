@@ -140,10 +140,11 @@ PARAMS = {
     # bring it in as the PCB goes in.
     "flange_lead": 0.6,
     "channel_lead": 0.4,  # more thins the wall at the channel's USB end
-    # The cap's groove is this much wider on each face than the housing's
-    # channel, which guides the flange: wherever the cap sits in the 0.2 of
-    # side play on its tongues, its groove's walls stay clear of the flange.
-    "cap_groove_clear": 0.25,
+    # The cap's groove is wider on each face and longer at each end than the
+    # housing's channel, which guides the flange: wherever the cap sits in the
+    # play on its tongues (0.2 across, 0.3 along), its groove stays clear of
+    # the flange.
+    "cap_groove_clear": (0.25, 0.35),  # each face, each end; more at the ends thins the USB-end corner
     "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
     # A wall inside the channel above the window, so the flange's top runs in
     # a groove walled on both faces, as its bottom does in the cap. It hangs
@@ -165,10 +166,11 @@ PARAMS = {
     "usb_model_shift": (0.05, -0.19, 0.33),  # DTT.FCStd draws the receptacle sunk into the PCB and flush with its edge
     "usb_notch": (0.4, 0.3, 1.1),  # notch round the shell: clearance beside (the PCB has 0.3 of play) and above it, 45 degree top corners
     "usb_surround": (8.0, 1.0, 0.3),  # half-width, thickness back from the PCB's edge, clearance above the PCB
-    # A pill round the port, 0.25 to 0.3 larger all round than the largest
-    # overmould USB allows (12.35 x 6.5); boxy ones over about 10 x 6 stop on
-    # its rim. Its lower edge is in the cap.
-    "usb_recess": (13.0, 7.0, 1.62, 3.5),  # width, height, depth (back to the PCB's edge), corner radius
+    # A pill round the port: 0.25 above and below the largest overmould USB
+    # allows (12.35 x 6.5) and 0.5 beside it, as the PCB's play in its pocket
+    # can put the port 0.4 to one side. Boxy overmoulds over about 10 x 6 stop
+    # on its rim. Its lower edge is in the cap.
+    "usb_recess": (13.4, 7.0, 1.62, 3.5),  # width, height, depth (back to the PCB's edge), corner radius
     # The boss beside S1 is cut back from the switch's jack end, as in the
     # original housing, so the PCB seats when it sits toward the jack end of
     # its pocket.
@@ -969,16 +971,17 @@ def slider_geom():
     return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0 - m, fz1=wz1 + m, gl=gl, fl=fl, c=c)
 
 
-def slider_cuts(clear=0.0):
+def slider_cuts(clear=(0.0, 0.0)):
     """Channel for the flange, a groove in the housing above the window and
-    one in the cap below it (wider by clear on each face); the grip window,
+    one in the cap below it (wider and longer by clear); the grip window,
     open down to the seam, which the cap closes; and the lead-in on the outer
     edge of the channel's mouth."""
     g = slider_geom()
     ya, t, c = P["act_y"], P["travel"], g["c"]
     zs = P["seam_z"]
     y0, y1 = ya - g["fl"] / 2 - c, ya + t + g["fl"] / 2 + c
-    chan = box(g["xi"] - 0.2 - clear, y0, g["fz0"] - c, g["xw"] + clear, y1, g["fz1"] + c)
+    cx, cy = clear
+    chan = box(g["xi"] - 0.2 - cx, y0 - cy, g["fz0"] - c, g["xw"] + cx, y1 + cy, g["fz1"] + c)
     win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, zs - 0.01, P["outer"][2] + 1,
               ya + t + g["gl"] / 2 + c, g["wz1"] + c)
     k, xw = P["channel_lead"], g["xw"]

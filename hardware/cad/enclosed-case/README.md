@@ -110,7 +110,7 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
 - USB-C and 3.5 mm plugs seat fully and the USB-C plug latches. The jack's
-  end wall is 1.3 mm. At USB-C a 13 × 7 mm pill-shaped recess, its lower
+  end wall is 1.3 mm. At USB-C a 13.4 × 7 mm pill-shaped recess, its lower
   corners at 45°, takes the plug's overmould right back to the PCB's edge,
   0.2 mm from the receptacle's face, as the original housing's end face did.
   Above the PCB a wall closes the recess, with a notch round the receptacle
