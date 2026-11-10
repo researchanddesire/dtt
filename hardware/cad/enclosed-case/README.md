@@ -112,12 +112,12 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
 - USB-C and 3.5 mm plugs seat fully and the USB-C plug latches. The jack's
-  end wall is 1.3 mm. At USB-C a 13.4 × 7 mm pill-shaped recess, its lower
-  corners at 45°, takes the plug's overmould right back to the PCB's edge,
-  0.2 mm from the receptacle's face, as the original housing's end face did.
-  Above the PCB a wall closes the recess, with a notch round the receptacle
-  (0.4 mm beside it, 0.3 above). Boxy overmoulds over about 10.5 × 6 mm, or
-  9.5 × 6.5 mm, stop on the recess's rim.
+  end wall is 1.3 mm. At USB-C a 13.4 × 7 mm recess with 1.5 mm corners,
+  the lower ones at 45°, takes the plug's overmould right back to the PCB's
+  edge, 0.2 mm from the receptacle's face, as the original housing's end face
+  did. It takes the largest overmould USB allows (12.35 × 6.5 mm), round or
+  boxy with corners of 1 mm or more. Above the PCB a wall closes the recess,
+  with a notch round the receptacle (0.4 mm beside it, 0.3 above).
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
   plain post 1.2 mm above its plunger, as before. A floor under the bar stops
   it 2 mm down.

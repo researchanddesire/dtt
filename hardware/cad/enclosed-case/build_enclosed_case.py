@@ -170,11 +170,11 @@ PARAMS = {
     "usb_model_shift": (0.05, -0.19, 0.33),  # DTT.FCStd draws the receptacle sunk into the PCB and flush with its edge
     "usb_notch": (0.4, 0.3, 1.1),  # notch round the shell: clearance beside (the PCB has 0.3 of play) and above it, 45 degree top corners
     "usb_surround": (8.0, 1.0, 0.3),  # half-width, thickness back from the PCB's edge, clearance above the PCB
-    # A pill round the port: 0.25 above and below the largest overmould USB
-    # allows (12.35 x 6.5) and 0.5 beside it, as the PCB's play in its pocket
-    # can put the port 0.4 to one side. Boxy overmoulds over about 10.5 x 6,
-    # or 9.5 x 6.5, stop on its rim. Its lower edge is in the cap.
-    "usb_recess": (13.4, 7.0, 1.62, 3.5),  # width, height, depth (back to the PCB's edge), corner radius
+    # A rounded rectangle round the port: 0.25 above and below the largest
+    # overmould USB allows (12.35 x 6.5) and 0.5 beside it, as the PCB's play
+    # in its pocket can put the port 0.4 to one side. Its corners take boxy
+    # overmoulds with corners of 1.0 or more. Its lower edge is in the cap.
+    "usb_recess": (13.4, 7.0, 1.62, 1.5),  # width, height, depth (back to the PCB's edge), corner radius
     # The boss beside S1 is cut back from the switch's jack end, as in the
     # original housing, so the PCB seats when it sits toward the jack end of
     # its pocket.
