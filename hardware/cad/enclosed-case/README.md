@@ -1,7 +1,7 @@
 # Enclosed case
 
 The DTT case, 50 mm wide at the USB-C end and curving in to 44 mm at the jack,
-with a 5 mm round all round the top edge and a blue switch cover that slides S1.
+with a 5 mm round all round the top edge and RADR's blue switch cover on S1.
 The PCB drops into a pocket in the housing and a flat rear cover caps it. The
 original four PCB screws hold it together, flush in countersinks in the cap. It
 replaces the loop backing, and slides into the [snap backplate](../snap-backplate/).
@@ -31,6 +31,18 @@ the PCB, with a roof over each, and the case no longer fits the snap backplate.
 | <img src="images/Enclosed-Cups.png" width="320"> | <img src="images/Part-RearCoverCups.png" width="320"> |
 | <img src="images/Enclosed-Cups-Exploded.png" width="320"> | |
 
+## Stepped version
+
+The same case with the original housing's outline: sides that step in with the
+PCB (50 / 48 / 44 mm) and the sloped jack end. Everything inside is the same.
+It doesn't fit the snap backplate; use the suction-cup rear cover. Its files
+are in [`stepped/`](stepped/).
+
+| | |
+| --- | --- |
+| <img src="stepped/images/Enclosed-Front.png" width="320"> | <img src="stepped/images/Enclosed-Rear.png" width="320"> |
+| <img src="stepped/images/Enclosed-Switch-Side.png" width="320"> | <img src="stepped/images/Enclosed-Exploded.png" width="320"> |
+
 ## Print
 
 | Part | File | Colour | Orientation |
@@ -38,14 +50,16 @@ the PCB, with a roof over each, and the case no longer fits the snap backplate.
 | Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl` in white, `Housing-Inlays-Blue.stl` (logo and button) in blue) | black | top face down |
 | Rear cap | `parts/Rear-Cover-Black.stl` | black | outer face down |
 | Suction-cup rear cap (instead) | `parts/Rear-Cover-Cups-Black.stl` | black | outer face down |
-| Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flange face down |
+| Switch cover (RADR's Power Switch print) | `parts/Switch-Cover-Blue.stl` | blue | flat face down |
 
 Or open [`print/DTT-Enclosed-Print.3mf`](print/DTT-Enclosed-Print.3mf) in Bambu
 Studio: plate 1 is the case with both rear caps (delete the one you don't
 need), plate 2 the snap backplate and wall bracket, already turned to their
 print faces. Blue is filament 1, the white diffuser 2 and black 3; it takes
-your current printer and process presets. `print/make_3mf.py` rebuilds it from
-the STLs.
+your current printer and process presets.
+[`print/DTT-Enclosed-Stepped-Print.3mf`](print/DTT-Enclosed-Stepped-Print.3mf)
+is the stepped case, with both rear caps. `print/make_3mf.py` rebuilds both
+from the STLs.
 
 <img src="print/Plates.png" width="640">
 
@@ -54,7 +68,6 @@ the STLs.
 | Qty | Part |
 | --- | --- |
 | 4 | The original short self-tapping PCB screws, 0408LTFB (#4 × 1/2" Torx flat head) |
-| 1 | Double-sided foam tape, about 20 × 20 × 0.8 mm, for the battery |
 
 ## Assemble
 
@@ -63,51 +76,57 @@ the STLs.
 2. Press the distance sensor into its window, connector toward the screen,
    until its two mounting ears sit on their posts, a pin in each ear's hole,
    and its three snaps click under its board. No glue.
-3. Stick the foam tape on the battery and press it onto its shelf, leads
-   toward the screen, its other end against the stop.
-4. With S1's lever at its jack end, push the switch cover onto it as far as
-   it goes, grip outwards, its wider side down past the PCB's edge.
+3. Slide the battery through its tray's two rings, leads toward the screen,
+   up to the stop. No tape.
+4. Push the switch cover onto S1's lever as far as it goes, nub outwards. It
+   fits either way up.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
-   pocket. Let go of the switch cover as it goes into its channel.
-6. Press the cap on; its tongue holds it in place. Drive the four screws into
+   pocket. The switch cover goes into its channel with it.
+6. Press the cap on; its tongue holds it in place and its tab closes the
+   window under the switch cover. Drive the four screws into
    the original bosses. Snug them; do not strip the bosses.
 
-Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup cap).
+Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup
+cap). The switch cover's nub stands 2.1 mm proud of the side.
 
 ## Source
 
 - `build_enclosed_case.py` builds the parts from `../DTT.FCStd`. Dimensions are
   in `PARAMS`. `top_round` is the round along the top edge. It turns into a
   45° face for its last 1.5 mm (`round_stop`), so it prints top face down
-  without support. The inside stays 1.2 mm in from it (`round_wall`). Set `outline` to `"conformal"`
-  for walls that follow the PCB's three widths (50 / 48 / 44 mm); its step
-  corners keep a 1.2 mm fillet. Set `lean` to `(3.0, 2.5)` for sides that
-  curve in 3 mm toward the top. The snap backplate only fits the upright taper.
+  without support. The inside stays 1.2 mm in from it (`round_wall`). Set
+  `lean` to `(3.0, 2.5)` for sides that curve in 3 mm toward the top. The snap
+  backplate only fits the upright taper.
+- `DTT_CASE=stepped` builds the stepped version into `stepped/`: walls 3 mm
+  outside the original housing's outline, a 1.2 mm fillet on the top edges and
+  the original's sloped jack end, with a 1.2 mm wall under it.
+- The switch cover is RADR's Power Switch print, read unchanged from
+  `RADR-Power-Switch.step` (`hardware/Print Files` in
+  Open-Source-Wireless-Remote_RADR).
 - The housing is built from nothing but its outer shape and the parts that go
   in it, as a short list of features in order (`build_housing`). The hidden
   "Housing features" group in `DTT-Enclosed.FCStd` shows each one.
 - `make_assembly.FCMacro` writes `DTT-Enclosed.FCStd`, `DTT-Enclosed.step`,
   `parts/` and `images/`: `xvfb-run -a freecad make_assembly.FCMacro`.
+  With `DTT_CASE=stepped` in front it writes the same into `stepped/`.
 - The PCB is unchanged; the screws use its existing 3.6 mm holes.
 
 ## Check on a test print
 
-- S1 actuator position and travel. The cover follows the KiCad F.Fab drawing
-  (actuator at Y 82.4, 1.5 mm wide) and allows 3.2 mm of travel. The old CAD
-  switch model put the actuator 5 mm further along, so check the real part.
-- The switch cover slides freely (0.15 mm clearance), stays in the window,
-  and its base hides the window at both ends of its travel. Its flange runs
-  in a track walled on both faces, in the housing above and the cap below.
+- S1's lever position and travel. The channel follows the KiCad F.Fab drawing
+  (lever at Y 82.4, 1.5 mm wide) and the datasheet's 2 mm of travel toward
+  USB-C, with 0.4 mm to spare at each end. Check the real part.
+- The switch cover: its plate (14.5 × 4.5 × 1.1 mm) slides freely in its
+  channel, 0.2 mm a side and 0.3 above and below, and hides the window at
+  both ends of its travel. Its socket was made for RADR's switch, so S1's
+  lever has 0.4 mm of play each way along the travel.
 - The PCB goes in nose first, with the switch cover on S1's lever, and drops
-  flat into its pocket. 45° lead-ins on the flange's top edges and on the
-  channel's mouth bring the cover into its track when it is pushed fully
-  onto the lever, or up to 0.3 mm short of that.
+  flat into its pocket. 45° lead-ins on the channel's mouth bring the plate
+  in from hard against S1.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
-  (0.2 mm a side) and holds the cap before the screws go in. The cap closes
-  over the switch cover's flange wherever it sits in that play, and a 45°
-  lead-in on the flange's lower inner edge lets it push a leaning cover
-  square.
+  (0.2 mm a side) and holds the cap before the screws go in. Its tab fills
+  the window up to the plate's lower edge and sits 0.3 mm under the plate.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
@@ -125,7 +144,9 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   sensor's lenses on the centreline. The sensor seats as in the original
   housing: its case in the window, its two mounting ears on pinned posts, and
   its three snaps clicked under its board, lenses flush with the top face.
-- The tape holds the battery on its shelf, against the stop.
+- The battery slides into its tray's two rings (20 × 7.5 mm openings, as the
+  original's) up to the stop, and stays put. Each ring's lower bar prints as
+  a 20 mm bridge; check it doesn't sag into the opening.
 - Suction-cup cap: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
   2 mm walls (`cup_roof`); check it doesn't sag onto the heads.

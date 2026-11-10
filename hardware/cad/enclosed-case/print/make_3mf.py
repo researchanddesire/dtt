@@ -2,6 +2,8 @@
 
 Run from the repo root:  python3 hardware/cad/enclosed-case/print/make_3mf.py
 Needs trimesh and numpy. Writes DTT-Enclosed-Print.3mf next to this file.
+With "stepped" after it, writes DTT-Enclosed-Stepped-Print.3mf from
+../stepped/parts: plate 1 only, as the stepped case doesn't fit the sleeve.
 
 Filaments follow Lucy's AMS: 1 blue, 2 white (diffuser), 3 black.
 Plates (256 x 256 bed): 1 the case with both rear caps (flat and suction-cup;
@@ -9,6 +11,7 @@ delete the one you don't want), 2 the sleeve backplate and wall bracket. Two
 plates keep Bambu's plate grid a single row. Each part is turned to its print face.
 """
 import os
+import sys
 import uuid
 import zipfile
 
@@ -16,9 +19,10 @@ import numpy as np
 import trimesh
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CASE = os.path.join(HERE, "..", "parts")
+STEPPED = "stepped" in sys.argv[1:]
+CASE = os.path.join(HERE, "..", "stepped" if STEPPED else "", "parts")
 SNAP = os.path.join(HERE, "..", "..", "..", "production-exports", "cad", "snap-backplate")
-OUT = os.path.join(HERE, "DTT-Enclosed-Print.3mf")
+OUT = os.path.join(HERE, "DTT-Enclosed-Stepped-Print.3mf" if STEPPED else "DTT-Enclosed-Print.3mf")
 
 BLUE, WHITE, BLACK = 1, 2, 3
 BED, PLATE_GAP = 256.0, 307.2  # plate N sits (N-1) * 307.2 mm right of plate 1
@@ -45,6 +49,8 @@ OBJECTS = [
     ("Wall-Bracket", [("Wall-Bracket-Black", f"{SNAP}/DTT-Snap-Backplate-Wall-Bracket.stl", BLACK)],
      NONE, 2, 170, 120, {"wall_loops": "4"}),
 ]
+if STEPPED:
+    OBJECTS = [o for o in OBJECTS if o[3] == 1]
 
 NS = ('xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
       'xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" '

@@ -11,6 +11,7 @@ from DTT.FCStd; nothing of the original housing is used.
 
 Run with FreeCAD 1.1+ (GUI under xvfb keeps the colours in the saved file):
     xvfb-run -a freecad make_assembly.FCMacro
+    DTT_CASE=stepped xvfb-run -a freecad make_assembly.FCMacro
 Coordinates follow DTT.FCStd: X = pcb_x - 127.583333, Y = 151.9861 - pcb_y,
 PCB top at Z = -3.5, PCB bottom at Z = -5.1.
 """
@@ -23,9 +24,12 @@ import Part
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = os.path.join(HERE, "..", "DTT.FCStd")
-OUT_FCSTD = os.path.join(HERE, "DTT-Enclosed.FCStd")
-OUT_STEP = os.path.join(HERE, "DTT-Enclosed.step")
-PARTS = os.path.join(HERE, "parts")
+RADR_SWITCH = os.path.join(HERE, "RADR-Power-Switch.step")
+STEPPED = os.environ.get("DTT_CASE") == "stepped"  # the stepped version, built into stepped/
+OUT = os.path.join(HERE, "stepped") if STEPPED else HERE
+OUT_FCSTD = os.path.join(OUT, "DTT-Enclosed-Stepped.FCStd" if STEPPED else "DTT-Enclosed.FCStd")
+OUT_STEP = OUT_FCSTD[:-6] + ".step"
+PARTS = os.path.join(OUT, "parts")
 
 V = App.Vector
 
@@ -40,7 +44,7 @@ PARAMS = {
     # Outer shape: full width at the USB-C end, then the sides curve in toward
     # the jack end on two large arcs ("taper"), or step in with the PCB's
     # three widths ("conformal").
-    "outline": "taper",
+    "outline": "conformal" if STEPPED else "taper",
     "outer": (-4.0, -0.6, 46.0, 94.6),  # x0, y0, x1, y1 of the full-width outline
     "outer_r": 4.0,  # USB-C end corners
     "taper": (75.0, 3.0, 6.0),  # sides start to curve in at this y, inset of each side at the jack end face, jack-end corner radius
@@ -119,41 +123,38 @@ PARAMS = {
     "csk_angle": 82.0,
     "screw_len": 12.7,  # overall, head included
     "screw_d": 2.8,
-    # S1 (JS102011JAQN). Actuator position from the KiCad F.Fab drawing.
-    "act_y": 82.39,  # actuator centre, drawn position (pcb y 69.59)
+    # S1 (JS102011JAQN). Its lever as the KiCad F.Fab drawing has it, taken as
+    # the jack end of its 2.0 travel, the tip 2.05 off the PCB's edge.
+    "act_y": 82.39,  # lever centre as drawn (pcb y 69.59)
     "act_w": 1.5,
-    "act_tip_x": 45.06,
-    "act_z": (-2.4, 0.2),
-    "travel": 3.2,  # generous; S1's own detents set the end positions
-    # Switch cover (slider). The window opens down to the seam.
+    "act_tip_x": 44.97,
+    "act_z": (-1.9, -0.3),
+    "travel": 2.0,
+    # Switch cover: RADR's "Power Switch" print (hardware/Print Files in
+    # Open-Source-Wireless-Remote_RADR), unchanged. A plate with a nub in the
+    # middle of one face and a socket for the lever in the other, the same
+    # either way up and either way round. The socket was made for RADR's
+    # wider lever, so S1's has 0.4 of play each way along the travel.
+    "switch_cover": (14.52, 4.5, 1.1),  # the plate: length, height, thickness
+    "switch_nub": (6.3, 3.6, 3.66),  # length where it flares into the plate, height, how far it stands off the plate
+    "switch_socket": (2.3, 2.4),  # along the travel, and up
+    "switch_cover_z": -1.25,  # the plate's centre
     "pcb_edge_x": 42.92,
-    "slider_clear": 0.15,
-    "flange_t": 1.0,
-    "grip_len": 5.0,
-    "flange_margin": 1.0,  # flange past the window above and below, in grooves in the housing and the cap
-    "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
-    "grip_proud": 0.4,
-    # The flange's top inner edge is cut back at 45 degrees, and so is the
-    # outer edge of the channel's mouth in the housing. Pushed onto S1's lever
-    # as far as the PCB's edge, a little short of that or askew, or with the
-    # PCB to one side of its pocket, the cover is off its groove; the slopes
-    # bring it in as the PCB goes in. The flange's top end edges are cut back
-    # too: tilted in, the PCB carries them up to 0.4 past the channel's ends.
-    # So is its bottom inner edge: a flange cammed out at its top leans in at
-    # its bottom, up to 0.55, and the rib beside the cap's groove pushes it
-    # square as the cap closes.
-    "flange_lead": 0.6,
-    "channel_lead": 0.4,  # more thins the wall at the channel's USB end
-    # The cap's groove is wider on each face and longer at each end than the
-    # housing's channel, which guides the flange: wherever the cap sits in the
-    # play on its tongues (0.2 across, 0.3 along), its groove stays clear of
-    # the flange.
-    "cap_groove_clear": (0.25, 0.35),  # each face, each end; more at the ends thins the USB-end corner
-    "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
-    # A wall inside the channel above the window, so the flange's top runs in
-    # a groove walled on both faces, as its bottom does in the cap. It hangs
-    # from the plate and stops 0.3 above S1 (top at 0.2).
-    "track": (1.5, 0.5),  # wall thickness, bottom z
+    # The plate runs in a channel in the housing, open at the seam so that it
+    # goes in with the PCB: 0.2 a side, 0.3 above and at each end of its
+    # travel, wherever the PCB sits in its pocket. The nub comes out through a
+    # window as high as the plate; a tab on the cap closes the window under it
+    # and carries the plate's lower edge.
+    "slider_clear": (0.2, 0.3),  # each face; above, below and at the ends
+    # 45 degree lead-ins on the channel's mouth bring the plate in as the PCB
+    # goes in, from hard against S1 or 1 mm off it: on the outer wall at the
+    # seam, and under each inner wall. The outer one stops short of the
+    # channel's USB-C end, where the case's corner thins the wall.
+    "channel_lead": (0.4, 0.6, 2.0),  # outer, inner, the outer one's distance from the USB-C end
+    # Inner walls of the channel: the boss beside S1 at its jack end, a wall
+    # from 0.3 above the PCB at its USB-C end (S1 ends 0.5 before it), and
+    # between them a wall that hangs from the plate to 0.3 above S1.
+    "track": (1.5, 0.5, 88.9),  # wall thickness, bottom z over S1, where the USB-end wall starts
     # Connector openings. The jack's hole is a plain round hole in the housing:
     # the PCB goes in jack end first, tilted, nose into the hole.
     "jack_axis": (20.9, -0.7),
@@ -241,12 +242,14 @@ PARAMS = {
     "sensor_snaps": (("+x", 8.6, 12.942, 2.0, 4.0, 2),
                      ("-x", 36.9, 13.924, 1.6, 2.398, 0),
                      ("+y", 7.617, 27.6, 2.0, 4.0, 1)),
-    # Battery, at its original height: double-sided foam tape on its top
-    # sticks it to a shelf under the plate, and a stop stands in front of its
-    # USB-C end. Both run out into the end wall.
-    "battery_shelf": (8.2, 69.0, 28.2, 9.17),  # x0, y0 (clear of the button's slot), x1, the cell's top z
-    "battery_tape": 0.8,  # foam tape between the cell and the shelf
+    # Battery tray, as in the original housing: two rings under the plate
+    # that the cell slides into from the screen side, and a stop in front of
+    # its USB-C end, run out into the end wall.
+    "battery_tray": ((73.2, 75.7), (83.95, 88.95)),  # each ring's y0, y1
+    "battery_ring": (5.7, 30.7, 0.07),  # the rings' outer x0, x1 and their underside
+    "battery_opening": (8.2, 28.2, 1.07, 8.57, 0.6),  # x0, x1, z0, z1, corner radius: 20 x 7.5 for the 702035 cell
     "battery_stop": (89.95, 2.5),  # y of its face (0.25 off the cell's end), bottom z
+    "battery_model_shift": -0.85,  # DTT.FCStd draws the cell that far above the middle of its rings
 }
 P = PARAMS
 
@@ -585,10 +588,12 @@ def lofted_envelope(z0, t=0.0):
     return solid(s.removeSplitter())
 
 
-def above_slope(shift):
-    """Everything above the sensor-end slope, moved shift outwards along -Y."""
+def above_slope(t=0.0):
+    """Everything above the jack-end slope, or above the surface t inside it.
+    The slope is the original housing's, moved out with the end wall (the
+    original's is at y = 1)."""
     z0, y0, k = P["slope"]
-    y0 -= shift
+    y0 -= 1.0 - P["outer"][1] - t * math.hypot(1.0, k) / k
     pts = [(y0 + (-20 - z0) / k, -20), (y0 + (40 - z0) / k, 40), (-40, 40), (-40, -20)]
     w = Part.makePolygon([V(-20, y, z) for (y, z) in pts] + [V(-20, pts[0][0], pts[0][1])])
     return Part.Face(w).extrude(V(80, 0, 0))
@@ -598,14 +603,13 @@ def outer_upper():
     """The outer form above the seam. The top round runs round the jack end
     too; without it the top edges get a plain fillet and the jack end keeps
     the original housing's sloped end, thickened."""
-    y0 = P["outer"][1]
     zs, zt = P["seam_z"], P["top_z"]
     r = P["edge_fillet"]
     e = lofted_envelope(zs)
     if top_round() > 0:
         return e
     e = e.makeFillet(r, [ed for ed in e.Edges if ed.BoundBox.ZMin > zt - 1e-6])
-    e = e.cut(above_slope(1.0 - y0))  # original end wall at y = 1
+    e = e.cut(above_slope())
     try:
         slope = [f for f in e.Faces if f.Surface.TypeId == "Part::GeomPlane" and 0.5 < f.normalAt(0, 0).z < 0.99]
         e = e.makeFillet(r, slope[0].Edges)
@@ -644,10 +648,13 @@ def pcb_pocket(pcb):
 def inside(pcb, diffuser):
     """The inside: the PCB pocket's outline from under the seam up to the
     plate, kept round_wall in from the outer faces (under the top round its
-    edges follow the round in), with a shallow recess in the plate for the
-    screen's glass and the opening under the diffuser."""
+    edges follow the round in, and the conformal outline's jack end follows
+    its slope), with a shallow recess in the plate for the screen's glass and
+    the opening under the diffuser."""
     zs, zp = P["seam_z"], P["plate_z"]
     pocket = ext(pcb_pocket(pcb).OuterWire, zs - 1, zp).common(lofted_envelope(zs - 1, P["round_wall"]))
+    if top_round() <= 0:
+        pocket = pocket.cut(above_slope(P["round_wall"]))
     x0, y0, x1, y1, zg = P["oled_glass"]
     c = P["glass_clear"]
     glass = box(x0 - c, y0 - c, zp - 0.1, x1 + c, y1 + c, zg)
@@ -776,14 +783,18 @@ def sensor_cuts():
     return [box(x0, y0, P["sensor_pad"][2] - 1, x1, y1, P["top_z"] + 1)]
 
 
-def battery_shelf():
-    """A shelf under the plate that the foam tape on the cell's top sticks to,
-    and a stop in front of its USB-C end, both run out into the end wall."""
-    x0, y0, x1, zc = P["battery_shelf"]
-    zs = zc + P["battery_tape"]
+def battery_tray():
+    """The original housing's two battery rings, hung from the plate, and a
+    stop in front of the cell's USB-C end, run out into the end wall."""
+    rx0, rx1, rz = P["battery_ring"]
+    x0, x1, z0, z1, r = P["battery_opening"]
     ys, zb = P["battery_stop"]
-    y1, z1 = P["outer"][3] + 5, P["plate_z"] + 0.5
-    return box(x0, y0, zs, x1, y1, z1).fuse(box(x0, ys, zb, x1, y1, z1)).removeSplitter()
+    zp = P["plate_z"] + 0.5
+    rings = [box(rx0, ya, rz, rx1, yb, zp) for ya, yb in P["battery_tray"]]
+    opening = stadium_y((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, r,
+                        P["battery_tray"][0][0] - 1, P["battery_tray"][-1][1] + 1)
+    stop = box(x0, ys, zb, x1, P["outer"][3] + 5, zp)
+    return rings[0].fuse(rings[1:]).cut(opening).fuse(stop).removeSplitter()
 
 
 def usb_surround():
@@ -807,14 +818,16 @@ def button_post():
 
 
 def switch_track():
-    """A wall inside the switch channel, from just above S1 up into the plate,
-    run out into the side wall. The channel is cut through it afterwards, so
-    the flange's top runs in a groove walled on both faces."""
+    """The switch channel's inner walls, run out into the side wall; the
+    channel is cut through them afterwards. Over S1 the wall hangs from the
+    plate; past S1's USB-C end it comes down to just above the PCB."""
     g = slider_geom()
-    ya, t, c = P["act_y"], P["travel"], g["c"]
-    tw, z0 = P["track"]
-    return box(g["xi"] - 0.2 - tw, ya - g["fl"] / 2 - c - 1, z0, P["outer"][2] + 5,
-               ya + t + g["fl"] / 2 + c + 1, P["plate_z"] + 0.5)
+    tw, z0, yu = P["track"]
+    x0, x1 = g["xin"] - tw, P["outer"][2] + 5
+    zp = P["plate_z"] + 0.5
+    over = box(x0, g["y0"] - 1, z0, x1, g["y1"] + 1, zp)
+    low = box(x0, yu, P["pcb_top_z"] + g["cz"], x1, g["y1"] + 1, zp)
+    return over.fuse(low).removeSplitter()
 
 
 def button_stop():
@@ -941,7 +954,7 @@ def build_housing(board, diffuser):
             ("Sensor pad", sensor_pad()),
             ("Sensor posts", sensor_posts(diffuser.BoundBox.YMin)),
             ("Sensor snaps", sensor_snaps()),
-            ("Battery shelf and stop", battery_shelf()),
+            ("Battery tray and stop", battery_tray()),
             ("Button post", button_post()),
             ("Button travel stop", button_stop()),
             ("Switch track", switch_track()),
@@ -964,69 +977,73 @@ def build_housing(board, diffuser):
 
 
 def slider_geom():
-    c = P["slider_clear"]
-    xi = P["pcb_edge_x"] + P["pcb_edge_gap"] + 0.08  # flange inner face
-    xf = xi + P["flange_t"]  # flange outer face
-    xw = xf + c  # window wall inner face
-    wz0, wz1 = P["window_z"]
-    m = P["flange_margin"]
-    gl, t = P["grip_len"], P["travel"]
-    fl = gl + 2 * c + 2 * t + 2 * P["flange_cover"]  # covers the whole window at either end of the travel
-    return dict(xi=xi, xf=xf, xw=xw, wz0=wz0, wz1=wz1, fz0=wz0 - m, fz1=wz1 + m, gl=gl, fl=fl, c=c)
+    """Where the switch cover's plate sits and how far it runs: its faces, its
+    channel and the nub's window."""
+    pl, ph, pt = P["switch_cover"]
+    nl = P["switch_nub"][0]
+    cx, cz = P["slider_clear"]
+    xi = P["pcb_edge_x"] + P["pcb_edge_gap"] + 0.08  # plate inner face, clear of S1 wherever the PCB sits
+    xf = xi + pt
+    play = (P["switch_socket"][0] - P["act_w"]) / 2
+    # The plate's centre from end to end of the travel, with the lever's play
+    # in the socket and the PCB's in its pocket.
+    ya = P["act_y"] - play - P["pcb_edge_gap"]
+    yb = P["act_y"] + P["travel"] + play + P["usb_end_gap"]
+    zc = P["switch_cover_z"]
+    return dict(xi=xi, xf=xf, xin=xi - cx, xw=xf + cx, cz=cz, zc=zc, z0=zc - ph / 2, z1=zc + ph / 2,
+                y0=ya - pl / 2 - cz, y1=yb + pl / 2 + cz, wy0=ya - nl / 2 - cx, wy1=yb + nl / 2 + cx)
 
 
-def slider_cuts(clear=(0.0, 0.0)):
-    """Channel for the flange, a groove in the housing above the window and
-    one in the cap below it (wider and longer by clear); the grip window,
-    open down to the seam, which the cap closes; and the lead-in on the outer
-    edge of the channel's mouth."""
+def slider_cuts():
+    """The channel for the plate, from the seam up; the nub's window, open
+    down to the seam and as high as the plate; and the lead-ins on the
+    channel's mouth."""
     g = slider_geom()
-    ya, t, c = P["act_y"], P["travel"], g["c"]
     zs = P["seam_z"]
-    y0, y1 = ya - g["fl"] / 2 - c, ya + t + g["fl"] / 2 + c
-    cx, cy = clear
-    chan = box(g["xi"] - 0.2 - cx, y0 - cy, g["fz0"] - c, g["xw"] + cx, y1 + cy, g["fz1"] + c)
-    win = box(g["xw"] - 0.1, ya - g["gl"] / 2 - c, zs - 0.01, P["outer"][2] + 1,
-              ya + t + g["gl"] / 2 + c, g["wz1"] + c)
-    k, xw = P["channel_lead"], g["xw"]
-    pts = [V(xw - 1, y0, zs - 1), V(xw + k + 1, y0, zs - 1), V(xw - 1, y0, zs + k + 1)]
-    lead = Part.Face(Part.makePolygon(pts + pts[:1])).extrude(V(0, y1 - y0, 0))
-    return [chan, win, lead]
+    chan = box(g["xin"], g["y0"], zs - 1, g["xw"], g["y1"], g["z1"] + g["cz"])
+    win = box(g["xw"] - 0.1, g["wy0"], zs - 1, P["outer"][2] + 1, g["wy1"], g["z1"])
+    ko, ki, short = P["channel_lead"]
+    xw, xin = g["xw"], g["xin"]
+    pts = [V(xw - 1, g["y0"], zs - 1), V(xw + ko + 1, g["y0"], zs - 1), V(xw - 1, g["y0"], zs + ko + 1)]
+    leads = [Part.Face(Part.makePolygon(pts + pts[:1])).extrude(V(0, g["y1"] - short - g["y0"], 0))]
+    _, zt, yu = P["track"]
+    yr = P["s1_relief"][0]
+    for ya, yb, zb in ((g["y0"], yr, P["pcb_top_z"]), (yr, yu, zt), (yu, g["y1"], P["pcb_top_z"] + g["cz"])):
+        pts = [V(xin - ki - 1, ya, zb - 1), V(xin + 1, ya, zb - 1), V(xin + 1, ya, zb + ki + 1)]
+        leads.append(Part.Face(Part.makePolygon(pts + pts[:1])).extrude(V(0, yb - ya, 0)))
+    return [chan, win] + leads
+
+
+def switch_tab():
+    """A tab on the cap that closes the nub's window from the seam up to the
+    plate's lower edge, and reaches in under the plate, 0.3 lower there."""
+    g = slider_geom()
+    zs = P["seam_z"]
+    cx, cz = P["slider_clear"]
+    ya, yb, xo = g["wy0"] + cz, g["wy1"] - cz, P["outer"][2]
+    under = box(g["xi"] + 0.15, ya, zs - 0.01, xo, yb, g["z0"] - cz)
+    sill = box(g["xw"] + cx, ya, zs - 0.01, xo, yb, g["z0"])  # clear of the plate wherever the cap sits on its tongues
+    return under.fuse(sill)
 
 
 def build_slider():
+    """RADR's switch cover, placed on S1's lever at its jack end: the plate's
+    inner face toward S1, its length along the travel."""
     g = slider_geom()
-    ya = P["act_y"]
-    xo = P["outer"][2] + P["grip_proud"]
-    flange = box(g["xi"], ya - g["fl"] / 2, g["fz0"], g["xf"], ya + g["fl"] / 2, g["fz1"])
-    grip = box(g["xf"] - 0.01, ya - g["gl"] / 2, g["wz0"], xo, ya + g["gl"] / 2, g["wz1"])
-    try:
-        outer = [e for e in grip.Edges if abs(e.BoundBox.XMin - xo) < 1e-6 and abs(e.BoundBox.XMax - xo) < 1e-6]
-        grip = grip.makeFillet(0.6, outer)
-    except Exception as e:
-        print("grip fillet skipped:", e)
-    s = flange.fuse(grip)
-    # Finger ridges across the grip face.
-    for dy in (-1.5, 0.0, 1.5):
-        s = s.cut(box(xo - 0.35, ya + dy - 0.3, g["wz0"] - 1, xo + 1, ya + dy + 0.3, g["wz1"] + 1))
-    # Pocket for S1's lever, closed all round: the cover goes onto the lever
-    # before the PCB goes in, and goes into its channel with the PCB.
-    z0, z1 = P["act_z"]
-    w = P["act_w"] + 0.4
-    xa, xb = g["xi"] - 1, P["act_tip_x"] + 0.4
-    s = s.cut(box(xa, ya - w / 2, z0 - 0.25, xb, ya + w / 2, z1 + 0.25))
-    # Lead-ins on the flange's top and bottom inner edges and on its top end
-    # edges.
-    k = P["flange_lead"]
-    xi, zt, zb = g["xi"], g["fz1"], g["fz0"]
-    y0, y1 = ya - g["fl"] / 2, ya + g["fl"] / 2
-    for ze, d in ((zt, 1), (zb, -1)):
-        lead = [V(xi - 1, y0 - 1, ze - d * (k + 1)), V(xi + k + 1, y0 - 1, ze + d), V(xi - 1, y0 - 1, ze + d)]
-        s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(0, y1 - y0 + 2, 0)))
-    for ye, d in ((y0, 1), (y1, -1)):
-        lead = [V(xi - 1, ye - d, zt - k - 1), V(xi - 1, ye + d * (k + 1), zt + 1), V(xi - 1, ye - d, zt + 1)]
-        s = s.cut(Part.Face(Part.makePolygon(lead + lead[:1])).extrude(V(g["xf"] - xi + 2, 0, 0)))
-    return s.removeSplitter()
+    s = Part.read(RADR_SWITCH)
+    s = solid(s.Solids[0].fuse(s.Solids[1:]).removeSplitter())
+    # The file's plate lies a quarter of a degree off its axes; square it up
+    # by its largest flat face, the plate's inner face.
+    face = max((f for f in s.Faces if f.Surface.TypeId == "Part::GeomPlane"), key=lambda f: f.Area)
+    n = face.normalAt(0, 0)
+    s.rotate(V(0, 0, 0), V(0, 0, 1), -math.degrees(math.atan2(n.x, -n.y)))  # inner face to -y
+    s.rotate(V(0, 0, 0), V(0, 0, 1), -90)  # length along y, inner face to -x, nub to +x
+    bb = s.optimalBoundingBox(False, False)
+    pl, ph, pt = P["switch_cover"]
+    assert abs(bb.YLength - pl) < 0.05 and abs(bb.ZLength - ph) < 0.05, "not the RADR Power Switch print"
+    assert abs(bb.XLength - pt - P["switch_nub"][2]) < 0.05, "not the RADR Power Switch print"
+    s.translate(V(g["xi"] - bb.XMin, P["act_y"] - bb.Center.y, g["zc"] - bb.Center.z))
+    return s
 
 
 def build_cover(pcb, extra=0.0):
@@ -1053,7 +1070,7 @@ def build_cover(pcb, extra=0.0):
     if extra:
         pads += cup_roofs(zt - P["cover_relief"])
     cover = cover.fuse(pads).common(shell)
-    cover = cover.cut(slider_cuts(P["cap_groove_clear"])[:1] + [usb_recess()])  # the switch cover's lower groove and the plug recess's lower edge
+    cover = cover.cut(usb_recess())  # the plug recess's lower edge
     holes = []
     for (x, y) in P["screw_axes"]:
         holes.append(zcyl(x, y, P["screw_clear_d"], zb - 1, zt + 1))
@@ -1219,7 +1236,8 @@ def build_s1(model):
     """S1 with its actuator where the KiCad F.Fab drawing puts it."""
     body = model.common(box(30, 70, -10, P["pcb_edge_x"], 100, 10))
     w = P["act_w"]
-    act = box(P["pcb_edge_x"] - 0.01, P["act_y"] - w / 2, -1.9, 44.97, P["act_y"] + w / 2, -0.3)
+    z0, z1 = P["act_z"]
+    act = box(P["pcb_edge_x"] - 0.01, P["act_y"] - w / 2, z0, P["act_tip_x"], P["act_y"] + w / 2, z1)
     return body.fuse(act).removeSplitter()
 
 
@@ -1355,8 +1373,8 @@ def build_all(doc):
     slider = build_slider()
     cover = build_cover(pcb)
     cup_cover = build_cover(pcb, P["cup_cover_extra"])
-    cover = solid(cover.fuse(tongue()).removeSplitter())
-    cup_cover = solid(cup_cover.fuse(tongue()).removeSplitter())
+    cover = solid(cover.fuse([tongue(), switch_tab()]).removeSplitter())
+    cup_cover = solid(cup_cover.fuse([tongue(), switch_tab()]).removeSplitter())
     # The blue inlays: the button's round pad, and the R+D logo moved to the
     # top left corner (the original logo body gives its outline).
     button = solid(housing.common(button_inlay()).removeSplitter())

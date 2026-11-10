@@ -1,6 +1,7 @@
 """Build DTT-Enclosed.FCStd, its STEP, the printed-part exports and the renders.
 
     xvfb-run -a freecad make_assembly.FCMacro
+    DTT_CASE=stepped xvfb-run -a freecad make_assembly.FCMacro    (the stepped version, into stepped/)
 
 Geometry and dimensions live in build_enclosed_case.py (PARAMS).
 """
@@ -25,7 +26,7 @@ BLACK = (0.16, 0.16, 0.17)
 BLUE = (0.09, 0.42, 0.93)
 CYAN = BLUE  # logo fill, printed in the same blue filament as the touch points
 CUP = (0.80, 0.84, 0.88)
-IMAGES = os.path.join(HERE, "images")
+IMAGES = os.path.join(B.OUT, "images")
 EXPLODE = {"housing": 45.0, "cover": -14.0, "screws": -28.0, "slider": 14.0}
 
 
@@ -69,9 +70,11 @@ def move_parts(doc):
     """The distance sensor moves to the centreline with its window; its
     exploded copies move too. The source model's two sensor mounting screws
     go: the posts' pins take the holes they sat in. The USB-C receptacle's
-    model moves to where the KiCad board and the part's drawing put it."""
+    model moves to where the KiCad board and the part's drawing put it, and
+    the cell to the middle of its rings."""
     moves = [(V(B.P["sensor_shift"], 0, 0), ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector")),
-             (V(*B.P["usb_model_shift"]), ("Part__Feature006", "USBCTongue", "USBCContacts"))]
+             (V(*B.P["usb_model_shift"]), ("Part__Feature006", "USBCTongue", "USBCContacts")),
+             (V(0, 0, B.P["battery_model_shift"]), ("BatteryPouch", "BatteryTape"))]
     for n in ("SensorScrew1", "SensorScrew2"):
         remove(doc, n)
     for d, names in moves:
@@ -166,6 +169,7 @@ def assemble():
             p.addProperty("App::PropertyLength", label, "Enclosed case")
         setattr(p, label, v)
     doc.recompute()
+    os.makedirs(B.OUT, exist_ok=True)
     doc.saveAs(B.OUT_FCSTD)
     return doc
 
@@ -312,8 +316,8 @@ def sections(doc):
     bx0, by0, bx1, by1, _ = B.P["oled_board"]
     py = B.P["button_pad"][1]
     X, Y = V(1, 0, 0), V(0, 1, 0)
-    cuts = [("S1's lever in the switch cover", Y, B.P["act_y"], (34, 48), (-9, 4)),
-            ("Switch cover in its grooves", Y, B.P["act_y"] + 2.0, (34, 48), (-9, 4)),
+    cuts = [("S1's lever in the switch cover", Y, B.P["act_y"], (34, 50), (-9, 4)),
+            ("Switch cover in its channel, over the cap's tab", Y, B.P["act_y"] + 2.0, (34, 50), (-9, 4)),
             ("PCB in its pocket, screw", Y, 76.0, (-5, 14), (-9, 10)),
             ("Screen clip: strip, slot, wall behind", Y, (by0 + by1) / 2, (-4.5, 10.5), (6.1, 14.6)),
             ("Button post straight over S2", Y, py, (27, 46), (-9, 15)),
@@ -322,7 +326,7 @@ def sections(doc):
             ("Jack in its hole", X, B.P["jack_axis"][0], (-2, 10), (-9, 4)),
             ("Sensor in its window, snaps under its ends", Y, 13.5, (3, 39), (-6, 15)),
             ("Sensor's ear on its post, pin in its hole", Y, B.P["sensor_holes"][0][1], (2, 20), (-1, 15)),
-            ("Battery taped under its shelf", X, 18.2, (50, 96), (-6, 15))]
+            ("Battery in its tray, against the stop", X, 18.2, (50, 96), (-6, 15))]
     fig, axs = plt.subplots(3, 4, figsize=(17.6, 13.2))
     for ax in axs.flat[len(cuts):]:
         ax.axis("off")
