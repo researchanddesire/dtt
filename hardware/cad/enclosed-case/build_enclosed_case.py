@@ -134,6 +134,10 @@ PARAMS = {
     "flange_cover": 0.75,  # flange past each end of the window at either end of the travel; more thins the USB-end corner
     "grip_proud": 0.4,
     "window_z": (-4.95, 0.7),  # grip, bottom 0.15 above the seam
+    # A wall inside the channel above the window, so the flange's top runs in
+    # a groove walled on both faces, as its bottom does in the cap. It hangs
+    # from the plate and stops 0.3 above S1 (top at 0.2).
+    "track": (1.5, 0.5),  # wall thickness, bottom z
     # Connector openings. The jack's hole is a plain round hole in the housing:
     # the PCB goes in jack end first, tilted, nose into the hole. At USB-C a
     # plug-sized opening in a recess for the plug's overmould.
@@ -142,7 +146,10 @@ PARAMS = {
     "usb_center": (20.95, -2.155),
     "usb_size": (9.2, 3.6),  # the receptacle face is 8.9 x 3.35, the plug 8.4 x 2.6
     "usb_r": 1.8,
-    "usb_recess": (13.0, 7.0, 1.0, 1.0),  # width, height, depth, corner radius: square-cornered overmoulds up to 12.4 x 6.5 seat, 0.6 short of the receptacle
+    # The recess is a pill round the port, like the opening: rounded overmoulds
+    # up to 13 x 7 seat 0.6 short of the receptacle; boxy ones over about
+    # 11 x 6 stop on its rim.
+    "usb_recess": (13.0, 7.0, 1.0, 3.5),  # width, height, depth, corner radius
     # Tongue on the cap's rim, in a groove in the housing, so the cap sits in
     # place before the screws go in.
     "groove": (0.75, 1.0, 1.9),  # inset from the outer face, width, depth
@@ -188,9 +195,12 @@ PARAMS = {
     "sensor_shift": -1.7,
     "sensor_case": (13.10, 9.62, 32.30, 17.62, 3.67),  # optical case before the shift: x0, y0, x1, y1; top z of its PCB
     "sensor_fit": (0.28, 0.1),  # window round the case, a side, in x and y
+    # The window grips the case only from this z up, its top 4 mm, as in the
+    # original; below it the collar clears the case by this much more in y.
+    "sensor_grip": (10.1, 0.3),
     "sensor_collar": 1.2,  # wall round the window
     "sensor_screws": ((11.0, 16.92), (34.4, 10.32)),  # before the shift; their ends stand 2.5 above the sensor's PCB
-    "sensor_boss": (4.6, 2.2, 3.0),  # boss diameter, clearance hole diameter and depth
+    "sensor_boss": (4.6, 3.0, 3.3),  # boss diameter; the screw end's slot width and depth (the ends are 2.0 across)
     # Flexure snaps that hook under the sensor's PCB, as in the original
     # housing: one at each end, moved with the sensor, and one on its edge
     # toward the jack, left where it was so it clears the jack. Each: the way
@@ -698,14 +708,21 @@ def sensor_collar():
 
 
 def sensor_cuts():
-    """The sensor's window, down through the collar, and a hole in each boss
-    for a screw's end."""
+    """The sensor's window: it grips the case from sensor_grip's z up, and is
+    roomier below it, down through the collar. For each screw's end, a slot up
+    its boss, open into the window so no thin wall is left between them."""
     x0, y0, x1, y1 = sensor_window()
     zb = P["sensor_case"][4]
     _, dh, hh = P["sensor_boss"]
     s = P["sensor_shift"]
-    return [box(x0, y0, zb - 1, x1, y1, P["top_z"] + 1)] + [
-        zcyl(x + s, y, dh, zb - 1, zb + hh) for x, y in P["sensor_screws"]]
+    zg, cy = P["sensor_grip"]
+    cuts = [box(x0, y0, zg, x1, y1, P["top_z"] + 1), box(x0, y0 - cy, zb - 1, x1, y1 + cy, zg + 0.01)]
+    for x, y in P["sensor_screws"]:
+        x += s
+        xe = x0 + 0.1 if x < (x0 + x1) / 2 else x1 - 0.1
+        ya, yb = max(y - dh / 2, y0 - cy), min(y + dh / 2, y1 + cy)  # within the window, so the collar keeps its wall
+        cuts += [zcyl(x, y, dh, zb - 1, zb + hh), box(min(x, xe), ya, zb - 1, max(x, xe), yb, zb + hh)]
+    return cuts
 
 
 def battery_shelf():
@@ -723,6 +740,17 @@ def button_post():
     px, py, _ = P["button_pad"]
     d, z0 = P["button_post"]
     return zcyl(px, py, d, z0, P["plate_z"] + 0.5)
+
+
+def switch_track():
+    """A wall inside the switch channel, from just above S1 up into the plate,
+    run out into the side wall. The channel is cut through it afterwards, so
+    the flange's top runs in a groove walled on both faces."""
+    g = slider_geom()
+    ya, t, c = P["act_y"], P["travel"], g["c"]
+    tw, z0 = P["track"]
+    return box(g["xi"] - 0.2 - tw, ya - g["fl"] / 2 - c - 1, z0, P["outer"][2] + 5,
+               ya + t + g["fl"] / 2 + c + 1, P["plate_z"] + 0.5)
 
 
 def button_stop():
@@ -821,7 +849,8 @@ def build_housing(board, diffuser):
             ("Sensor snaps", sensor_snaps()),
             ("Battery shelf and stop", battery_shelf()),
             ("Button post", button_post()),
-            ("Button travel stop", button_stop())]
+            ("Button travel stop", button_stop()),
+            ("Switch track", switch_track())]
     holes = [("Screw pilot holes", screw_pilots()),
              ("Sensor window and screw ends", sensor_cuts()),
              ("Diffuser", [diffuser]),
