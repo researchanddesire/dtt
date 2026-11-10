@@ -65,11 +65,11 @@ the STLs.
    and its three snaps click under its board. No glue.
 3. Stick the foam tape on the battery and press it onto its shelf, leads
    toward the screen, its other end against the stop.
-4. Push the switch cover onto S1's lever on the PCB, grip outwards, its wider
-   side down past the PCB's edge.
+4. Push the switch cover onto S1's lever on the PCB as far as it goes, grip
+   outwards, its wider side down past the PCB's edge.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
-   pocket, with the switch cover going into its channel.
+   pocket. Let go of the switch cover as it goes into its channel.
 6. Press the cap on; its tongue holds it in place. Drive the four screws into
    the original bosses. Snug them; do not strip the bosses.
 
@@ -100,19 +100,22 @@ Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup 
   and its base hides the window at both ends of its travel. Its flange runs
   in a track walled on both faces, in the housing above and the cap below.
 - The PCB goes in nose first, with the switch cover on S1's lever, and drops
-  flat into its pocket. A 45° lead-in on the flange's top inner edge brings
-  the cover into its track, however far it was pushed onto the lever.
+  flat into its pocket. 45° lead-ins on the flange's top inner edge and on
+  the channel's mouth bring the cover into its track when it is pushed fully
+  onto the lever, or up to 0.6 mm short of that.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
-  (0.2 mm a side) and holds the cap before the screws go in.
+  (0.2 mm a side) and holds the cap before the screws go in. The cap closes
+  over the switch cover's flange wherever it sits in that play.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
 - USB-C and 3.5 mm plugs seat fully and the USB-C plug latches. The jack's
-  end wall is 1.3 mm. At USB-C a 13 × 7 mm pill-shaped recess takes the plug's
-  overmould right back to the PCB's edge, 0.2 mm from the receptacle's face,
-  as the original housing's end face did. Above the PCB a wall closes the
-  recess, with a notch round the receptacle (0.4 mm beside it, 0.3 above).
-  Boxy overmoulds wider than about 11 × 6 mm stop on the recess's rim.
+  end wall is 1.3 mm. At USB-C a 13 × 7 mm pill-shaped recess, its lower
+  corners at 45°, takes the plug's overmould right back to the PCB's edge,
+  0.2 mm from the receptacle's face, as the original housing's end face did.
+  Above the PCB a wall closes the recess, with a notch round the receptacle
+  (0.4 mm beside it, 0.3 above). Boxy overmoulds over about 10 × 6 mm stop on
+  the recess's rim.
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
   plain post 1.2 mm above its plunger, as before. A floor under the bar stops
   it 2 mm down.
