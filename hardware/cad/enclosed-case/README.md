@@ -56,7 +56,9 @@ Or open [`print/DTT-Enclosed-Print.3mf`](print/DTT-Enclosed-Print.3mf) in Bambu
 Studio: plate 1 is the case with both rear caps (delete the one you don't
 need), plate 2 the snap backplate and wall bracket, already turned to their
 print faces. Blue is filament 1, the white diffuser 2 and black 3; it takes
-your current printer and process presets.
+your current printer and process presets. The switch cover's nub has 0.55 mm
+walls: keep the Arachne wall generator (Bambu Studio's default) or turn on
+thin-wall detection.
 [`print/DTT-Enclosed-Stepped-Print.3mf`](print/DTT-Enclosed-Stepped-Print.3mf)
 is the stepped case, with both rear caps. `print/make_3mf.py` rebuilds both
 from the STLs.
@@ -78,8 +80,8 @@ from the STLs.
    and its three snaps click under its board. No glue.
 3. Slide the battery through its tray's two rings, leads toward the screen,
    up to the stop. No tape.
-4. Push the switch cover onto S1's lever as far as it goes, nub outwards. It
-   fits either way up.
+4. With S1's lever at its jack end, push the switch cover onto it as far as
+   it goes, nub outwards. It fits either way up.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
    pocket. The switch cover goes into its channel with it.
@@ -125,18 +127,20 @@ cap). The switch cover's nub stands 2.1 mm proud of the side.
   flat into its pocket. 45° lead-ins on the channel's mouth bring the plate
   in from hard against S1.
 - The cap's tongue (0.6 × 1.6 mm) drops into the housing groove without forcing
-  (0.2 mm a side) and holds the cap before the screws go in. Its tab fills
-  the window up to the plate's lower edge and sits 0.3 mm under the plate.
+  (0.2 mm a side) and holds the cap before the screws go in. Its tab goes
+  into the window without catching its ends or the PCB's edge, fills it up to
+  the plate's lower edge and sits 0.3 mm under the plate.
 - The screw heads sit flush in the 82° countersinks (5.9 mm). The screws
   reach 8 mm into the bosses, whose pilot holes have the original's four ribs
   (2.65 mm, 2.30 across the ribs).
 - USB-C and 3.5 mm plugs seat fully and the USB-C plug latches. The jack's
   end wall is 1.3 mm. At USB-C a 13.4 × 7 mm recess with 1.5 mm corners,
-  the lower ones at 45°, takes the plug's overmould right back to the PCB's
-  edge, 0.2 mm from the receptacle's face, as the original housing's end face
-  did. It takes the largest overmould USB allows (12.35 × 6.5 mm), round or
-  boxy with corners of 1 mm or more. Above the PCB a wall closes the recess,
-  with a notch round the receptacle (0.4 mm beside it, 0.3 above).
+  the lower ones at 45°, takes the plug's overmould back to the PCB's edge,
+  0.2 to 0.5 mm from the receptacle's face depending on where the board sits
+  in its pocket. It takes the largest overmould USB allows (12.35 × 6.5 mm)
+  if its ends are round or its corners 1.5 mm or more, and boxy ones with
+  1 mm corners up to 12 × 6 mm. Above the PCB a wall closes the recess, with
+  a notch round the receptacle (0.4 mm beside it, 0.3 above).
 - The button: a 4 mm black bar to a blue round pad straight over S2, with a
   plain post 1.2 mm above its plunger, as before. A floor under the bar stops
   it 2 mm down.
@@ -145,8 +149,10 @@ cap). The switch cover's nub stands 2.1 mm proud of the side.
   housing: its case in the window, its two mounting ears on pinned posts, and
   its three snaps clicked under its board, lenses flush with the top face.
 - The battery slides into its tray's two rings (20 × 7.5 mm openings, as the
-  original's) up to the stop, and stays put. Each ring's lower bar prints as
-  a 20 mm bridge; check it doesn't sag into the opening.
+  original's) up to the stop on the end wall, and stays put. The openings
+  are exactly the cell's nominal width, and each ring's lower bar prints as
+  a 20 mm bridge; check the cell goes in and the bridges don't sag into the
+  opening.
 - Suction-cup cap: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
   2 mm walls (`cup_roof`); check it doesn't sag onto the heads.

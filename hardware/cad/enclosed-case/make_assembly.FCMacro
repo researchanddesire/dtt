@@ -71,10 +71,10 @@ def move_parts(doc):
     exploded copies move too. The source model's two sensor mounting screws
     go: the posts' pins take the holes they sat in. The USB-C receptacle's
     model moves to where the KiCad board and the part's drawing put it, and
-    the cell to the middle of its rings."""
+    the cell to the middle of its rings, 0.25 off its stop."""
     moves = [(V(B.P["sensor_shift"], 0, 0), ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector")),
              (V(*B.P["usb_model_shift"]), ("Part__Feature006", "USBCTongue", "USBCContacts")),
-             (V(0, 0, B.P["battery_model_shift"]), ("BatteryPouch", "BatteryTape"))]
+             (V(0, *B.P["battery_model_shift"]), ("BatteryPouch", "BatteryTape"))]
     for n in ("SensorScrew1", "SensorScrew2"):
         remove(doc, n)
     for d, names in moves:

@@ -142,14 +142,15 @@ PARAMS = {
     "pcb_edge_x": 42.92,
     # The plate runs in a channel in the housing, open at the seam so that it
     # goes in with the PCB: 0.2 a side, 0.3 above and at each end of its
-    # travel, wherever the PCB sits in its pocket. The nub comes out through a
-    # window as high as the plate; a tab on the cap closes the window under it
-    # and carries the plate's lower edge.
+    # travel. The nub comes out through a window as high as the plate; a tab
+    # on the cap closes the window under it and carries the plate's lower
+    # edge.
     "slider_clear": (0.2, 0.3),  # each face; above, below and at the ends
     # 45 degree lead-ins on the channel's mouth bring the plate in as the PCB
-    # goes in, from hard against S1 or 1 mm off it: on the outer wall at the
-    # seam, and under each inner wall. The outer one stops short of the
-    # channel's USB-C end, where the case's corner thins the wall.
+    # goes in, from hard against S1: on the outer wall at the seam, and under
+    # each inner wall. The outer one stops short of the channel's USB-C end,
+    # where the case's corner thins the wall. The USB-end wall's end has the
+    # same lead-in, for a plate that leans in beside S1.
     "channel_lead": (0.4, 0.6, 2.0),  # outer, inner, the outer one's distance from the USB-C end
     # Inner walls of the channel: the boss beside S1 at its jack end, a wall
     # from 0.3 above the PCB at its USB-C end (S1 ends 0.5 before it), and
@@ -243,13 +244,13 @@ PARAMS = {
                      ("-x", 36.9, 13.924, 1.6, 2.398, 0),
                      ("+y", 7.617, 27.6, 2.0, 4.0, 1)),
     # Battery tray, as in the original housing: two rings under the plate
-    # that the cell slides into from the screen side, and a stop in front of
-    # its USB-C end, run out into the end wall.
+    # that the cell slides into from the screen side, up to a flat stop on
+    # the end wall, level with the USB-C surround.
     "battery_tray": ((73.2, 75.7), (83.95, 88.95)),  # each ring's y0, y1
     "battery_ring": (5.7, 30.7, 0.07),  # the rings' outer x0, x1 and their underside
-    "battery_opening": (8.2, 28.2, 1.07, 8.57, 0.6),  # x0, x1, z0, z1, corner radius: 20 x 7.5 for the 702035 cell
-    "battery_stop": (89.95, 2.5),  # y of its face (0.25 off the cell's end), bottom z
-    "battery_model_shift": -0.85,  # DTT.FCStd draws the cell that far above the middle of its rings
+    "battery_opening": (8.2, 28.2, 1.07, 8.57),  # x0, x1, z0, z1: 20 x 7.5 for the 702035 cell
+    "battery_stop": (91.98, 2.5),  # y of its face, bottom z
+    "battery_model_shift": (2.03, -0.85),  # y, z: moves DTT.FCStd's cell to 0.25 off the stop and the middle of its rings
 }
 P = PARAMS
 
@@ -785,14 +786,13 @@ def sensor_cuts():
 
 def battery_tray():
     """The original housing's two battery rings, hung from the plate, and a
-    stop in front of the cell's USB-C end, run out into the end wall."""
+    stop for the cell's USB-C end on the end wall."""
     rx0, rx1, rz = P["battery_ring"]
-    x0, x1, z0, z1, r = P["battery_opening"]
+    x0, x1, z0, z1 = P["battery_opening"]
     ys, zb = P["battery_stop"]
     zp = P["plate_z"] + 0.5
     rings = [box(rx0, ya, rz, rx1, yb, zp) for ya, yb in P["battery_tray"]]
-    opening = stadium_y((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, r,
-                        P["battery_tray"][0][0] - 1, P["battery_tray"][-1][1] + 1)
+    opening = box(x0, P["battery_tray"][0][0] - 1, z0, x1, P["battery_tray"][-1][1] + 1, z1)
     stop = box(x0, ys, zb, x1, P["outer"][3] + 5, zp)
     return rings[0].fuse(rings[1:]).cut(opening).fuse(stop).removeSplitter()
 
@@ -997,7 +997,7 @@ def slider_geom():
 def slider_cuts():
     """The channel for the plate, from the seam up; the nub's window, open
     down to the seam and as high as the plate; and the lead-ins on the
-    channel's mouth."""
+    channel's mouth and on the end of the USB-end inner wall."""
     g = slider_geom()
     zs = P["seam_z"]
     chan = box(g["xin"], g["y0"], zs - 1, g["xw"], g["y1"], g["z1"] + g["cz"])
@@ -1011,17 +1011,21 @@ def slider_cuts():
     for ya, yb, zb in ((g["y0"], yr, P["pcb_top_z"]), (yr, yu, zt), (yu, g["y1"], P["pcb_top_z"] + g["cz"])):
         pts = [V(xin - ki - 1, ya, zb - 1), V(xin + 1, ya, zb - 1), V(xin + 1, ya, zb + ki + 1)]
         leads.append(Part.Face(Part.makePolygon(pts + pts[:1])).extrude(V(0, yb - ya, 0)))
+    pts = [V(xin - ki, yu, P["pcb_top_z"]), V(xin + 0.1, yu, P["pcb_top_z"]), V(xin + 0.1, yu + ki + 0.1, P["pcb_top_z"])]
+    leads.append(Part.Face(Part.makePolygon(pts + pts[:1])).extrude(V(0, 0, zt + ki - P["pcb_top_z"])))
     return [chan, win] + leads
 
 
 def switch_tab():
     """A tab on the cap that closes the nub's window from the seam up to the
-    plate's lower edge, and reaches in under the plate, 0.3 lower there."""
+    plate's lower edge, and reaches in under the plate, 0.3 lower there. It
+    clears the window's ends and the PCB's edge wherever the cap and the PCB
+    sit in their play."""
     g = slider_geom()
     zs = P["seam_z"]
     cx, cz = P["slider_clear"]
-    ya, yb, xo = g["wy0"] + cz, g["wy1"] - cz, P["outer"][2]
-    under = box(g["xi"] + 0.15, ya, zs - 0.01, xo, yb, g["z0"] - cz)
+    ya, yb, xo = g["wy0"] + cz + cx, g["wy1"] - cz - cx, P["outer"][2]
+    under = box(g["xi"] + 0.35, ya, zs - 0.01, xo, yb, g["z0"] - cz)
     sill = box(g["xw"] + cx, ya, zs - 0.01, xo, yb, g["z0"])  # clear of the plate wherever the cap sits on its tongues
     return under.fuse(sill)
 
