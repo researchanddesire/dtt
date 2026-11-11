@@ -56,14 +56,14 @@ PARAMS = {
     # each long side curves in on an arc, so the case slims away from the PCB.
     "lean": (0.0, 2.5),  # inset of each side at the top face (0 keeps them upright), z where the lean starts
     "top_z": 14.17,
-    # Round along the top edge, built into the lofted sides, so it can be larger
-    # than the USB-C end corners: those tighten as the round brings the outline
-    # in, toward corner_min_r. It runs round the jack end too. The round stops
-    # where it has turned round_stop degrees from upright, and a straight face
-    # carries on at that slope to the top face, so it prints top face down
-    # without support. Under it the walls are kept round_wall thick from inside.
-    # The conformal outline's 1.5 mm step corners keep a plain edge_fillet and
-    # the original sloped jack end instead.
+    # Round along the top edge, all the way round: a chamfer on the top edge
+    # and a fillet of top_round on the chamfer's lower edge, so the round stops
+    # 45 degrees from upright and a straight face carries on at that slope to
+    # the top face. It prints top face down without support. Under it the walls
+    # are kept round_wall thick from inside. With leaning sides the round is
+    # lofted instead, its corners tightening toward corner_min_r as it comes
+    # in. The conformal outline's 1.5 mm step corners keep a plain edge_fillet
+    # and the original sloped jack end.
     "top_round": 5.0,
     "round_stop": 45.0,
     "corner_min_r": 1.0,
@@ -569,11 +569,27 @@ def section_levels(t=0.0):
     return curved, straight
 
 
+def rounded_envelope(z0, t=0.0):
+    """The case from z0 to the top face with its top round, or the surface t
+    inside it: the plan outline (t in) extruded, a chamfer round its top edge
+    and a fillet on the chamfer's lower edge."""
+    r, zt = top_round() - t, P["top_z"] - t
+    f = plan_outline(z0) if t <= 0 else Part.Face(plan_outline(z0).makeOffset2D(-t))
+    s = f.extrude(V(0, 0, zt - z0))
+    c = r * (2 - math.sqrt(2))
+    s = s.makeChamfer(c, [e for e in s.Edges if e.BoundBox.ZMin > zt - 1e-6])
+    low = [e for e in s.Edges if abs(e.BoundBox.ZMin - (zt - c)) < 1e-6 and abs(e.BoundBox.ZMax - (zt - c)) < 1e-6]
+    return solid(s.makeFillet(r, low))
+
+
 def lofted_envelope(z0, t=0.0):
-    """The case from z0 to the top face, or the surface t inside it: upright
-    sides, then a loft through sections that lean in and round over the top,
-    and a ruled one up the straight face above the round (smooth if the sides
-    lean, which curves it)."""
+    """The case from z0 to the top face, or the surface t inside it. Upright
+    sides with the top round are a plain chamfer and fillet. Leaning sides are
+    lofted: upright, then a loft through sections that lean in and round over
+    the top, and a ruled one up the straight face above the round (smooth if
+    the sides lean, which curves it)."""
+    if top_round() > t and P["lean"][0] <= 0 and abs(P["round_stop"] - 45.0) < 1e-9:
+        return rounded_envelope(z0, t)
     curved, straight = section_levels(t)
     zt = P["top_z"] - t
     za = curved[0] if curved else zt
