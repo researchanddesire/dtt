@@ -24,7 +24,6 @@ import Part
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = os.path.join(HERE, "..", "DTT.FCStd")
-RADR_SWITCH = os.path.join(HERE, "RADR-Power-Switch.step")
 STEPPED = os.environ.get("DTT_CASE") == "stepped"  # the stepped version, built into stepped/
 OUT = os.path.join(HERE, "stepped") if STEPPED else HERE
 OUT_FCSTD = os.path.join(OUT, "DTT-Enclosed-Stepped.FCStd" if STEPPED else "DTT-Enclosed.FCStd")
@@ -130,19 +129,18 @@ PARAMS = {
     "act_tip_x": 44.97,
     "act_z": (-1.9, -0.3),
     "travel": 2.0,
-    # Switch cover: RADR's "Power Switch" print (hardware/Print Files in
-    # Open-Source-Wireless-Remote_RADR), unchanged. A plate with a nub in the
-    # middle of one face and a socket for the lever in the other, the same
-    # either way up and either way round. The socket was made for RADR's
-    # wider lever, so S1's has 0.4 of play each way along the travel.
-    "switch_cover": (14.52, 4.5, 1.1),  # the plate: length, height, thickness
-    "switch_nub": (6.3, 3.6, 3.66),  # length where it flares into the plate, height, how far it stands off the plate
-    "switch_socket": (2.3, 2.4),  # along the travel, and up
-    "switch_cover_z": -1.25,  # the plate's centre
+    # Switch cover: a plate with a ridged grip in the middle of one face and a
+    # socket for the lever in the other, centred on the lever, so it is the
+    # same either way up and either way round. The plate covers the window by
+    # 0.7 at each end of the travel.
+    "switch_cover": (12.4, 4.8, 1.1),  # the plate: length, height, thickness
+    "switch_grip": (5.0, 4.0, 0.4, 0.6),  # length, height, how far it stands proud of the case side, edge radius
+    "switch_ridges": (1.5, 0.6, 0.35),  # three grooves across the grip: pitch, width, depth
+    "switch_socket": (1.9, 2.4, 0.4),  # along the travel (0.2 each side of the lever), up (0.4 each side), past the lever's tip
     "pcb_edge_x": 42.92,
     # The plate runs in a channel in the housing, open at the seam so that it
     # goes in with the PCB: 0.2 a side, 0.3 above and at each end of its
-    # travel. The nub comes out through a window as high as the plate; a tab
+    # travel. The grip comes out through a window as high as the plate; a tab
     # on the cap closes the window under it and carries the plate's lower
     # edge.
     "slider_clear": (0.2, 0.3),  # each face; above, below and at the ends
@@ -978,9 +976,9 @@ def build_housing(board, diffuser):
 
 def slider_geom():
     """Where the switch cover's plate sits and how far it runs: its faces, its
-    channel and the nub's window."""
+    channel and the grip's window."""
     pl, ph, pt = P["switch_cover"]
-    nl = P["switch_nub"][0]
+    nl = P["switch_grip"][0]
     cx, cz = P["slider_clear"]
     xi = P["pcb_edge_x"] + P["pcb_edge_gap"] + 0.08  # plate inner face, clear of S1 wherever the PCB sits
     xf = xi + pt
@@ -989,13 +987,13 @@ def slider_geom():
     # in the socket and the PCB's in its pocket.
     ya = P["act_y"] - play - P["pcb_edge_gap"]
     yb = P["act_y"] + P["travel"] + play + P["usb_end_gap"]
-    zc = P["switch_cover_z"]
+    zc = sum(P["act_z"]) / 2
     return dict(xi=xi, xf=xf, xin=xi - cx, xw=xf + cx, cz=cz, zc=zc, z0=zc - ph / 2, z1=zc + ph / 2,
                 y0=ya - pl / 2 - cz, y1=yb + pl / 2 + cz, wy0=ya - nl / 2 - cx, wy1=yb + nl / 2 + cx)
 
 
 def slider_cuts():
-    """The channel for the plate, from the seam up; the nub's window, open
+    """The channel for the plate, from the seam up; the grip's window, open
     down to the seam and as high as the plate; and the lead-ins on the
     channel's mouth and on the end of the USB-end inner wall."""
     g = slider_geom()
@@ -1017,7 +1015,7 @@ def slider_cuts():
 
 
 def switch_tab():
-    """A tab on the cap that closes the nub's window from the seam up to the
+    """A tab on the cap that closes the grip's window from the seam up to the
     plate's lower edge, and reaches in under the plate, 0.3 lower there. It
     clears the window's ends and the PCB's edge wherever the cap and the PCB
     sit in their play."""
@@ -1031,23 +1029,24 @@ def switch_tab():
 
 
 def build_slider():
-    """RADR's switch cover, placed on S1's lever at its jack end: the plate's
-    inner face toward S1, its length along the travel."""
+    """The switch cover, on S1's lever at its jack end: the plate, the grip on
+    its outer face and the lever's socket in its inner face."""
     g = slider_geom()
-    s = Part.read(RADR_SWITCH)
-    s = solid(s.Solids[0].fuse(s.Solids[1:]).removeSplitter())
-    # The file's plate lies a quarter of a degree off its axes; square it up
-    # by its largest flat face, the plate's inner face.
-    face = max((f for f in s.Faces if f.Surface.TypeId == "Part::GeomPlane"), key=lambda f: f.Area)
-    n = face.normalAt(0, 0)
-    s.rotate(V(0, 0, 0), V(0, 0, 1), -math.degrees(math.atan2(n.x, -n.y)))  # inner face to -y
-    s.rotate(V(0, 0, 0), V(0, 0, 1), -90)  # length along y, inner face to -x, nub to +x
-    bb = s.optimalBoundingBox(False, False)
     pl, ph, pt = P["switch_cover"]
-    assert abs(bb.YLength - pl) < 0.05 and abs(bb.ZLength - ph) < 0.05, "not the RADR Power Switch print"
-    assert abs(bb.XLength - pt - P["switch_nub"][2]) < 0.05, "not the RADR Power Switch print"
-    s.translate(V(g["xi"] - bb.XMin, P["act_y"] - bb.Center.y, g["zc"] - bb.Center.z))
-    return s
+    gl, gh, proud, r = P["switch_grip"]
+    pitch, rw, rd = P["switch_ridges"]
+    sw, sh, sd = P["switch_socket"]
+    ya, zc = P["act_y"], g["zc"]
+    xo = P["outer"][2] + proud
+    plate = box(g["xi"], ya - pl / 2, zc - ph / 2, g["xf"], ya + pl / 2, zc + ph / 2)
+    plate = plate.makeChamfer(0.2, plate.Edges)
+    grip = box(g["xi"] + 0.5, ya - gl / 2, zc - gh / 2, xo, ya + gl / 2, zc + gh / 2)
+    grip = grip.makeFillet(r, [e for e in grip.Edges if e.BoundBox.XMin > xo - 1e-6])
+    s = plate.fuse(grip)
+    for k in (-1, 0, 1):
+        s = s.cut(box(xo - rd, ya + k * pitch - rw / 2, zc - gh, xo + 1, ya + k * pitch + rw / 2, zc + gh))
+    s = s.cut(box(g["xi"] - 1, ya - sw / 2, zc - sh / 2, P["act_tip_x"] + sd, ya + sw / 2, zc + sh / 2))
+    return solid(s.removeSplitter())
 
 
 def build_cover(pcb, extra=0.0):

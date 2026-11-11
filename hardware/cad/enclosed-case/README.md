@@ -1,7 +1,7 @@
 # Enclosed case
 
 The DTT case, 50 mm wide at the USB-C end and curving in to 44 mm at the jack,
-with a 5 mm round all round the top edge and RADR's blue switch cover on S1.
+with a 5 mm round all round the top edge and a blue switch cover on S1.
 The PCB drops into a pocket in the housing and a flat rear cover caps it. The
 original four PCB screws hold it together, flush in countersinks in the cap. It
 replaces the loop backing, and slides into the [snap backplate](../snap-backplate/).
@@ -50,15 +50,13 @@ are in [`stepped/`](stepped/).
 | Housing | `parts/Housing-Black.stl` (+ `Housing-Diffuser-White.stl` in white, `Housing-Inlays-Blue.stl` (logo and button) in blue) | black | top face down |
 | Rear cap | `parts/Rear-Cover-Black.stl` | black | outer face down |
 | Suction-cup rear cap (instead) | `parts/Rear-Cover-Cups-Black.stl` | black | outer face down |
-| Switch cover (RADR's Power Switch print) | `parts/Switch-Cover-Blue.stl` | blue | flat face down |
+| Switch cover | `parts/Switch-Cover-Blue.stl` | blue | flat face down |
 
 Or open [`print/DTT-Enclosed-Print.3mf`](print/DTT-Enclosed-Print.3mf) in Bambu
 Studio: plate 1 is the case with both rear caps (delete the one you don't
 need), plate 2 the snap backplate and wall bracket, already turned to their
 print faces. Blue is filament 1, the white diffuser 2 and black 3; it takes
-your current printer and process presets. The switch cover's nub has 0.55 mm
-walls: keep the Arachne wall generator (Bambu Studio's default) or turn on
-thin-wall detection.
+your current printer and process presets.
 [`print/DTT-Enclosed-Stepped-Print.3mf`](print/DTT-Enclosed-Stepped-Print.3mf)
 is the stepped case, with both rear caps. `print/make_3mf.py` rebuilds both
 from the STLs.
@@ -81,7 +79,7 @@ from the STLs.
 3. Slide the battery through its tray's two rings, leads toward the screen,
    up to the stop. No tape.
 4. With S1's lever at its jack end, push the switch cover onto it as far as
-   it goes, nub outwards. It fits either way up.
+   it goes, grip outwards. It fits either way up.
 5. Plug the battery and harness into the PCB. Put the PCB in jack end first,
    tilted, with the jack's nose in its hole, then lower the USB-C end into the
    pocket. The switch cover goes into its channel with it.
@@ -90,7 +88,7 @@ from the STLs.
    the original bosses. Snug them; do not strip the bosses.
 
 Size: 50.0 (44.0 at the jack end) × 95.2 × 22.3 mm (26.3 with the suction-cup
-cap). The switch cover's nub stands 2.1 mm proud of the side.
+cap). The switch cover's grip stands 0.4 mm proud of the side.
 
 ## Source
 
@@ -103,9 +101,6 @@ cap). The switch cover's nub stands 2.1 mm proud of the side.
 - `DTT_CASE=stepped` builds the stepped version into `stepped/`: walls 3 mm
   outside the original housing's outline, a 1.2 mm fillet on the top edges and
   the original's sloped jack end, with a 1.2 mm wall under it.
-- The switch cover is RADR's Power Switch print, read unchanged from
-  `RADR-Power-Switch.step` (`hardware/Print Files` in
-  Open-Source-Wireless-Remote_RADR).
 - The housing is built from nothing but its outer shape and the parts that go
   in it, as a short list of features in order (`build_housing`). The hidden
   "Housing features" group in `DTT-Enclosed.FCStd` shows each one.
@@ -118,11 +113,11 @@ cap). The switch cover's nub stands 2.1 mm proud of the side.
 
 - S1's lever position and travel. The channel follows the KiCad F.Fab drawing
   (lever at Y 82.4, 1.5 mm wide) and the datasheet's 2 mm of travel toward
-  USB-C, with 0.4 mm to spare at each end. Check the real part.
-- The switch cover: its plate (14.5 × 4.5 × 1.1 mm) slides freely in its
+  USB-C, with 0.3 mm to spare at each end. Check the real part.
+- The switch cover: its plate (12.4 × 4.8 × 1.1 mm) slides freely in its
   channel, 0.2 mm a side and 0.3 above and below, and hides the window at
-  both ends of its travel. Its socket was made for RADR's switch, so S1's
-  lever has 0.4 mm of play each way along the travel.
+  both ends of its travel. S1's lever has 0.2 mm of play each way in its
+  socket along the travel.
 - The PCB goes in nose first, with the switch cover on S1's lever, and drops
   flat into its pocket. 45° lead-ins on the channel's mouth bring the plate
   in from hard against S1.
