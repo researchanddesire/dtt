@@ -156,9 +156,11 @@ cap). The switch cover's grip stands 0.4 mm proud of the side.
 - Suction-cup cap: the cups click in and sit tight (`cup_snap`, `cup_land`),
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
   2 mm walls (`cup_roof`); check it doesn't sag onto the heads.
-- The OLED clips: the module clicks in and its glass sits flat on the plate.
-  The 20° catches are set to lift the board 0.1 mm past its seat, so the
-  strips stay sprung against it.
+- The OLED clips: the module clicks in with its screen flat on the plate and
+  the header's four solder points in their pocket. The 20° catches are set
+  for a module 2.95 mm from the screen's face to the back of its board
+  (`oled_stack`) and take 2.85 to 3.05 mm. They lift the board 0.1 mm past
+  its seat, so the strips stay sprung against it.
 
 The CAD checks are geometric only. Clamp force, thread hold and drop
 strength need a physical test.

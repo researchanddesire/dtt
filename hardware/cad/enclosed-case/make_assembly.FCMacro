@@ -71,12 +71,20 @@ def move_parts(doc):
     exploded copies move too. The source model's two sensor mounting screws
     go: the posts' pins take the holes they sat in. The USB-C receptacle's
     model moves to where the KiCad board and the part's drawing put it, and
-    the cell to the middle of its rings, 0.25 off its stop."""
+    the cell to the middle of its rings, 0.25 off its stop. The screen module
+    gets its real thickness and the header's solder points, and moves to sit
+    its face on the plate."""
+    dz, oled = B.build_oled(doc)
     moves = [(V(B.P["sensor_shift"], 0, 0), ("SensorPCB", "SensorOpticalCase", "SensorLenses", "SensorConnector")),
              (V(*B.P["usb_model_shift"]), ("Part__Feature006", "USBCTongue", "USBCContacts")),
-             (V(0, *B.P["battery_model_shift"]), ("BatteryPouch", "BatteryTape"))]
+             (V(0, *B.P["battery_model_shift"]), ("BatteryPouch", "BatteryTape")),
+             (V(0, 0, dz), B.OLED_PARTS)]
     for n in ("SensorScrew1", "SensorScrew2"):
         remove(doc, n)
+    for n, shape in oled.items():
+        for name in (n, "Exploded_" + n):
+            if doc.getObject(name) is not None:
+                doc.getObject(name).Shape = shape
     for d, names in moves:
         for n in names:
             for name in (n, "Exploded_" + n):
@@ -311,15 +319,17 @@ def sections(doc):
              ("PCB_S2", "#b5b5b5", None), ("Part__Feature006", "#b5b5b5", None), ("PCB_J5", "#b5b5b5", None),
              ("Part__Feature003", "#b5b5b5", None), ("PCBMountScrew1", "#c9a227", "Screw"),
              ("PCBMountScrew2", "#c9a227", None), ("OLEDPCB", "#3f9d6a", "OLED board"),
-             ("Part__Feature005", "#33415e", "OLED glass"), ("BatteryPouch", "#c8b88a", "Battery"),
+             ("Part__Feature005", "#33415e", "OLED glass"), ("OLEDHeaderPins", "#c9a227", None),
+             ("BatteryPouch", "#c8b88a", "Battery"),
              ("SensorPCB", "#7a5bb5", "Sensor"), ("SensorOpticalCase", "#7a5bb5", None)]
-    bx0, by0, bx1, by1, _ = B.P["oled_board"]
+    bx0, by0, bx1, by1 = B.P["oled_board"]
     py = B.P["button_pad"][1]
     X, Y = V(1, 0, 0), V(0, 1, 0)
     cuts = [("S1's lever in the switch cover", Y, B.P["act_y"], (34, 50), (-9, 4)),
             ("Switch cover in its channel, over the cap's tab", Y, B.P["act_y"] + 2.0, (34, 50), (-9, 4)),
             ("PCB in its pocket, screw", Y, 76.0, (-5, 14), (-9, 10)),
             ("Screen clip: strip, slot, wall behind", Y, (by0 + by1) / 2, (-4.5, 10.5), (6.1, 14.6)),
+            ("Screen header's solder in its pocket", X, B.P["oled_pins"][0] - B.P["oled_pins"][2] / 6, (29, 40), (6.1, 14.6)),
             ("Button post straight over S2", Y, py, (27, 46), (-9, 15)),
             ("Cap tongue in its groove", Y, 40.0, (-5, 3), (-9, -1)),
             ("USB-C recess, back to the PCB's edge", X, B.P["usb_center"][0], (84, 96), (-9, 4)),

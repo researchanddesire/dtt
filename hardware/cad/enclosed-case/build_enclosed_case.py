@@ -201,21 +201,26 @@ PARAMS = {
     "inlay_z": (13.52, 14.17),  # same depth as the logo inlay
     # The screen's viewport, on its active area (21.74 x 10.86, nearer the
     # header end of the glass than the old window), with a 45 degree edge at
-    # the top face. The glass sits in a shallow recess in the plate.
+    # the top face.
     "viewport": (21.0, 44.0, 23.4, 12.4, 0.5, 0.5),  # centre x, y, width, height, corner radius, chamfer
-    "oled_glass": (8.10, 37.84, 33.90, 53.24, 12.77),  # x0, y0, x1, y1, top z
-    "glass_clear": 0.15,  # recess round the glass
+    # The screen module (GME12864-11, 0.96 in OLED): its face sits flat on the
+    # plate and its board's back is oled_stack below. The header's four solder
+    # points stand on the board's front, taller than the screen, so the plate
+    # has a pocket over them.
+    "oled_board": (7.25, 31.64, 34.75, 59.44),  # x0, y0, x1, y1
+    "oled_stack": 2.95,  # screen face to the board's back
+    "oled_pins": (21.28, 33.92, 7.62, 2.2),  # solder points: row centre x, y, row length, height above the board's front
+    "pin_pocket": (1.9, 1.5, 0.9),  # the pocket: past the row's ends, either side of it, depth into the plate
     # Print-in-place snap clips for the OLED module: a spring strip either side
     # of its board, bridged between blocks at its ends that run out into the
-    # side wall, with a lip that catches the board's back and holds the glass on
-    # the plate. Behind each strip a wall fills out to the side wall, past a
+    # side wall, with a lip that catches the board's back and holds the screen
+    # on the plate. Behind each strip a wall fills out to the side wall, past a
     # slot that lets the strip bend out and stops it bending too far.
-    "oled_board": (7.25, 31.64, 34.75, 59.44, 9.57),  # x0, y0, x1, y1, back face z
     "clip_gap": 0.2,  # strips and end tabs to the board edges
-    "clip_beam": (1.2, 8.77, 11.07),  # strip thickness, bottom z, top z (1.5 under the plate, so the bridge can sag)
+    "clip_beam": (1.2, 8.2, 11.07),  # strip thickness, bottom z, top z (1.5 under the plate, so the bridge can sag)
     "clip_post": 2.0,  # end block length; the end tabs reach this far over the board corners
-    "clip_lip": (0.7, 8.0, 0.1, 20.0),  # reach from the strip, length, how far it would lift the board at rest, catch face from flat (degrees)
-    "clip_backing": 0.95,  # slot behind each strip: it bends 0.5 to let the board in, and the wall behind stops it
+    "clip_lip": (1.1, 8.0, 0.1, 20.0),  # reach from the strip, length, how far it would lift the board at rest, catch face from flat (degrees)
+    "clip_backing": 1.1,  # slot behind each strip: it bends 0.9 to let the board in, and the wall behind stops it
     # Distance sensor (GP2Y0A51SK0F), moved left by sensor_shift, which centres
     # its lenses on the case. It seats as in the original housing: its optical
     # case in a window through the plate and a pad under it, and the two
@@ -664,19 +669,19 @@ def inside(pcb, diffuser):
     """The inside: the PCB pocket's outline from under the seam up to the
     plate, kept round_wall in from the outer faces (under the top round its
     edges follow the round in, and the conformal outline's jack end follows
-    its slope), with a shallow recess in the plate for the screen's glass and
-    the opening under the diffuser."""
+    its slope), with a pocket in the plate for the screen header's solder
+    points and the opening under the diffuser."""
     zs, zp = P["seam_z"], P["plate_z"]
     pocket = ext(pcb_pocket(pcb).OuterWire, zs - 1, zp).common(lofted_envelope(zs - 1, P["round_wall"]))
     if top_round() <= 0:
         pocket = pocket.cut(above_slope(P["round_wall"]))
-    x0, y0, x1, y1, zg = P["oled_glass"]
-    c = P["glass_clear"]
-    glass = box(x0 - c, y0 - c, zp - 0.1, x1 + c, y1 + c, zg)
+    cx, cy, row, _ = P["oled_pins"]
+    ex, ey, depth = P["pin_pocket"]
+    pins = box(cx - row / 2 - ex, cy - ey, zp - 0.1, cx + row / 2 + ex, cy + ey, zp + depth)
     zd = diffuser.BoundBox.ZMin
     base = [f for f in diffuser.Faces if f.normalAt(0, 0).z < -0.99 and abs(f.CenterOfMass.z - zd) < 1e-6]
     light = ext(base[0].OuterWire, zp - 0.1, zd)
-    return solid(pocket.fuse([glass, light]).removeSplitter())
+    return solid(pocket.fuse([pins, light]).removeSplitter())
 
 
 def screw_bosses():
@@ -1347,12 +1352,13 @@ def screen_clips():
     a slot that lets the strip bend out to let the board in and stops it short
     of bending too far. The right strip's block at the button end stands
     beside the board, with no tab, so the button's slot stays clear and
-    nothing stands free (the glass's recess keeps the board square). A lip in the middle of each
+    nothing stands free. A lip in the middle of each
     strip catches the board's back on a face clip_lip[3] degrees from flat,
     near self-locking, that would lift the board clip_lip[2] past its seat,
-    so the strips stay sprung and press the glass onto the plate. Printed top
+    so the strips stay sprung and press the screen onto the plate. Printed top
     face down, the strips are bridges and the lips short overhangs."""
-    bx0, by0, bx1, by1, zb = P["oled_board"]
+    bx0, by0, bx1, by1 = P["oled_board"]
+    zb = P["plate_z"] - P["oled_stack"]  # the board's back
     g, s = P["clip_gap"], P["clip_post"]
     t, z0, z1 = P["clip_beam"]
     reach, ll, dz, ang = P["clip_lip"]
@@ -1383,6 +1389,25 @@ def screen_clips():
         prof = [V(xs(0.01), ym - ll / 2, zr), V(xs(-reach), ym - ll / 2, za), V(xs(0.01), ym - ll / 2, za - reach)]
         parts.append(Part.Face(Part.makePolygon(prof + prof[:1])).extrude(V(0, ll, 0)))
     return parts[0].fuse(parts[1:]).removeSplitter()
+
+
+OLED_PARTS = ("Part__Feature005", "OLEDPCB", "OLEDHolePlating", "OLEDHeader", "OLEDHeaderPins", "OLEDFlex",
+              "OLEDRearICs", "OLEDTraces")
+
+
+def build_oled(doc):
+    """The screen module as it is, where the source model has a thicker glass
+    and no solder: how far its parts move to put the screen's face on the
+    plate, with the glass as thick as oled_stack leaves over the board and
+    the header's solder points standing on the board's front. The two shapes
+    are where the source model has them, before the move."""
+    cx, cy, row, h = P["oled_pins"]
+    pcb = doc.getObject("OLEDPCB").Shape.BoundBox
+    g = doc.getObject("Part__Feature005").Shape.BoundBox
+    glass = box(g.XMin, g.YMin, pcb.ZMax, g.XMax, g.YMax, pcb.ZMin + P["oled_stack"])
+    solder = [Part.makeCone(0.9, 0.35, h, V(cx + (i - 1.5) * row / 3, cy, pcb.ZMax - 0.01)) for i in range(4)]
+    pins = doc.getObject("OLEDHeaderPins").Shape.fuse(solder).removeSplitter()
+    return P["plate_z"] - P["oled_stack"] - pcb.ZMin, {"Part__Feature005": glass, "OLEDHeaderPins": pins}
 
 
 def build_all(doc):
