@@ -205,12 +205,12 @@ PARAMS = {
     "viewport": (21.0, 44.0, 23.4, 12.4, 0.5, 0.5),  # centre x, y, width, height, corner radius, chamfer
     # The screen module (GME12864-11, 0.96 in OLED): its face sits flat on the
     # plate and its board's back is oled_stack below. The header's four solder
-    # points stand on the board's front, taller than the screen, so the plate
-    # has a pocket over them.
+    # points stand on the board's front, nearly as tall as the screen, so the
+    # plate has a pocket over them.
     "oled_board": (7.25, 31.64, 34.75, 59.44),  # x0, y0, x1, y1
-    "oled_stack": 2.95,  # screen face to the board's back
-    "oled_pins": (21.28, 33.92, 7.62, 2.2),  # solder points: row centre x, y, row length, height above the board's front
-    "pin_pocket": (1.9, 1.5, 0.9),  # the pocket: past the row's ends, either side of it, depth into the plate
+    "oled_stack": 3.0,  # screen face to the board's back
+    "oled_pins": (21.28, 33.92, 7.62, 2.75),  # solder points: row centre x, y, row length, tips above the board's back (1.6 past a 1.15 board)
+    "pin_pocket": (1.9, 1.5, 0.6),  # the pocket: past the row's ends, either side of it, depth into the plate
     # Print-in-place snap clips for the OLED module: a spring strip either side
     # of its board, bridged between blocks at its ends that run out into the
     # side wall, with a lip that catches the board's back and holds the screen
@@ -219,8 +219,8 @@ PARAMS = {
     "clip_gap": 0.2,  # strips and end tabs to the board edges
     "clip_beam": (1.2, 8.2, 11.07),  # strip thickness, bottom z, top z (1.5 under the plate, so the bridge can sag)
     "clip_post": 2.0,  # end block length; the end tabs reach this far over the board corners
-    "clip_lip": (1.1, 8.0, 0.1, 20.0),  # reach from the strip, length, how far it would lift the board at rest, catch face from flat (degrees)
-    "clip_backing": 1.1,  # slot behind each strip: it bends 0.9 to let the board in, and the wall behind stops it
+    "clip_lip": (0.9, 8.0, 0.2, 20.0),  # reach from the strip, length, catch face clear of the board's back, catch face from flat (degrees)
+    "clip_backing": 0.95,  # slot behind each strip: it bends 0.7 to let the board in, and the wall behind stops it
     # Distance sensor (GP2Y0A51SK0F), moved left by sensor_shift, which centres
     # its lenses on the case. It seats as in the original housing: its optical
     # case in a window through the plate and a pad under it, and the two
@@ -1353,20 +1353,21 @@ def screen_clips():
     of bending too far. The right strip's block at the button end stands
     beside the board, with no tab, so the button's slot stays clear and
     nothing stands free. A lip in the middle of each
-    strip catches the board's back on a face clip_lip[3] degrees from flat,
-    near self-locking, that would lift the board clip_lip[2] past its seat,
-    so the strips stay sprung and press the screen onto the plate. Printed top
+    strip closes over the board's back. Its catch face is clip_lip[3] degrees
+    from flat and stands clip_lip[2] clear of the board, which prints as one
+    0.30 mm layer, so the strip always springs back over the board and the
+    screen stops against the lips when pressed from the front. Printed top
     face down, the strips are bridges and the lips short overhangs."""
     bx0, by0, bx1, by1 = P["oled_board"]
     zb = P["plate_z"] - P["oled_stack"]  # the board's back
     g, s = P["clip_gap"], P["clip_post"]
     t, z0, z1 = P["clip_beam"]
-    reach, ll, dz, ang = P["clip_lip"]
+    reach, ll, clear, ang = P["clip_lip"]
     slot = P["clip_backing"]
     xwl, xwr = P["outer"][0] - 5, P["outer"][2] + 5  # out into the side walls; trimmed to the inside
     k = math.tan(math.radians(ang))
     zp = P["plate_z"] + 0.33  # into the plate
-    zr = zb + dz + g * k  # catch face at the strip
+    zr = zb - clear + g * k  # catch face at the strip
     za = zr - reach * k  # its inner edge
     ym = (by0 + by1) / 2
     ya, yb = by0 - g, by1 + g  # end block faces toward the board
@@ -1399,13 +1400,15 @@ def build_oled(doc):
     """The screen module as it is, where the source model has a thicker glass
     and no solder: how far its parts move to put the screen's face on the
     plate, with the glass as thick as oled_stack leaves over the board and
-    the header's solder points standing on the board's front. The two shapes
-    are where the source model has them, before the move."""
+    the header's solder points standing on the board's front, their tips
+    oled_pins[3] above its back. The two shapes are where the source model
+    has them, before the move."""
     cx, cy, row, h = P["oled_pins"]
     pcb = doc.getObject("OLEDPCB").Shape.BoundBox
     g = doc.getObject("Part__Feature005").Shape.BoundBox
     glass = box(g.XMin, g.YMin, pcb.ZMax, g.XMax, g.YMax, pcb.ZMin + P["oled_stack"])
-    solder = [Part.makeCone(0.9, 0.35, h, V(cx + (i - 1.5) * row / 3, cy, pcb.ZMax - 0.01)) for i in range(4)]
+    z0 = pcb.ZMax - 0.01
+    solder = [Part.makeCone(0.9, 0.35, pcb.ZMin + h - z0, V(cx + (i - 1.5) * row / 3, cy, z0)) for i in range(4)]
     pins = doc.getObject("OLEDHeaderPins").Shape.fuse(solder).removeSplitter()
     return P["plate_z"] - P["oled_stack"] - pcb.ZMin, {"Part__Feature005": glass, "OLEDHeaderPins": pins}
 
