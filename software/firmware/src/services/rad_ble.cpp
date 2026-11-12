@@ -5,7 +5,10 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
+#include <atomic>
 #include <mutex>
 
 #include "FirmwareProvenance.h"
@@ -14,6 +17,7 @@
 #include "input.h"
 #include "services/board.hpp"
 #include "services/leds.h"
+#include "services/rad_ble_events.h"
 #include "services/wifi_service.h"
 #include "state/events.hpp"
 #include "state/state.h"
@@ -21,6 +25,8 @@
 #include "wifiSettings.h"
 
 #ifndef PROVISION
+#include <TrainingFeed.h>
+
 #include "services/vibrator.h"
 #endif
 
@@ -87,6 +93,10 @@ const radble::Resource RESOURCES[] = {
     {"window_time", "motion.windowTime", "motion", "object", "ms", RS,
      ""},
     {"streak", "motion.streak", "motion", "object", "strokes", RS, ""},
+    // The trainer has no encoder control. The encoder surface carries the
+    // compact live feed, so it streams without changing the motion payload.
+    {"live", "encoder.live", "encoder", "object", "", RS,
+     "{\"maxBytes\":160}"},
     {"session", "session.current", "setting", "object", "", R, ""},
     {"hands_free", "session.handsFree", "setting", "bool", "", RW, ""},
     {"session_name", "session.name", "setting", "string", "", R, ""},
@@ -252,6 +262,80 @@ radble::Result sessionDefinition(size_t index) {
     String output;
     serializeJson(document, output);
     return radble::Result::success(output);
+}
+
+// The segment the live feed describes, bound when it starts training.
+// Guarded by trainingMutex.
+struct FeedSegment {
+    uint16_t index = 0;
+    float tipCm = 0.0f;
+    float deepCm = 0.0f;
+};
+FeedSegment feedSegment;
+
+// Segment events wait here for the RadBLE worker. Null until the server runs.
+std::atomic<QueueHandle_t> trainingEvents{nullptr};
+constexpr UBaseType_t TRAINING_EVENT_QUEUE_LENGTH = 4;
+
+// Compact sample for the encoder surface. The caller holds trainingMutex.
+String liveFeedJson() {
+    TrainingFeedSample sample;
+    sample.segment = session.segmentIdx;
+    // A segment that was stopped before its end keeps stale readings, so the
+    // feed describes a segment only while it runs and after it has ended.
+    if (currentSegment != nullptr &&
+        (trainingLifecycle.active() ||
+         currentSegment->state == TrainingState::END)) {
+        const SegmentBase& segment = *currentSegment;
+        const float tipCm = feedSegment.tipCm;
+        const float deepCm = feedSegment.deepCm;
+        sample.available = true;
+        sample.segment = feedSegment.index;
+        sample.depth =
+            trainingFeedScale(segment.currentPosition, tipCm, deepCm);
+        sample.positionState = static_cast<int>(segment.positionState);
+        sample.trainingState = static_cast<int>(segment.state);
+        sample.strokes = segment.statistics.strokes > 0
+                             ? static_cast<uint32_t>(segment.statistics.strokes)
+                             : 0U;
+        sample.progress = segment.getTrainingProgress();
+        sample.grade = segment.grade();
+        // Freeform compares rpm with its target and has no positional window.
+        if (segment.type != TrainingType::FREEFORM) {
+            sample.windowStart =
+                trainingFeedScale(segment.startWindow, tipCm, deepCm);
+            sample.windowEnd =
+                trainingFeedScale(segment.endWindow, tipCm, deepCm);
+        }
+    }
+    char json[TRAINING_FEED_SAMPLE_MAX_BYTES + 1];
+    if (writeTrainingFeedSample(sample, json, sizeof(json)) == 0) return "{}";
+    return json;
+}
+
+void queueTrainingEvent(const TrainingFeedEvent& event) {
+    const QueueHandle_t queue = trainingEvents.load();
+    if (queue != nullptr) xQueueSend(queue, &event, 0);
+}
+
+// Publishes queued segment events. Runs on the RadBLE worker, the task that
+// publishes the library's own state and lease events.
+void publishTrainingEvents() {
+    const QueueHandle_t queue = trainingEvents.load();
+    if (queue == nullptr) return;
+    // A notification carries whatever the event characteristic holds when the
+    // host task sends it, and the worker publishes its own events around
+    // snapshot calls. Keep each segment event a few milliseconds from its
+    // neighbours so neither replaces the other.
+    const TickType_t spacing = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
+    TrainingFeedEvent event;
+    char json[TRAINING_FEED_EVENT_MAX_BYTES + 1];
+    while (xQueueReceive(queue, &event, 0) == pdTRUE) {
+        if (writeTrainingFeedEvent(event, json, sizeof(json)) == 0) continue;
+        vTaskDelay(spacing);
+        radBleServer.publishEvent(json);
+        vTaskDelay(spacing);
+    }
 }
 #endif
 
@@ -442,6 +526,8 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             document["value"] = session.calibratedMaxPosition;
         else if (path == "session.definition")
             return sessionDefinition(args["index"] | session.segmentIdx);
+        else if (path == "encoder.live")
+            return radble::Result::success(liveFeedJson());
 #endif
         else if (path == "device.trainerId")
             document["value"] = trainerId;
@@ -705,6 +791,10 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 }
 
 String snapshot(radble::Surface surface, void*) {
+#ifndef PROVISION
+    // RadBLE reads State from its worker at least every 250 ms.
+    if (surface == radble::Surface::State) publishTrainingEvents();
+#endif
     const String currentState = stateName();
 #ifndef PROVISION
     // Hardware surfaces sample the ADC for up to tens of milliseconds and read
@@ -758,6 +848,10 @@ String snapshot(radble::Surface surface, void*) {
             document["id"] = "main";
             document["pressed"] = digitalRead(BUTTON_IN) == LOW;
             break;
+#ifndef PROVISION
+        case radble::Surface::Encoder:
+            return liveFeedJson();
+#endif
         case radble::Surface::Analog:
             document["distanceCm"] = getDistance(1);
             document["distanceVoltage"] = getAnalogVoltage(SENSOR_INPUT, 1);
@@ -865,6 +959,34 @@ ServerCallbacks serverCallbacks;
 
 radble::Server radBleServer;
 
+#ifndef PROVISION
+void radBleSegmentStarted(const uint16_t segment, const int type,
+                          const int target, const float tipCm,
+                          const float deepCm) {
+    {
+        TrainingGuard guard(trainingMutex);
+        feedSegment = {segment, tipCm, deepCm};
+    }
+    TrainingFeedEvent event;
+    event.kind = TrainingFeedEvent::SegmentStarted;
+    event.segment = segment;
+    event.type = static_cast<uint8_t>(constrain(type, 0, 255));
+    event.target = target > 0 ? static_cast<uint32_t>(target) : 0U;
+    queueTrainingEvent(event);
+}
+
+void radBleSegmentCompleted(const uint16_t segment, const int grade,
+                            const int passed, const int strikes) {
+    TrainingFeedEvent event;
+    event.kind = TrainingFeedEvent::SegmentCompleted;
+    event.segment = segment;
+    event.grade = static_cast<uint8_t>(constrain(grade, 0, 100));
+    event.passed = static_cast<int8_t>(passed < 0 ? -1 : passed != 0);
+    event.strikes = static_cast<uint8_t>(constrain(strikes, 0, 255));
+    queueTrainingEvent(event);
+}
+#endif
+
 bool initRadBle() {
     loadVoltageCalibration();
     refreshPowerTelemetry(true);
@@ -911,6 +1033,10 @@ bool initRadBle() {
         .context = nullptr,
     };
     if (!radBleServer.begin(server, config)) return false;
+#ifndef PROVISION
+    trainingEvents = xQueueCreate(TRAINING_EVENT_QUEUE_LENGTH,
+                                  sizeof(TrainingFeedEvent));
+#endif
     auto* advertising = NimBLEDevice::getAdvertising();
     advertising->setName(deviceName.c_str());
     advertising->addServiceUUID(radBleServer.serviceUuid());
