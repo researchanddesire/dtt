@@ -95,7 +95,8 @@ cap). The switch cover's grip stands 0.4 mm proud of the side.
 - The case is modelled in Onshape (document "Deep Throat Trainer", tab "DTT
   Enclosed Case"). `build_enclosed_case.py` mirrors it feature for feature in
   FreeCAD and builds the files here. Change Onshape first, then the script.
-  The stepped version is in the script only.
+  The stepped version is built by the script and imported into the same
+  document (tab "DTT Enclosed Case, stepped", with its own assembly).
 - `build_enclosed_case.py` builds the parts from `../DTT.FCStd`. Dimensions are
   in `PARAMS`. `top_round` is the round along the top edge. It turns into a
   45° face for its last 1.5 mm (`round_stop`), so it prints top face down
