@@ -1,0 +1,74 @@
+"""Write DTT-Molded.FCStd (coloured, editable view of the molded case).
+
+    freecadcmd build_molded_case.py && xvfb-run -a freecad make_assembly.FCMacro
+"""
+import os
+import sys
+
+import FreeCAD as App
+import FreeCADGui as Gui
+
+HERE = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else os.getcwd()
+sys.path.insert(0, HERE)
+import build_molded_case as B  # noqa: E402
+
+BLACK, BLUE, WHITE = (0.13, 0.13, 0.14), (0.09, 0.42, 0.93), (0.92, 0.92, 0.88)
+GREEN, GREY, METAL, CLEAR = (0.05, 0.3, 0.15), (0.35, 0.35, 0.38), (0.7, 0.7, 0.72), (0.85, 0.85, 0.9)
+
+import Part  # noqa: E402
+
+# The moulded parts as freecadcmd build_molded_case.py exported them (run that
+# first); the reference parts straight from the enclosed case's assembly.
+R = lambda n: Part.read(os.path.join(B.PARTS, n + ".step"))
+src = App.openDocument(B.ASSY)
+g = dict(housing=R("Housing-Black"), cup_cap=R("Cap-Cups-Black"), cap=R("Cap-Black"), slider=R("Switch-Cover-Blue"),
+         overlay={k: R("Overlay-" + k.capitalize()) for k in ("black", "blue", "white", "clear", "diffuser")},
+         screws=[src.getObject("PCBMountScrew%d" % i).Shape.copy() for i in range(1, 5)],
+         cups=[src.getObject("SuctionCup%d" % i).Shape.copy() for i in (1, 2)], comps=B.components(src))
+doc = App.newDocument("DTT_Molded")
+
+
+def add(group, name, label, shape, col, vis=True, transp=0):
+    o = doc.addObject("Part::Feature", name)
+    o.Label = label
+    o.Shape = shape
+    group.addObject(o)
+    v = o.ViewObject
+    if v is not None:
+        v.ShapeColor = col
+        v.Transparency = transp
+        v.Visibility = vis
+    return o
+
+
+case = doc.addObject("App::Part", "MoldedCase")
+case.Label = "Molded case - moulded parts"
+add(case, "Housing", "Housing - black PC/ABS", g["housing"], BLACK)
+add(case, "CapCups", "Cap with suction-cup keyholes - black", g["cup_cap"], BLACK)
+add(case, "Cap", "Plain cap - black (swap for the cup cap)", g["cap"], BLACK, vis=False)
+add(case, "SwitchCover", "Switch cover - blue", g["slider"], BLUE)
+ov = doc.addObject("App::Part", "Overlay")
+ov.Label = "Top overlay - printed film (see parts/Overlay.dxf)"
+for k, label, col, tr in (("black", "Overlay - black print", (0.08, 0.08, 0.09), 0), ("blue", "Overlay - blue print", BLUE, 0),
+                          ("white", "Overlay - white diffuser print", WHITE, 0), ("clear", "Overlay - clear screen window", (0.6, 0.7, 0.8), 60),
+                          ("diffuser", "Diffuser patch - opal film laminated under the white window", (0.97, 0.97, 0.95), 0)):
+    add(ov, "Overlay" + k.capitalize(), label, g["overlay"][k], col, transp=tr)
+
+hw = doc.addObject("App::Part", "Hardware")
+hw.Label = "Screws and suction cups"
+for i, s in enumerate(g["screws"]):
+    add(hw, "Screw%d" % (i + 1), "PCB screw %d - 0408LTFB" % (i + 1), s, METAL)
+for i, s in enumerate(g["cups"]):
+    add(hw, "Cup%d" % (i + 1), "Suction cup %d - bought in" % (i + 1), s, CLEAR, transp=50)
+
+el = doc.addObject("App::Part", "Electronics")
+el.Label = "PCBA and modules (reference)"
+for n, (label, s) in g["comps"].items():
+    col = GREEN if n == "BoardRev4" else GREY
+    if n.startswith("Harness") or n.startswith("BatteryLead"):
+        col = (0.8, 0.3, 0.2)
+    add(el, "R_" + n, label, s, col)
+
+doc.recompute()
+doc.saveAs(os.path.join(HERE, "DTT-Molded.FCStd"))
+os._exit(0)
