@@ -1,20 +1,14 @@
-# DTT (Deep Throat Trainer) rev4 - main signal harness
-# Board J2 (HC-ZH-7PLT, JST ZH 1.5 mm, 7-pin) -> OLED 4-pin header + Sharp distance sensor.
-#
-# Sources (introspected):
-#   - J2 pin nets: 217A_dttrainer_rev4.kicad_pcb pads (1 IO32, 2 GND, 3 3V3, 4 GND, 5 3V3, 6 IO22, 7 IO21).
-#   - Firmware: SENSOR_INPUT = 32 (services/board.hpp), U8G2 SSD1306 I2C SDA 21 / SCL 22.
-#   - CAD (DTT FCStd): HarnessWire1..7 centrelines 72-83 mm (d 0.65 mm); sensor = GP2Y0A51SK0F;
-#     OLED = GME12864 0.96" module; J2 footprint B7B-ZR-SM4-TF; J6 footprint B2B-PH-K-S.
-#   - Wire colours / grouping: assembly photos (harness-connected-to-pcb.png, build-kit-overview.png).
-# Render:  wireviz hardware/cables/dtt-harness.yml
+# DTT rev4 main harness DTT-HAR-001: PCB J2 to the OLED and the distance sensor.
+# J2 pins from the rev4 KiCad pads (1 IO32, 2 GND, 3 3V3, 4 GND, 5 3V3, 6 IO22, 7 IO21);
+# firmware uses IO32 for the sensor and I2C SDA 21 / SCL 22. Lengths follow the CAD harness wires plus slack.
+# Render from this folder: wireviz dtt-harness.yml
 
 metadata:
   title: DTT rev4 main harness (J2 to OLED + distance sensor)
   pn: DTT-HAR-001
   description: >-
-    7-wire harness, 2 branches. Battery is NOT part of this harness
-    (702035 cell ships with its own leads + JST PH 2.0 2-pin plug to J6).
+    7-wire harness, 2 branches. The battery is separate: the 702035 cell
+    has its own leads and a JST PH 2.0 2-pin plug for J6.
 
 options:
   fontname: arial
@@ -42,7 +36,7 @@ connectors:
     pn: DuPont 1x4P 2.54 (generic)
     pincount: 4
     pinlabels: [GND, VCC, SCL, SDA]
-    notes: Mates OLED 4-pin header (see note 3).
+    notes: Mates the OLED 4-pin header (note 3).
     additional_components:
       - type: Crimp terminal, DuPont 2.54 female, 22-28 AWG
         pn: Generic DuPont female
@@ -54,7 +48,7 @@ connectors:
     manufacturer: JST (or equiv.)
     pincount: 3
     pinlabels: [Vo, GND, Vcc]
-    notes: Mates GP2Y0A51SK0F sensor (note 4).
+    notes: Mates the GP2Y0A51SK0F sensor (note 4).
     additional_components:
       - type: Crimp terminal, ZH, 26-28 AWG
         pn: SZH-002T-P0.5
@@ -97,9 +91,9 @@ tweak:
     <table border="1" cellborder="0" cellspacing="0" cellpadding="3" align="left">
     <tr><td align="left"><b>NOTES</b></td></tr>
     <tr><td align="left">1. Wire 28 AWG UL1571 (OD 0.8-1.0 mm to suit SZH-002T-P0.5). Lengths +/-5 mm, terminal to terminal.</td></tr>
-    <tr><td align="left">2. Wires loose (no sleeve); twist each branch lightly is OK. Colours per photos of current build.</td></tr>
-    <tr><td align="left">3. ASSUMED: OLED header order GND-VCC-SCL-SDA (GME12864-11 type). Confirm vs. supplied module silkscreen.</td></tr>
-    <tr><td align="left">4. Sensor: Sharp GP2Y0A51SK0F (from CAD); ZH 3-pin per Sharp datasheet - verify with sample. (Sharp Vcc spec 4.5-5.5 V; board feeds 3V3 - design note, not a harness change.)</td></tr>
-    <tr><td align="left">5. Battery NOT in this harness: 702035 cell with own leads + JST PH 2.0 2P plug (PHR-2) to J6. J6 pin1 = VBAT(+), pin2 = GND.</td></tr>
+    <tr><td align="left">2. Wires loose, no sleeve. Each branch may be lightly twisted.</td></tr>
+    <tr><td align="left">3. OLED header order GND-VCC-SCL-SDA (GME12864-11). Match the module silkscreen.</td></tr>
+    <tr><td align="left">4. Sensor: Sharp GP2Y0A51SK0F, ZH 3-pin Vo-GND-Vcc per the Sharp datasheet.</td></tr>
+    <tr><td align="left">5. Battery not in this harness: 702035 cell with its own leads and a JST PH 2.0 2P plug (PHR-2) to J6. J6 pin 1 VBAT+, pin 2 GND.</td></tr>
     <tr><td align="left">6. 100% continuity test; pull test per JST spec.</td></tr>
     </table>>];
