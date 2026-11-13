@@ -2,7 +2,7 @@
 
 - [DTT.FCStd](DTT.FCStd) — editable FreeCAD assembly (FreeCAD 1.1+).
 - [DTT.step](DTT.step) — STEP assembly.
-- [enclosed-case/](enclosed-case/README.md) — case variant with PCB edge walls, sliding switch cover, and a screwed rear cover.
+- [enclosed-case/](enclosed-case/README.md) — enclosed case with a sliding switch cover and a suction-cup rear cover.
 - [Body + diffuser 3MF](../production-exports/cad/integrated-diffuser/DTT-Outer-Body-Print-in-Place.3mf) — two material regions printed together.
 
 The assembly includes the housing, diffuser, PCB, OLED, sensor, 702035 battery,
