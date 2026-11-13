@@ -1,0 +1,142 @@
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <ArduinoJson.h>
+#include <TrainingLifecycle.h>
+#include "boost/sml.hpp"
+#include "state/events.hpp"
+namespace sml = boost::sml;
+using namespace sml;
+using TrainingGuard = std::lock_guard<std::recursive_mutex>;
+std::recursive_mutex trainingMutex;
+TrainingLifecycle trainingLifecycle;
+enum class TrainingState { START, END };
+using String = std::string;
+struct Segment {
+    TrainingState state = TrainingState::START;
+    struct { bool enabled = true; int threshold = 80; } passFail;
+    int grade() const { return 75; }
+    JsonDocument createPayload(String& trainer, String& sessionId, int index,
+                                String& settings, String& toy, int passed) {
+        JsonDocument document;
+        document["trainer"] = trainer; document["session"] = sessionId;
+        document["index"] = index; document["settings"] = settings;
+        document["toy"] = toy; document["passed"] = passed;
+        return document;
+    }
+};
+std::shared_ptr<Segment> currentSegment;
+struct Toy { String id; };
+struct { String id = "session-a", settingsId = "settings-a"; int segmentIdx = 0, segmentCount = 2; std::optional<Toy> toy; } session;
+String trainerId = "synthetic-trainer";
+Segment definition;
+const Segment* getSegmentByIdx(int) { return &definition; }
+struct { int stopped = 0; void off() { ++stopped; } } vibratorInstance;
+unsigned notificationPosts = 0, resultSnapshots = 0, attempts = 0;
+uint32_t workerGeneration = 0;
+constexpr uint32_t configMINIMAL_STACK_SIZE = 1024;
+constexpr uint8_t RUNTIME_TASK_STACK_MULTIPLIER = 8, SENSOR_TASK_STACK_MULTIPLIER = 4;
+bool startTrainingTasks(uint32_t, uint32_t) { workerGeneration = trainingLifecycle.begin(); ++attempts; return true; }
+void startSaveResultsTask() { ++resultSnapshots; }
+// ACTUAL_STOP
+// ACTUAL_ACTIONS
+// ACTUAL_GUARDS
+// ACTUAL_CAPTURE
+constexpr auto clear = []() { TrainingGuard guard(trainingMutex); trainingLifecycle.stop(); currentSegment.reset(); };
+constexpr auto recoverMissingSegment = []() { currentSegment.reset(); };
+constexpr auto drawGradeOrFailure = []() {};
+struct begin_case {};
+struct Machine {
+    auto operator()() const {
+        return make_transition_table(
+            *"setup"_s + event<begin_case> = "play.idle"_s,
+            // ACTUAL_TRANSITIONS
+            "play.calibration.min"_s + event<begin_case> = "play.idle"_s,
+            "play.grade"_s + event<begin_case> = "play.idle"_s,
+            "play.details.session"_s + event<begin_case> = "play.idle"_s
+        );
+    }
+};
+
+static bool trainingFlag(sml::sm<Machine>& machine) {
+    std::string currentState;
+    machine.visit_current_states([&](auto state) { currentState = state.c_str(); });
+    TrainingGuard guard(trainingMutex);
+    JsonDocument document;
+    // ACTUAL_STATE_FIELDS
+    return document["training"].as<bool>();
+}
+static void activate(uint32_t generation, const std::string& sessionId) {
+    TrainingGuard guard(trainingMutex);
+    assert(trainingLifecycle.prepareSensor(generation));
+    assert(trainingLifecycle.activate(generation));
+    currentSegment = std::make_shared<Segment>();
+    if (trainingLifecycle.reserveNotification(generation, sessionId)) ++notificationPosts;
+}
+int main() {
+    sml::sm<Machine> machine;
+    machine.process_event(begin_case{});
+    const auto old = workerGeneration;
+    assert(!trainingFlag(machine));
+    assert(!trainingLifecycle.reserveNotification(old, session.id));
+    activate(old, session.id);
+    assert(trainingFlag(machine) && notificationPosts == 1);
+    auto delayedWorker = currentSegment;
+    std::weak_ptr<Segment> lifetime = delayedWorker;
+    assert(!machine.process_event(done{})); // generic completion cannot fabricate a grade
+    assert(machine.process_event(recalibrate{}));
+    assert(machine.is("play.calibration.min"_s));
+    assert(currentSegment && !trainingFlag(machine) && resultSnapshots == 0);
+    assert(!machine.process_event(training_worker_finished{old}));
+    machine.process_event(begin_case{});
+    const auto retry = workerGeneration;
+    assert(retry != old && !lifetime.expired()); // retained worker owns old memory safely
+    delayedWorker.reset(); assert(lifetime.expired());
+    assert(!trainingLifecycle.prepareSensor(old));
+    assert(!trainingLifecycle.sensorReady(retry));
+    activate(retry, session.id);
+    assert(notificationPosts == 1); // recalibration/retry does not retry an ambiguous POST
+    currentSegment->state = TrainingState::END;
+    assert(!machine.process_event(training_worker_finished{old}));
+    assert(!machine.process_event(training_worker_failed{old}));
+    assert(machine.is("play.idle"_s) && resultSnapshots == 0);
+    assert(machine.process_event(training_worker_finished{retry}));
+    assert(machine.is("play.grade"_s) && !trainingFlag(machine));
+    assert(resultSnapshots == 1);
+    assert(!machine.process_event(training_worker_finished{retry}));
+    machine.process_event(begin_case{}); // next segment, same session
+    activate(workerGeneration, session.id);
+    assert(notificationPosts == 1);
+    machine.process_event(recalibrate{});
+    session.id = "session-b"; session.segmentIdx = 0;
+    machine.process_event(begin_case{});
+    activate(workerGeneration, session.id);
+    assert(notificationPosts == 2);
+    assert(machine.process_event(training_worker_failed{workerGeneration}));
+    assert(machine.is("play.details.session"_s) && !trainingFlag(machine) && !currentSegment);
+    assert(resultSnapshots == 1); // failure/cancellation never uploads a fabricated completion
+    currentSegment = std::make_shared<Segment>();
+    assert(!captureCompletedResult()); // unfinished objects do not become result uploads
+    currentSegment->state = TrainingState::END;
+    session.id = "captured-session"; session.settingsId = "captured-settings";
+    session.segmentIdx = 4; session.toy = Toy{"captured-toy"};
+    auto payload = captureCompletedResult();
+    assert(payload && (*payload)["session"] == "captured-session" && (*payload)["index"] == 4);
+    assert((*payload)["passed"] == 0);
+    currentSegment.reset(); session.id = "later-session"; session.settingsId = "later-settings";
+    session.segmentIdx = 5; session.toy.reset();
+    assert((*payload)["session"] == "captured-session" && (*payload)["index"] == 4);
+    assert((*payload)["settings"] == "captured-settings" && (*payload)["toy"] == "captured-toy");
+    assert(std::abs(trainingSpeedCmPerSecond(1, 2, 100000) - 10) < .0001f);
+    assert(std::abs(trainingSpeedCmPerSecond(2, 1, 100000) + 10) < .0001f);
+    assert(trainingSpeedCmPerSecond(1, 2, 0) == 0);
+    assert(trainingSpeedCmPerSecond(NAN, 2, 1000) == 0);
+    const uint32_t elapsed = uint32_t(5) - (UINT32_MAX - 4);
+    assert(elapsed == 10 && trainingSpeedCmPerSecond(0, 1, elapsed) == 100000);
+    std::cout << "training lifecycle: actual SML transitions, cancellation/generation/retained lifetime, notification and speed assertions passed\n";
+}

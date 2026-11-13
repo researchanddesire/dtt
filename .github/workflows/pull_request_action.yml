@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: software
+        working-directory: software/firmware
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install PlatformIO Core
-        run: pip install --upgrade platformio
+        run: pip install platformio==6.2.0
 
       - name: Check PlatformIO Project
         run: |
@@ -39,15 +39,20 @@ jobs:
 
       - name: Test release build guards and EEPROM parsing
         run: |
-          python scripts/test_private_build_security.py
-          python scripts/test_eeprom_security.py
+          python ../scripts/test_private_build_security.py
+          python ../scripts/test_eeprom_security.py
 
       - name: Verify quiet firmware skips state logging work
         run: python test/security_state_logger/test_source_behaviour.py
 
       # Native tests above install ArduinoJson and Unity for these host checks.
       - name: Test dashboard transport and session cache boundaries
-        run: python test/security_dashboard_transport/test_source_behaviour.py
+        run: |
+          python test/security_dashboard_transport/test_source_behaviour.py --prepare-reply-dependency
+          python test/security_dashboard_transport/test_source_behaviour.py
+          python test/security_firmware_provenance/test_response.py
+          python test/security_training_lifecycle/test_lifecycle.py
+          python test/security_upload_queue/test_response_policy.py
 
       - name: Test captive portal isolation and deadlines
         run: python test/native_wifi_portal/test_portal_safety.py
@@ -56,7 +61,7 @@ jobs:
         run: |
           python test/security_certificate_dates/test_source_behaviour.py
           python test/security_dhcp_parser/test_parser.py
-          python scripts/test_check_dhcp_patch.py
+          python ../scripts/test_check_dhcp_patch.py
 
       - name: Check session lifetime and mutex behavior with sanitizers
         run: |
@@ -74,77 +79,77 @@ jobs:
 
       - name: Verify firmware fits each approved OTA partition
         run: |
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment staging-v1 \
             --partition partition-v1.csv \
             --partition-binary .pio/build/staging-v1/partitions.bin \
             --firmware .pio/build/staging-v1/firmware.bin \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment staging-v2 \
             --partition partition-v2.csv \
             --partition-binary .pio/build/staging-v2/partitions.bin \
             --firmware .pio/build/staging-v2/firmware.bin \
             --expected-partition-blob 87b066320a83be1d390fd4cdfea9d1b5b6bccea4 \
             --expected-partition-binary-sha256 df8bb78d1134d502246d4ae7de59d397bc1d2529fa9c4affdd68aa78514e6c09
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment migration-staging \
             --partition partition-v1.csv \
             --partition-binary .pio/build/migration-staging/partitions.bin \
             --firmware .pio/build/migration-staging/firmware.bin \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment production-v1 \
             --partition partition-v1.csv \
             --partition-binary .pio/build/production-v1/partitions.bin \
             --firmware .pio/build/production-v1/firmware.bin \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment production-v2 \
             --partition partition-v2.csv \
             --partition-binary .pio/build/production-v2/partitions.bin \
             --firmware .pio/build/production-v2/firmware.bin \
             --expected-partition-blob 87b066320a83be1d390fd4cdfea9d1b5b6bccea4 \
             --expected-partition-binary-sha256 df8bb78d1134d502246d4ae7de59d397bc1d2529fa9c4affdd68aa78514e6c09
-          python ../.github/scripts/check_firmware_size.py \
+          python ../../.github/scripts/check_firmware_size.py \
             --environment migration-production \
             --partition partition-v1.csv \
             --partition-binary .pio/build/migration-production/partitions.bin \
             --firmware .pio/build/migration-production/firmware.bin \
             --expected-partition-blob 62778131c63221bcb0433e31ea5cde8eedc815f6 \
             --expected-partition-binary-sha256 148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 4194304 \
             .pio/build/staging-v1/firmware.bin
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
             .pio/build/staging-v2/firmware.bin
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
             .pio/build/migration-staging/firmware.bin
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 4194304 \
             .pio/build/production-v1/firmware.bin
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
             .pio/build/production-v2/firmware.bin
-          python ../.github/scripts/check_migration_image.py \
+          python ../../.github/scripts/check_migration_image.py \
             --expected-flash-size-bytes 16777216 \
             .pio/build/migration-production/firmware.bin
 
       - name: Build and validate staging and production web installers
         run: |
           for environment in staging-v1 production-v1; do
-            python ../.github/scripts/build_web_installer.py \
+            python ../../.github/scripts/build_web_installer.py \
               --profile esp32-4mb \
               --build-dir ".pio/build/$environment" \
               --output ".pio/build/$environment/web-installer.bin"
           done
           for environment in staging-v2 production-v2; do
-            python ../.github/scripts/build_web_installer.py \
+            python ../../.github/scripts/build_web_installer.py \
               --profile esp32-16mb \
               --build-dir ".pio/build/$environment" \
               --output ".pio/build/$environment/web-installer.bin"
@@ -152,13 +157,13 @@ jobs:
 
       - name: Test immutable publisher
         run: |
-          python ../.github/scripts/test_check_firmware_size.py
-          python ../.github/scripts/test_check_migration_image.py
-          python ../.github/scripts/test_build_web_installer.py
-          python ../.github/scripts/test_download_verified_release.py
-          python ../.github/scripts/test_publish_immutable_firmware.py
-          python ../.github/scripts/test_release_workflow.py
-          python scripts/test_release_version.py
+          python ../../.github/scripts/test_check_firmware_size.py
+          python ../../.github/scripts/test_check_migration_image.py
+          python ../../.github/scripts/test_build_web_installer.py
+          python ../../.github/scripts/test_download_verified_release.py
+          python ../../.github/scripts/test_publish_immutable_firmware.py
+          python ../../.github/scripts/test_release_workflow.py
+          python ../scripts/test_release_version.py
 
   check_docs:
     runs-on: ubuntu-latest

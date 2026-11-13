@@ -4,12 +4,14 @@ title: DT Trainer Developer Documentation
 
 # Deep Throat Trainer — Developer Documentation
 
-PlatformIO firmware for the ESP32-based Deep Throat Trainer.
+PlatformIO firmware for the ESP32-based Deep Throat Trainer. The PlatformIO
+project is `software/firmware/`; development and release tooling is in
+`software/scripts/`, and local development settings are in `software/dev/`.
 
 ## Build
 
 ```bash
-cd software
+cd software/firmware
 pio run -e development
 ```
 
