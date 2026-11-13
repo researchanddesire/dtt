@@ -1,6 +1,6 @@
 # DTT rev4 main harness DTT-HAR-001: PCB J2 to the OLED and the distance sensor.
 # J2 pins from the rev4 KiCad pads (1 IO32, 2 GND, 3 3V3, 4 GND, 5 3V3, 6 IO22, 7 IO21);
-# firmware uses IO32 for the sensor and I2C SDA 21 / SCL 22. Lengths follow the CAD harness wires plus slack.
+# firmware uses IO32 for the sensor and I2C SDA 21 / SCL 22. Each branch is 50 mm, as built.
 # Render from this folder: wireviz dtt-harness.yml
 
 metadata:
@@ -60,7 +60,7 @@ cables:
     category: bundle
     type: UL1571 28 AWG
     gauge: 28 AWG
-    length: 100
+    length: 50
     length_unit: mm
     colors: [BK, RD, YE, GN]
     wirelabels: [GND, 3V3, SCL, SDA]
@@ -69,7 +69,7 @@ cables:
     category: bundle
     type: UL1571 28 AWG
     gauge: 28 AWG
-    length: 100
+    length: 50
     length_unit: mm
     colors: [BU, BK, RD]
     wirelabels: [DIST, GND, 3V3]
@@ -90,7 +90,7 @@ tweak:
     label_notes [shape=plaintext, fontname=arial, fontsize=11, label=<
     <table border="1" cellborder="0" cellspacing="0" cellpadding="3" align="left">
     <tr><td align="left"><b>NOTES</b></td></tr>
-    <tr><td align="left">1. Wire 28 AWG UL1571 (OD 0.8-1.0 mm to suit SZH-002T-P0.5). Lengths +/-5 mm, terminal to terminal.</td></tr>
+    <tr><td align="left">1. Wire 28 AWG UL1571 (OD 0.8-1.0 mm to suit SZH-002T-P0.5). Length 50 +/-5 mm, terminal to terminal.</td></tr>
     <tr><td align="left">2. Wires loose, no sleeve. Each branch may be lightly twisted.</td></tr>
     <tr><td align="left">3. OLED header order GND-VCC-SCL-SDA (GME12864-11). Match the module silkscreen.</td></tr>
     <tr><td align="left">4. Sensor: Sharp GP2Y0A51SK0F, ZH 3-pin Vo-GND-Vcc per the Sharp datasheet.</td></tr>
