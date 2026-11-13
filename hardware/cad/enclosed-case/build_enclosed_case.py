@@ -1070,22 +1070,59 @@ def build_slider():
     return solid(s.removeSplitter())
 
 
+def cover_loft(pcb, z0, z1):
+    """The PCB's outline at z0 lofted out to the case outline at z1, side to
+    side and corner to corner. Both outlines have the same sides in the same
+    order, so the loft is one ruled face for each side and each corner."""
+    def edges(wire, z):
+        out = []
+        for e in wire.OrderedEdges:
+            pts = [e.valueAt(e.FirstParameter + (e.LastParameter - e.FirstParameter) * k) for k in (0.0, 0.5, 1.0)]
+            pts = [V(q.x, q.y, z) for q in (pts if e.Orientation == "Forward" else pts[::-1])]
+            arc = e.Curve.TypeId == "Part::GeomCircle"
+            out.append((arc, pts[1], (Part.Arc(*pts) if arc else Part.LineSegment(pts[0], pts[2])).toShape()))
+        return out
+
+    low, up = edges(pcb, z0), edges(plan_outline().OuterWire, z1)
+    n = len(up)
+    assert len(low) == n, "the PCB and case outlines differ in their sides"
+    # Start both at the same side: the turn of the PCB's list that puts its sides nearest the case's.
+    turn = min((k for k in range(n) if all(low[(i + k) % n][0] == up[i][0] for i in range(n))),
+               key=lambda k: sum((low[(i + k) % n][1] - up[i][1]).Length for i in range(n)))
+    low = low[turn:] + low[:turn]
+    faces = [Part.Face(Part.Wire([e[2] for e in w])) for w in (low, up)]
+    faces += [Part.makeRuledSurface(a[2], b[2]) for a, b in zip(low, up)]
+    shell = Part.Shell(faces)
+    shell.sewShape()
+    s = Part.Solid(shell)
+    if s.Volume < 0:
+        s.reverse()
+    assert s.isValid() and shell.isClosed(), "cover loft"
+    return s
+
+
 def build_cover(pcb, extra=0.0):
     """Rear cover: a flat cap from the seam at the PCB's back face down, with
     a relief under the PCB, so it presses the PCB only at pads round the
     screws. With extra, its floor is that much thicker, with the screw heads at
-    their usual depth in counterbores, and it takes the suction-cup keyholes."""
+    their usual depth in counterbores, and it takes the suction-cup keyholes.
+    The stepped version's plain cap lofts in from the case outline at the seam
+    to the PCB's outline on its rear face, which takes the original DTT's
+    loop Velcro and sits on its backboards."""
     zs = P["seam_z"]
     zt = P["pcb_bottom_z"]
     zb = zt - P["cover_thickness"]
     zf = zb  # where the screw heads sit
     zb -= extra
-    cover = envelope(zb, zs)
-    try:
-        bottom = [e for e in cover.Edges if e.BoundBox.ZMax < zb + 1e-6]
-        cover = cover.makeChamfer(P["bottom_chamfer"], bottom)
-    except Exception as e:
-        print("cover chamfer skipped:", e)
+    if P["outline"] == "conformal" and not extra:
+        cover = cover_loft(pcb, zb, zs)
+    else:
+        cover = envelope(zb, zs)
+        try:
+            bottom = [e for e in cover.Edges if e.BoundBox.ZMax < zb + 1e-6]
+            cover = cover.makeChamfer(P["bottom_chamfer"], bottom)
+        except Exception as e:
+            print("cover chamfer skipped:", e)
     shell = cover.copy()
     # Relief under the PCB and the central pocket.
     cover = cover.cut(ext(pcb_pocket(pcb).OuterWire, zt - P["cover_relief"], zs + 1))
