@@ -83,8 +83,11 @@ def move_parts(doc):
         remove(doc, n)
     for n, shape in oled.items():
         for name in (n, "Exploded_" + n):
-            if doc.getObject(name) is not None:
-                doc.getObject(name).Shape = shape
+            o = doc.getObject(name)
+            if o is not None:
+                place = o.Placement  # the exploded copy's offset
+                o.Shape = shape
+                o.Placement = place
     for d, names in moves:
         for n in names:
             for name in (n, "Exploded_" + n):

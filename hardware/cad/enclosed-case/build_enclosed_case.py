@@ -1354,9 +1354,10 @@ def screen_clips():
     beside the board, with no tab, so the button's slot stays clear and
     nothing stands free. A lip in the middle of each
     strip closes over the board's back. Its catch face is clip_lip[3] degrees
-    from flat and stands clip_lip[2] clear of the board, which prints as one
-    0.30 mm layer, so the strip always springs back over the board and the
-    screen stops against the lips when pressed from the front. Printed top
+    from flat and stands clip_lip[2] clear of the board. At 0.30 mm layers on
+    a 0.30 mm first layer that prints as a flat ledge one layer behind the
+    board: the strip springs back over the board, and the screen, pressed
+    from the front, gives that one layer and stops on the ledges. Printed top
     face down, the strips are bridges and the lips short overhangs."""
     bx0, by0, bx1, by1 = P["oled_board"]
     zb = P["plate_z"] - P["oled_stack"]  # the board's back
