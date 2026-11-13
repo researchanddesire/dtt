@@ -89,6 +89,10 @@ PARAMS = {
     "cover_pocket_depth": 1.3,  # clears USB shell legs and jack pegs
     "cover_relief": 0.2,  # floor stays clear of the PCB except at the pads
     "cover_pad_d": 7.5,
+    # The stepped version's plain cap carries a loft on its rear face: over
+    # cover_loft the case outline comes in to the PCB's own outline, which
+    # takes the original DTT's loop Velcro and sits on its backboards.
+    "cover_loft": 3.0,
     # Alternative rear cover that takes two suction cups straight on the back,
     # in keyholes that run sideways in opposite directions, so the case can't
     # slide off its cups whichever way it is pulled. Both slots rise 30 degrees
@@ -113,7 +117,7 @@ PARAMS = {
     # diameter, from the KiCad board): jack pegs, J4, S1 and USB-C shell legs.
     "cup_keepout": ((21.3, 4.7, 1.2), (21.3, 11.7, 1.2), (2.5, 80.8, 1.5), (5.0, 80.8, 1.5),
                     (40.7, 80.7, 0.9), (16.7, 86.0, 2.1), (25.3, 86.0, 2.1)),
-    "cup_counterbore_d": 6.3,  # the screw heads stay at their usual depth
+    "cup_counterbore_d": 6.3,  # the screw heads stay at their usual depth (the stepped cap's loft too)
     "cup_proxy": (35.0, 14.0, 8.5, 2.5),  # cup diameter and depth (estimates), groove diameter and length
     # Original short self-tapping PCB screws (0408LTFB, #4 x 1/2" Torx flat
     # head), sunk flush in 82 degree countersinks.
@@ -1106,16 +1110,16 @@ def build_cover(pcb, extra=0.0):
     a relief under the PCB, so it presses the PCB only at pads round the
     screws. With extra, its floor is that much thicker, with the screw heads at
     their usual depth in counterbores, and it takes the suction-cup keyholes.
-    The stepped version's plain cap lofts in from the case outline at the seam
-    to the PCB's outline on its rear face, which takes the original DTT's
-    loop Velcro and sits on its backboards."""
+    The stepped version's plain cap has cover_loft more on its rear face,
+    lofted in from the case outline to the PCB's outline, with the screw heads
+    in counterbores too."""
     zs = P["seam_z"]
     zt = P["pcb_bottom_z"]
-    zb = zt - P["cover_thickness"]
-    zf = zb  # where the screw heads sit
-    zb -= extra
-    if P["outline"] == "conformal" and not extra:
-        cover = cover_loft(pcb, zb, zs)
+    zf = zt - P["cover_thickness"]  # where the screw heads sit
+    loft = P["cover_loft"] if P["outline"] == "conformal" and not extra else 0.0
+    zb = zf - extra - loft
+    if loft:
+        cover = solid(envelope(zf, zs).fuse(cover_loft(pcb, zb, zf)).removeSplitter())
     else:
         cover = envelope(zb, zs)
         try:
@@ -1139,7 +1143,7 @@ def build_cover(pcb, extra=0.0):
         h = (r - P["screw_clear_d"] / 2) / math.tan(math.radians(P["csk_angle"] / 2))
         holes.append(Part.makeCone(r + 0.5 * math.tan(math.radians(P["csk_angle"] / 2)), P["screw_clear_d"] / 2,
                                    h + 0.5, V(x, y, zf - 0.5)))
-        if extra:
+        if zb < zf:
             holes.append(zcyl(x, y, P["cup_counterbore_d"], zb - 1, zf))
     cover = cover.cut(holes)
     if extra:

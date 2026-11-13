@@ -35,11 +35,12 @@ the PCB, with a roof over each, and the case no longer fits the snap backplate.
 
 The same case with the original housing's outline: sides that step in with the
 PCB (50 / 48 / 44 mm) and the sloped jack end. Everything inside is the same.
-Its flat rear cap lofts in over its 3 mm, from the case outline at the seam to
-the PCB's outline on its rear face. The original loop Velcro sticks to that
-face, its notches round the screw heads, and the case goes on the original
-backboards. It doesn't fit the snap backplate; the suction-cup rear cover is
-the other way to mount it. Its files are in [`stepped/`](stepped/).
+Its flat rear cap has a 3 mm loft on its rear face, coming in from the case
+outline to the PCB's outline (`cover_loft`). The original loop Velcro sticks
+to that face, its notches at the screws, and the case goes on the original
+backboards. The screw heads sit 3 mm down in pockets, and the case is 25.3 mm
+thick. It doesn't fit the snap backplate; the suction-cup rear cover is the
+other way to mount it. Its files are in [`stepped/`](stepped/).
 
 | | |
 | --- | --- |
@@ -160,8 +161,9 @@ cap). The switch cover's grip stands 0.4 mm proud of the side.
   and the heads slide under the roofs. Each roof is a 15.6 mm bridge onto
   2 mm walls (`cup_roof`); check it doesn't sag onto the heads.
 - The stepped version's flat cap: the original loop Velcro covers its rear
-  face. The two jack-side countersinks come within 0.3 mm of that face's
-  edge, as the PCB's holes do; check the rim prints.
+  face, and the screws go in through their 6.3 mm pockets. At the two
+  jack-side pockets the rim to the face's edge is one line wide for the
+  first two layers (0.07 and 0.23 mm at the face); check it prints.
 - The OLED clips: the module clicks in with its screen flat on the plate,
   under a pocket that clears the header's four solder points, and sits
   square in the window (0.2 mm a side between the strips). The module is
