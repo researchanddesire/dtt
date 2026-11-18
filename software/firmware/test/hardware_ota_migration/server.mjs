@@ -148,6 +148,7 @@ const server = createServer(async (request, response) => {
         "corrupt-final",
         "pause-final",
         "migrate",
+        "unreachable",
       ]);
       if (body.mode !== undefined && !allowed.has(body.mode)) {
         return sendJson(response, 400, { error: "invalid mode" });
@@ -166,6 +167,13 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/__lab/events") {
       return sendJson(response, 200, { mode, gate, events });
+    }
+
+    if (mode === "unreachable") {
+      // Looks like an outage to the device: the connection drops unanswered.
+      record({ type: "dropped", path: url.pathname });
+      request.socket.destroy();
+      return;
     }
 
     if (

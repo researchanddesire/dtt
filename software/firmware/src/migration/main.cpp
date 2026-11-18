@@ -58,7 +58,12 @@ constexpr std::uint32_t FINAL_STAGE_LIMIT =
     BOOTLOADER_STAGING_OFFSET - V2_APP1_OFFSET;
 constexpr std::uint32_t FINAL_RECORD_OFFSET = 0xF08000;
 constexpr std::uint32_t FINAL_RECORD_MAGIC = 0x464D5444;
+// One bit of this word, in the record's sector, is cleared per activation.
+constexpr std::uint32_t FINAL_ACTIVATION_MARKS_OFFSET =
+    FINAL_RECORD_OFFSET + 0x800;
+constexpr int FINAL_ACTIVATION_LIMIT = 4;
 constexpr int FINAL_STAGE_ATTEMPTS = 2;
+constexpr std::uint32_t ERASE_STEP_BYTES = 0x10000;
 constexpr std::uint32_t MIGRATION_STATE_OFFSET = 0xF10000;
 constexpr std::uint32_t MIGRATION_STATE_SIZE = 0x1000;
 constexpr std::uint32_t MIGRATION_STATE_MAGIC = 0x324D5444;
@@ -550,9 +555,18 @@ bool relocateToApp0() {
         return false;
     }
     std::uint8_t sourceDigest[32] = {};
-    if (esp_partition_get_sha256(source, sourceDigest) != ESP_OK ||
-        esp_partition_erase_range(destination, 0, destination->size) !=
-            ESP_OK) {
+    esp_err_t erase = esp_partition_get_sha256(source, sourceDigest);
+    // Erase in short steps so other tasks keep running between them.
+    for (std::uint32_t offset = 0;
+         erase == ESP_OK && offset < destination->size;
+         offset += ERASE_STEP_BYTES) {
+        erase = esp_partition_erase_range(
+            destination, offset,
+            std::min<std::uint32_t>(ERASE_STEP_BYTES,
+                                    destination->size - offset));
+        delay(1);
+    }
+    if (erase != ESP_OK) {
         Serial.println("MIGRATOR_RELOCATE_ERASE_FAILED");
         return false;
     }
@@ -963,21 +977,36 @@ bool stageFinalFirmware() {
     return true;
 }
 
-// Boots the staged final firmware once the 16 MiB table is in place. Its
-// record is used once: a final firmware that fails to start returns here and
-// is then fetched again over the network.
+// Boots the staged final firmware once the 16 MiB table is in place. The
+// bootloader returns here if that firmware's first start is interrupted, so
+// the staged copy stays usable for a few activations and needs no network.
+// A firmware that keeps failing to start is then fetched again instead.
 bool activateStagedFinalFirmware() {
     const esp_partition_t *target = app1();
     if (target == nullptr || !finalFirmwareStaged() ||
         !verifyOrRestoreIdentity()) {
         return false;
     }
-    if (esp_ota_set_boot_partition(target) != ESP_OK) {
+    const std::uint32_t marksOffset =
+        FINAL_ACTIVATION_MARKS_OFFSET - V2_APP1_OFFSET;
+    std::uint32_t marks = 0;
+    if (esp_partition_read(target, marksOffset, &marks, sizeof(marks)) !=
+        ESP_OK) {
+        return false;
+    }
+    const int used = __builtin_popcount(~marks);
+    if (used >= FINAL_ACTIVATION_LIMIT) {
+        Serial.println("MIGRATOR_FINAL_ACTIVATIONS_EXHAUSTED");
+        return false;
+    }
+    // Flash bits only clear, so the count survives without an erase.
+    marks &= ~(std::uint32_t{1} << used);
+    if (esp_partition_write(target, marksOffset, &marks, sizeof(marks)) !=
+            ESP_OK ||
+        esp_ota_set_boot_partition(target) != ESP_OK) {
         Serial.println("MIGRATOR_FINAL_ACTIVATE_FAILED");
         return false;
     }
-    esp_partition_erase_range(target, FINAL_RECORD_OFFSET - V2_APP1_OFFSET,
-                              TABLE_SECTOR_SIZE);
     Serial.println("MIGRATOR_FINAL_ACTIVATED");
     return true;
 }
@@ -1039,6 +1068,13 @@ void runMigration() {
     if (!confirmMigrationImage()) {
         Serial.println("MIGRATOR_IMAGE_CONFIRM_FAILED");
         return;
+    }
+    if (legacy) {
+        // The remaining legacy-layout steps only touch flash. Keep the radio
+        // out of them: no network work competes with the copies, and the
+        // supply is not loaded by transmissions while sectors are rewritten.
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
     }
 
     switch (action) {

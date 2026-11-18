@@ -197,6 +197,10 @@ class UpdateHashSink final : public Stream {
     bool failed_ = false;
 };
 
+// Erased ahead of the write position in pieces this small, so the download
+// keeps being serviced and no single erase holds the flash for seconds.
+constexpr std::uint32_t PARTITION_ERASE_STEP_BYTES = 16U * SPI_FLASH_SEC_SIZE;
+
 // Buffers a download into whole flash sectors of a caller-owned region.
 class PartitionSink final : public Stream {
    public:
@@ -246,6 +250,19 @@ class PartitionSink final : public Stream {
 
    private:
     bool writeSector() {
+        if (flushedBytes_ % PARTITION_ERASE_STEP_BYTES == 0) {
+            const std::uint32_t remaining =
+                ((expectedBytes_ - flushedBytes_) + SPI_FLASH_SEC_SIZE - 1U) &
+                ~(SPI_FLASH_SEC_SIZE - 1U);
+            if (esp_partition_erase_range(
+                    destination_, flushedBytes_,
+                    std::min(remaining, PARTITION_ERASE_STEP_BYTES)) !=
+                ESP_OK) {
+                fail("artifact destination erase failed");
+                return false;
+            }
+            delay(1);
+        }
         if (esp_partition_write(destination_, flushedBytes_, sector_,
                                 buffered_) != ESP_OK) {
             fail("artifact write failed");
@@ -497,14 +514,6 @@ bool downloadArtifactToPartition(const Artifact &artifact,
     }
     if (!knownContentLengthMatches(http.getSize(), artifact.sizeBytes)) {
         error = "artifact content length mismatch";
-        http.end();
-        return false;
-    }
-    const std::uint32_t eraseBytes =
-        (artifact.sizeBytes + SPI_FLASH_SEC_SIZE - 1U) &
-        ~(SPI_FLASH_SEC_SIZE - 1U);
-    if (esp_partition_erase_range(destination, 0, eraseBytes) != ESP_OK) {
-        error = "artifact destination erase failed";
         http.end();
         return false;
     }
