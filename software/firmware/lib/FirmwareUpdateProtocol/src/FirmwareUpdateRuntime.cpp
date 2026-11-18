@@ -7,7 +7,9 @@
 #include <Update.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_partition.h>
 #include <esp_sntp.h>
+#include <esp_spi_flash.h>
 #include <mbedtls/sha256.h>
 #include <time.h>
 
@@ -15,6 +17,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <new>
 #include <string>
 
 namespace {
@@ -193,6 +197,117 @@ class UpdateHashSink final : public Stream {
     bool failed_ = false;
 };
 
+// Erased ahead of the write position in pieces this small, so the download
+// keeps being serviced and no single erase holds the flash for seconds.
+constexpr std::uint32_t PARTITION_ERASE_STEP_BYTES = 16U * SPI_FLASH_SEC_SIZE;
+
+// Buffers a download into whole flash sectors of a caller-owned region.
+class PartitionSink final : public Stream {
+   public:
+    PartitionSink(const esp_partition_t *destination,
+                  const std::uint32_t expectedBytes, String &error)
+        : destination_(destination),
+          expectedBytes_(expectedBytes),
+          error_(error),
+          sector_(new (std::nothrow) std::uint8_t[SPI_FLASH_SEC_SIZE]) {
+        if (!sector_) fail("artifact buffer allocation failed");
+    }
+    ~PartitionSink() override { delete[] sector_; }
+    std::size_t write(const std::uint8_t value) override {
+        return write(&value, 1);
+    }
+    std::size_t write(const std::uint8_t *buffer,
+                      const std::size_t size) override {
+        if (failed_) return 0;
+        if (size > expectedBytes_ - totalBytes_) {
+            fail("artifact exceeds declared size");
+            return 0;
+        }
+        std::size_t consumed = 0;
+        while (consumed < size) {
+            const std::size_t count = std::min<std::size_t>(
+                size - consumed, SPI_FLASH_SEC_SIZE - buffered_);
+            memcpy(sector_ + buffered_, buffer + consumed, count);
+            buffered_ += count;
+            consumed += count;
+            if (buffered_ == SPI_FLASH_SEC_SIZE && !writeSector()) return 0;
+        }
+        totalBytes_ += size;
+        return size;
+    }
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    bool finish() {
+        if (failed_) return false;
+        if (totalBytes_ != expectedBytes_) {
+            error_ = "artifact download was incomplete";
+            return false;
+        }
+        return buffered_ == 0 || writeSector();
+    }
+    std::uint32_t totalBytes() const { return totalBytes_; }
+
+   private:
+    bool writeSector() {
+        if (flushedBytes_ % PARTITION_ERASE_STEP_BYTES == 0) {
+            const std::uint32_t remaining =
+                ((expectedBytes_ - flushedBytes_) + SPI_FLASH_SEC_SIZE - 1U) &
+                ~(SPI_FLASH_SEC_SIZE - 1U);
+            if (esp_partition_erase_range(
+                    destination_, flushedBytes_,
+                    std::min(remaining, PARTITION_ERASE_STEP_BYTES)) !=
+                ESP_OK) {
+                fail("artifact destination erase failed");
+                return false;
+            }
+            delay(1);
+        }
+        if (esp_partition_write(destination_, flushedBytes_, sector_,
+                                buffered_) != ESP_OK) {
+            fail("artifact write failed");
+            return false;
+        }
+        flushedBytes_ += buffered_;
+        buffered_ = 0;
+        return true;
+    }
+    void fail(const char *message) {
+        failed_ = true;
+        error_ = message;
+        setWriteError();
+    }
+    const esp_partition_t *destination_;
+    std::uint32_t expectedBytes_;
+    std::uint32_t totalBytes_ = 0;
+    std::uint32_t flushedBytes_ = 0;
+    std::size_t buffered_ = 0;
+    String &error_;
+    bool failed_ = false;
+    std::uint8_t *sector_;
+};
+
+bool partitionSha256Matches(const esp_partition_t *partition,
+                            const std::uint32_t sizeBytes,
+                            const std::string &expectedSha256) {
+    mbedtls_sha256_context sha;
+    mbedtls_sha256_init(&sha);
+    bool hashed = mbedtls_sha256_starts_ret(&sha, 0) == 0;
+    std::uint8_t buffer[1024];
+    for (std::uint32_t offset = 0; hashed && offset < sizeBytes;
+         offset += sizeof(buffer)) {
+        const std::uint32_t count =
+            std::min<std::uint32_t>(sizeof(buffer), sizeBytes - offset);
+        hashed = esp_partition_read(partition, offset, buffer, count) ==
+                     ESP_OK &&
+                 mbedtls_sha256_update_ret(&sha, buffer, count) == 0;
+    }
+    std::uint8_t digest[32] = {};
+    hashed = hashed && mbedtls_sha256_finish_ret(&sha, digest) == 0;
+    mbedtls_sha256_free(&sha);
+    return hashed && firmware::sha256Matches(expectedSha256, digest);
+}
+
 }  // namespace
 
 namespace firmware {
@@ -359,6 +474,66 @@ bool installStreamedArtifact(const Artifact &artifact, const int updateCommand,
     if (!Update.end(true)) {
         error = "artifact finalization failed";
         Update.abort();
+        return false;
+    }
+    return true;
+}
+
+bool downloadArtifactToPartition(const Artifact &artifact,
+                                 const esp_partition_t *destination,
+                                 String &error) {
+    if (destination == nullptr || artifact.sizeBytes == 0 ||
+        artifact.sizeBytes > destination->size) {
+        error = "artifact does not fit its destination";
+        return false;
+    }
+    NetworkRequestLock requestLock;
+    firmware::CertificateDateClient secureClient;
+    WiFiClient plainClient;
+    HTTPClient http;
+    if (!beginFirmwareRequest(http, secureClient, plainClient,
+                              artifact.url.c_str(), 60000, error)) {
+        return false;
+    }
+    const int status = http.GET();
+    if (status <= 0) {
+        error = "artifact connection failed: " +
+                HTTPClient::errorToString(status);
+        http.end();
+        return false;
+    }
+    if (isRedirectStatus(status)) {
+        error = "artifact redirect rejected";
+        http.end();
+        return false;
+    }
+    if (status != HTTP_CODE_OK) {
+        error = "artifact returned HTTP " + String(status);
+        http.end();
+        return false;
+    }
+    if (!knownContentLengthMatches(http.getSize(), artifact.sizeBytes)) {
+        error = "artifact content length mismatch";
+        http.end();
+        return false;
+    }
+    PartitionSink sink(destination, artifact.sizeBytes, error);
+    const int received = http.writeToStream(&sink);
+    http.end();
+    if (!transferCompleted(received, sink.totalBytes(), artifact.sizeBytes)) {
+        if (error.isEmpty()) {
+            error = received < 0
+                        ? "artifact download failed: " +
+                              HTTPClient::errorToString(received)
+                        : "artifact download was incomplete";
+        }
+        return false;
+    }
+    if (!sink.finish()) return false;
+    // Trust what the flash holds, not what was sent to it.
+    if (!partitionSha256Matches(destination, artifact.sizeBytes,
+                                artifact.sha256)) {
+        error = "artifact SHA-256 mismatch";
         return false;
     }
     return true;

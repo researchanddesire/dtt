@@ -518,6 +518,51 @@ void test_partition_migration_plan_fails_closed() {
                               BootloaderState::unapproved)));
 }
 
+void test_migration_prepares_before_giving_up_previous_firmware() {
+    using firmware::dtt::MigrationAction;
+    using firmware::dtt::PreparationStep;
+    const auto step = [](const MigrationAction action, const bool legacy,
+                         const bool identity, const bool staged) {
+        return static_cast<int>(firmware::dtt::nextPreparationStep(
+            action, legacy, identity, staged));
+    };
+    const int refuse = static_cast<int>(PreparationStep::refuse);
+    const int stage = static_cast<int>(PreparationStep::stageFinalFirmware);
+    const int proceed = static_cast<int>(PreparationStep::proceed);
+
+    // A device the bridge cannot migrate is handed back, whatever else holds.
+    TEST_ASSERT_EQUAL_INT(
+        refuse, step(MigrationAction::failClosed, true, true, true));
+    TEST_ASSERT_EQUAL_INT(
+        refuse, step(MigrationAction::failClosed, false, true, true));
+
+    // Under the legacy table every destructive step waits for a usable
+    // identity and a verified copy of the final firmware.
+    for (const auto action :
+         {MigrationAction::relocateToApp0, MigrationAction::writeBootloader,
+          MigrationAction::writePartitionTable}) {
+        TEST_ASSERT_EQUAL_INT(refuse, step(action, true, false, false));
+        TEST_ASSERT_EQUAL_INT(refuse, step(action, true, false, true));
+        TEST_ASSERT_EQUAL_INT(stage, step(action, true, true, false));
+        TEST_ASSERT_EQUAL_INT(proceed, step(action, true, true, true));
+    }
+
+    // Once the 16 MiB table is installed only the final install is left.
+    TEST_ASSERT_EQUAL_INT(
+        proceed,
+        step(MigrationAction::resolveFinalFirmware, false, false, false));
+}
+
+void test_staged_final_firmware_must_fit_below_bootloader_staging() {
+    constexpr std::uint32_t limit = 0xF00000 - 0x790000;
+    TEST_ASSERT_FALSE(firmware::dtt::stagedFinalFirmwareFits(0, limit));
+    TEST_ASSERT_TRUE(firmware::dtt::stagedFinalFirmwareFits(1, limit));
+    TEST_ASSERT_TRUE(firmware::dtt::stagedFinalFirmwareFits(limit, limit));
+    TEST_ASSERT_FALSE(firmware::dtt::stagedFinalFirmwareFits(limit + 1, limit));
+    TEST_ASSERT_FALSE(
+        firmware::dtt::stagedFinalFirmwareFits(0xFFFFFFFF, limit));
+}
+
 void test_migration_accepts_deployed_trainer_id_formats() {
     TEST_ASSERT_TRUE(firmware::dtt::validTrainerId(
         "B1E57A229D22417E88B476977AF7226A"));
@@ -552,6 +597,8 @@ int main(int, char **) {
     RUN_TEST(test_accepts_uppercase_sha_and_gates_migration);
     RUN_TEST(test_rejects_direct_v2_firmware_on_legacy_layout);
     RUN_TEST(test_partition_migration_plan_fails_closed);
+    RUN_TEST(test_migration_prepares_before_giving_up_previous_firmware);
+    RUN_TEST(test_staged_final_firmware_must_fit_below_bootloader_staging);
     RUN_TEST(test_migration_accepts_deployed_trainer_id_formats);
     return UNITY_END();
 }
