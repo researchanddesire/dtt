@@ -5,6 +5,7 @@
 #include <esp32/rom/spi_flash.h>
 #include <esp_flash.h>
 #include <esp_flash_encrypt.h>
+#include <esp_image_format.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 #include <esp_secure_boot.h>
@@ -31,6 +32,14 @@
 #define FIRMWARE_TRACK "main"
 #endif
 
+// The bridge downloads over TLS and copies flash sectors from this task.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+
+// Keep a freshly installed bridge in the pending state until it decides to
+// go ahead. A bootloader that supports rollback then returns to the previous
+// firmware by itself if the bridge resets or loses power before that point.
+extern "C" bool verifyRollbackLater() { return true; }
+
 namespace {
 
 constexpr std::uint32_t TABLE_OFFSET = 0x8000;
@@ -41,6 +50,20 @@ constexpr std::uint32_t BOOTLOADER_REGION_SIZE =
 constexpr std::uint32_t BOOTLOADER_HEADER_FLASH_CONFIG_OFFSET = 3;
 constexpr std::uint32_t BOOTLOADER_STAGING_OFFSET = 0xF00000;
 constexpr std::uint32_t V2_APP_SIZE = 0x780000;
+constexpr std::uint32_t V2_APP1_OFFSET = 0x790000;
+// The final firmware is staged where the 16 MiB table will place app1. Its
+// record sits above the bootloader staging sectors, in the unused tail of
+// that slot.
+constexpr std::uint32_t FINAL_STAGE_LIMIT =
+    BOOTLOADER_STAGING_OFFSET - V2_APP1_OFFSET;
+constexpr std::uint32_t FINAL_RECORD_OFFSET = 0xF08000;
+constexpr std::uint32_t FINAL_RECORD_MAGIC = 0x464D5444;
+// One bit of this word, in the record's sector, is cleared per activation.
+constexpr std::uint32_t FINAL_ACTIVATION_MARKS_OFFSET =
+    FINAL_RECORD_OFFSET + 0x800;
+constexpr int FINAL_ACTIVATION_LIMIT = 4;
+constexpr int FINAL_STAGE_ATTEMPTS = 2;
+constexpr std::uint32_t ERASE_STEP_BYTES = 0x10000;
 constexpr std::uint32_t MIGRATION_STATE_OFFSET = 0xF10000;
 constexpr std::uint32_t MIGRATION_STATE_SIZE = 0x1000;
 constexpr std::uint32_t MIGRATION_STATE_MAGIC = 0x324D5444;
@@ -62,6 +85,13 @@ struct MigrationState {
 
 static_assert(sizeof(MigrationState) < MIGRATION_STATE_SIZE,
               "migration state must fit its reserved sector");
+
+struct FinalStageRecord {
+    std::uint32_t magic;
+    std::uint32_t sizeBytes;
+    std::uint8_t sha256[32];
+    std::uint8_t integrity[32];
+};
 
 alignas(4) std::uint8_t migrationStateSector[MIGRATION_STATE_SIZE];
 alignas(4) std::uint8_t bootloaderRegion[BOOTLOADER_REGION_SIZE];
@@ -222,6 +252,12 @@ bool enableSixteenMiBFlashAccess() {
         Serial.println("MIGRATOR_FLASH_DRIVER_MISSING");
         return false;
     }
+    std::uint32_t current = 0;
+    if (esp_flash_get_size(esp_flash_default_chip, &current) == ESP_OK &&
+        current == firmware::dtt::SIXTEEN_MIB &&
+        g_rom_flashchip.chip_size == firmware::dtt::SIXTEEN_MIB) {
+        return true;
+    }
     const std::uint32_t physical = physicalFlashSize();
     if (physical < firmware::dtt::SIXTEEN_MIB) {
         Serial.println("MIGRATOR_FLASH_TOO_SMALL");
@@ -257,12 +293,15 @@ bool migrationStateValid(const MigrationState &state) {
            firmware::dtt::validTrainerId(state.trainerId);
 }
 
-bool captureIdentitySnapshot(MigrationState &state) {
+bool identityUsable() {
     initEEPROM();
-    if (!firmware::dtt::validTrainerId(trainerId.c_str())) {
-        Serial.println("MIGRATOR_DEVICE_ID_INVALID");
-        return false;
-    }
+    if (firmware::dtt::validTrainerId(trainerId.c_str())) return true;
+    Serial.println("MIGRATOR_DEVICE_ID_INVALID");
+    return false;
+}
+
+bool captureIdentitySnapshot(MigrationState &state) {
+    if (!identityUsable()) return false;
     state = {};
     state.magic = MIGRATION_STATE_MAGIC;
     state.version = MIGRATION_STATE_VERSION;
@@ -446,30 +485,63 @@ bool confirmMigrationImage() {
            esp_ota_mark_app_valid_cancel_rollback() == ESP_OK;
 }
 
-void rejectUnapprovedPendingImage() {
+// The firmware this bridge replaced, for as long as it can still be booted:
+// the other legacy slot, holding a complete image that is not a copy of the
+// bridge. Under the 16 MiB table that slot belongs to the final firmware.
+const esp_partition_t *previousFirmware() {
+    if (v2Layout()) return nullptr;
     const esp_partition_t *running = esp_ota_get_running_partition();
-    esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
-    if (running != nullptr &&
-        esp_ota_get_state_partition(running, &state) == ESP_OK &&
-        state == ESP_OTA_IMG_PENDING_VERIFY) {
-        Serial.println("MIGRATOR_ROLLING_BACK_UNAPPROVED_IMAGE");
-        delay(100);
-        esp_ota_mark_app_invalid_rollback_and_reboot();
+    const esp_partition_t *other = runningFromApp0() ? app1() : app0();
+    if (running == nullptr || other == nullptr ||
+        other->address == running->address) {
+        return nullptr;
     }
+    esp_image_metadata_t metadata = {};
+    const esp_partition_pos_t position = {other->address, other->size};
+    std::uint8_t runningDigest[32] = {};
+    std::uint8_t otherDigest[32] = {};
+    if (esp_image_verify(ESP_IMAGE_VERIFY_SILENT, &position, &metadata) !=
+            ESP_OK ||
+        esp_partition_get_sha256(running, runningDigest) != ESP_OK ||
+        esp_partition_get_sha256(other, otherDigest) != ESP_OK ||
+        memcmp(runningDigest, otherDigest, sizeof(runningDigest)) == 0) {
+        return nullptr;
+    }
+    return other;
 }
 
-bool migrationPreflight(const firmware::dtt::BootloaderState bootloader) {
-    const bool layoutSupported = legacyLayout() || v2Layout();
-    const bool flashSupported =
-        physicalFlashSize() >= firmware::dtt::SIXTEEN_MIB;
-    const bool securitySupported = !securityFeaturesEnabled();
-    const bool bootloaderSupported =
-        bootloader != firmware::dtt::BootloaderState::unapproved;
+// Hands the device back to the firmware it ran before this update. It works
+// with every bootloader, including those that cannot roll back by themselves.
+// Returns only when there is no such firmware left to boot.
+void returnToPreviousFirmware(const char *reason) {
+    Serial.print("MIGRATOR_REFUSED ");
+    Serial.println(reason);
+    const esp_partition_t *previous = previousFirmware();
+    if (previous == nullptr) {
+        Serial.println("MIGRATOR_NO_PREVIOUS_FIRMWARE");
+        return;
+    }
+    if (esp_ota_set_boot_partition(previous) != ESP_OK) {
+        Serial.println("MIGRATOR_RETURN_SELECT_FAILED");
+        // A pending image can still be handed back by the bootloader.
+        esp_ota_mark_app_invalid_rollback_and_reboot();
+        return;
+    }
+    Serial.println("MIGRATOR_RETURNING_TO_PREVIOUS_FIRMWARE");
+    Serial.flush();
+    delay(100);
+    ESP.restart();
+}
+
+void reportPreflightFailure(const bool layoutSupported) {
     if (!layoutSupported) Serial.println("MIGRATOR_LAYOUT_NOT_APPROVED");
-    if (!flashSupported) Serial.println("MIGRATOR_FLASH_TOO_SMALL");
-    if (!securitySupported) Serial.println("MIGRATOR_SECURITY_NOT_SUPPORTED");
-    return layoutSupported && flashSupported && securitySupported &&
-           bootloaderSupported;
+    if (physicalFlashSize() < firmware::dtt::SIXTEEN_MIB) {
+        Serial.println("MIGRATOR_FLASH_TOO_SMALL");
+    }
+    if (securityFeaturesEnabled()) {
+        Serial.println("MIGRATOR_SECURITY_NOT_SUPPORTED");
+    }
+    Serial.println("MIGRATOR_PREFLIGHT_FAILED");
 }
 
 bool relocateToApp0() {
@@ -483,19 +555,27 @@ bool relocateToApp0() {
         return false;
     }
     std::uint8_t sourceDigest[32] = {};
-    if (esp_partition_get_sha256(source, sourceDigest) != ESP_OK ||
-        esp_partition_erase_range(destination, 0, destination->size) !=
-            ESP_OK) {
+    esp_err_t erase = esp_partition_get_sha256(source, sourceDigest);
+    // Erase in short steps so other tasks keep running between them.
+    for (std::uint32_t offset = 0;
+         erase == ESP_OK && offset < destination->size;
+         offset += ERASE_STEP_BYTES) {
+        erase = esp_partition_erase_range(
+            destination, offset,
+            std::min<std::uint32_t>(ERASE_STEP_BYTES,
+                                    destination->size - offset));
+        delay(1);
+    }
+    if (erase != ESP_OK) {
         Serial.println("MIGRATOR_RELOCATE_ERASE_FAILED");
         return false;
     }
-    std::uint8_t buffer[4096];
     for (std::uint32_t offset = 0; offset < source->size;
-         offset += sizeof(buffer)) {
-        if (esp_partition_read(source, offset, buffer, sizeof(buffer)) !=
-                ESP_OK ||
-            esp_partition_write(destination, offset, buffer, sizeof(buffer)) !=
-                ESP_OK) {
+         offset += sizeof(migrationStateSector)) {
+        if (esp_partition_read(source, offset, migrationStateSector,
+                               sizeof(migrationStateSector)) != ESP_OK ||
+            esp_partition_write(destination, offset, migrationStateSector,
+                                sizeof(migrationStateSector)) != ESP_OK) {
             Serial.println("MIGRATOR_RELOCATE_COPY_FAILED");
             return false;
         }
@@ -739,8 +819,9 @@ std::string runningFirmwareHash() {
                : std::string{};
 }
 
-bool installFinalFirmware() {
-    if (!verifyOrRestoreIdentity() || !connectWifi()) return false;
+// Describes the device as it will be once the 16 MiB table is installed, so
+// the resolver answers with the final firmware for that layout.
+firmware::DeviceReport finalFirmwareReport() {
     firmware::DeviceReport report;
     report.deviceType = "dtt";
     report.deviceId = trainerId.c_str();
@@ -752,16 +833,19 @@ bool installFinalFirmware() {
     report.chipRevision = ESP.getChipRevision();
     report.chipCores = ESP.getChipCores();
     report.flashSizeBytes = physicalFlashSize();
-    const esp_partition_t *next = esp_ota_get_next_update_partition(nullptr);
-    report.otaSlotSizeBytes = next == nullptr ? 0 : next->size;
+    report.otaSlotSizeBytes = V2_APP_SIZE;
     report.psramSizeBytes = ESP.getPsramSize();
     report.partitionLayout = "dtt-ota-16mb-v1";
     report.partitionTableHash =
         rawFlashHashString(TABLE_OFFSET, TABLE_SECTOR_SIZE);
     report.bootloaderHash = bootloaderHash();
     firmware::provenance::reconcile(report);
+    return report;
+}
 
-    firmware::Decision decision;
+bool resolveFinalFirmware(firmware::DeviceReport &report,
+                          firmware::Decision &decision) {
+    report = finalFirmwareReport();
     String error;
     if (!firmware::postCheck(RAD_SERVER, report, decision, error)) {
         Serial.print("MIGRATOR_RESOLVE_FAILED ");
@@ -769,13 +853,172 @@ bool installFinalFirmware() {
         return false;
     }
     firmware::provenance::observeCurrent(report, decision);
-    firmware::provenance::stageUpdate(report, decision);
-    if (!decision.shouldUpdate) {
+    if (!decision.shouldUpdate || decision.kind != "firmware") {
         Serial.println("MIGRATOR_WAITING_FOR_FINAL");
         return false;
     }
-    if (decision.kind != "firmware" ||
-        !firmware::installApplicationAndFilesystem(decision, error)) {
+    return true;
+}
+
+bool readFinalStageRecord(FinalStageRecord &record) {
+    std::uint8_t integrity[32] = {};
+    return enableSixteenMiBFlashAccess() &&
+           esp_flash_read(nullptr, &record, FINAL_RECORD_OFFSET,
+                          sizeof(record)) == ESP_OK &&
+           record.magic == FINAL_RECORD_MAGIC &&
+           firmware::dtt::stagedFinalFirmwareFits(record.sizeBytes,
+                                                  FINAL_STAGE_LIMIT) &&
+           hashBytes(&record, offsetof(FinalStageRecord, integrity),
+                     integrity) &&
+           memcmp(integrity, record.integrity, sizeof(integrity)) == 0;
+}
+
+// True when the final firmware recorded by an earlier boot is still in flash,
+// byte for byte.
+bool finalFirmwareStaged() {
+    FinalStageRecord record{};
+    std::uint8_t digest[32] = {};
+    return readFinalStageRecord(record) &&
+           rawFlashHash(V2_APP1_OFFSET, record.sizeBytes, digest) &&
+           memcmp(digest, record.sha256, sizeof(digest)) == 0;
+}
+
+// Registers a region above the legacy table for one operation.
+const esp_partition_t *registerHighFlash(const std::uint32_t offset,
+                                         const std::uint32_t size,
+                                         const char *label,
+                                         const std::uint8_t subtype) {
+    const esp_partition_t *partition = nullptr;
+    const esp_err_t registration = esp_partition_register_external(
+        esp_flash_default_chip, offset, size, label, ESP_PARTITION_TYPE_DATA,
+        static_cast<esp_partition_subtype_t>(subtype), &partition);
+    if (registration != ESP_OK || partition == nullptr) {
+        Serial.printf("MIGRATOR_HIGH_FLASH_REGISTER_FAILED %s 0x%x\n", label,
+                      registration);
+        return nullptr;
+    }
+    return partition;
+}
+
+bool writeFinalStageRecord(const FinalStageRecord *record) {
+    const esp_partition_t *partition = registerHighFlash(
+        FINAL_RECORD_OFFSET, TABLE_SECTOR_SIZE, "finalRecord", 0x44);
+    if (partition == nullptr) return false;
+    esp_err_t result =
+        esp_partition_erase_range(partition, 0, TABLE_SECTOR_SIZE);
+    if (result == ESP_OK && record != nullptr) {
+        result = esp_partition_write(partition, 0, record, sizeof(*record));
+    }
+    const esp_err_t deregistration =
+        esp_partition_deregister_external(partition);
+    return result == ESP_OK && deregistration == ESP_OK;
+}
+
+// Downloads the final firmware into the flash the 16 MiB table will call
+// app1, while the legacy table and the previous firmware are both untouched.
+// After this, the rest of the migration needs neither Wi-Fi nor the server.
+bool stageFinalFirmware() {
+    if (!connectWifi()) return false;
+    firmware::DeviceReport report;
+    firmware::Decision decision;
+    if (!resolveFinalFirmware(report, decision)) return false;
+    const firmware::Artifact *application = nullptr;
+    for (std::size_t index = 0; index < decision.artifactCount; ++index) {
+        const firmware::Artifact &artifact = decision.artifacts[index];
+        if (artifact.role == "application" && application == nullptr) {
+            application = &artifact;
+        } else if (artifact.role == "application" ||
+                   artifact.role == "filesystem") {
+            // Only a single application image can be staged ahead of the
+            // table change.
+            application = nullptr;
+            break;
+        }
+    }
+    if (application == nullptr ||
+        !firmware::dtt::stagedFinalFirmwareFits(application->sizeBytes,
+                                                FINAL_STAGE_LIMIT)) {
+        Serial.println("MIGRATOR_FINAL_NOT_STAGEABLE");
+        return false;
+    }
+    // Drop any earlier record before its image is overwritten.
+    if (!enableSixteenMiBFlashAccess() || !writeFinalStageRecord(nullptr)) {
+        Serial.println("MIGRATOR_FINAL_RECORD_CLEAR_FAILED");
+        return false;
+    }
+    const std::uint32_t stageSpan =
+        (application->sizeBytes + TABLE_SECTOR_SIZE - 1U) &
+        ~(TABLE_SECTOR_SIZE - 1U);
+    const esp_partition_t *stage =
+        registerHighFlash(V2_APP1_OFFSET, stageSpan, "finalStage", 0x43);
+    if (stage == nullptr) return false;
+    Serial.println("MIGRATOR_FINAL_STAGE_START");
+    String error;
+    const bool downloaded =
+        firmware::downloadArtifactToPartition(*application, stage, error);
+    const esp_err_t deregistration = esp_partition_deregister_external(stage);
+    if (!downloaded || deregistration != ESP_OK) {
+        Serial.print("MIGRATOR_FINAL_STAGE_FAILED ");
+        Serial.println(error);
+        return false;
+    }
+    FinalStageRecord record{};
+    record.magic = FINAL_RECORD_MAGIC;
+    record.sizeBytes = application->sizeBytes;
+    if (!rawFlashHash(V2_APP1_OFFSET, record.sizeBytes, record.sha256) ||
+        !hashBytes(&record, offsetof(FinalStageRecord, integrity),
+                   record.integrity) ||
+        !writeFinalStageRecord(&record) || !finalFirmwareStaged()) {
+        Serial.println("MIGRATOR_FINAL_RECORD_WRITE_FAILED");
+        return false;
+    }
+    firmware::provenance::stageUpdate(report, decision);
+    Serial.println("MIGRATOR_FINAL_STAGED");
+    return true;
+}
+
+// Boots the staged final firmware once the 16 MiB table is in place. The
+// bootloader returns here if that firmware's first start is interrupted, so
+// the staged copy stays usable for a few activations and needs no network.
+// A firmware that keeps failing to start is then fetched again instead.
+bool activateStagedFinalFirmware() {
+    const esp_partition_t *target = app1();
+    if (target == nullptr || !finalFirmwareStaged() ||
+        !verifyOrRestoreIdentity()) {
+        return false;
+    }
+    const std::uint32_t marksOffset =
+        FINAL_ACTIVATION_MARKS_OFFSET - V2_APP1_OFFSET;
+    std::uint32_t marks = 0;
+    if (esp_partition_read(target, marksOffset, &marks, sizeof(marks)) !=
+        ESP_OK) {
+        return false;
+    }
+    const int used = __builtin_popcount(~marks);
+    if (used >= FINAL_ACTIVATION_LIMIT) {
+        Serial.println("MIGRATOR_FINAL_ACTIVATIONS_EXHAUSTED");
+        return false;
+    }
+    // Flash bits only clear, so the count survives without an erase.
+    marks &= ~(std::uint32_t{1} << used);
+    if (esp_partition_write(target, marksOffset, &marks, sizeof(marks)) !=
+            ESP_OK ||
+        esp_ota_set_boot_partition(target) != ESP_OK) {
+        Serial.println("MIGRATOR_FINAL_ACTIVATE_FAILED");
+        return false;
+    }
+    Serial.println("MIGRATOR_FINAL_ACTIVATED");
+    return true;
+}
+
+bool installFinalFirmware() {
+    if (!verifyOrRestoreIdentity() || !connectWifi()) return false;
+    firmware::DeviceReport report;
+    firmware::Decision decision;
+    if (!resolveFinalFirmware(report, decision)) return false;
+    firmware::provenance::stageUpdate(report, decision);
+    String error;
+    if (!firmware::installApplicationAndFilesystem(decision, error)) {
         Serial.print("MIGRATOR_FINAL_INSTALL_FAILED ");
         Serial.println(error);
         return false;
@@ -786,9 +1029,54 @@ bool installFinalFirmware() {
 
 void runMigration() {
     const auto bootloader = bootloaderState(bootloaderHash());
+    const bool legacy = legacyLayout();
+    const bool v2 = v2Layout();
     const auto action = firmware::dtt::nextMigrationAction(
-        legacyLayout(), v2Layout(), runningFromApp0(), physicalFlashSize(),
+        legacy, v2, runningFromApp0(), physicalFlashSize(),
         securityFeaturesEnabled(), bootloader);
+
+    // Nothing below this block may fail for a reason that could have been
+    // found here, while the previous firmware can still take the device back.
+    const char *refusal = "preflight";
+    bool identityValid = false;
+    bool finalStaged = false;
+    if (action == firmware::dtt::MigrationAction::failClosed) {
+        reportPreflightFailure(legacy || v2);
+    } else if (legacy) {
+        identityValid = identityUsable();
+        finalStaged = identityValid && finalFirmwareStaged();
+        if (!identityValid) refusal = "identity";
+    }
+    auto step = firmware::dtt::nextPreparationStep(action, legacy,
+                                                   identityValid, finalStaged);
+    if (step == firmware::dtt::PreparationStep::stageFinalFirmware) {
+        bool staged = false;
+        for (int attempt = 0; attempt < FINAL_STAGE_ATTEMPTS && !staged;
+             ++attempt) {
+            staged = stageFinalFirmware();
+        }
+        step = staged ? firmware::dtt::PreparationStep::proceed
+                      : firmware::dtt::PreparationStep::refuse;
+        refusal = "final-firmware-unavailable";
+    }
+    if (step == firmware::dtt::PreparationStep::refuse) {
+        returnToPreviousFirmware(refusal);
+        Serial.println("MIGRATOR_FAIL_CLOSED");
+        return;
+    }
+    // From here the bridge owns the device until the final firmware runs.
+    if (!confirmMigrationImage()) {
+        Serial.println("MIGRATOR_IMAGE_CONFIRM_FAILED");
+        return;
+    }
+    if (legacy) {
+        // The remaining legacy-layout steps only touch flash. Keep the radio
+        // out of them: no network work competes with the copies, and the
+        // supply is not loaded by transmissions while sectors are rewritten.
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+    }
+
     switch (action) {
         case firmware::dtt::MigrationAction::relocateToApp0:
             if (relocateToApp0()) ESP.restart();
@@ -806,7 +1094,9 @@ void runMigration() {
             if (writeAndVerifyPartitionTable()) ESP.restart();
             break;
         case firmware::dtt::MigrationAction::resolveFinalFirmware:
-            if (installFinalFirmware()) ESP.restart();
+            if (activateStagedFinalFirmware() || installFinalFirmware()) {
+                ESP.restart();
+            }
             break;
         default:
             Serial.println("MIGRATOR_FAIL_CLOSED");
@@ -825,16 +1115,6 @@ void setup() {
     Serial.print(FIRMWARE_BUILD_SHA);
     Serial.print(" ");
     Serial.println(FIRMWARE_TRACK);
-    const auto bootloader = bootloaderState(bootloaderHash());
-    if (!migrationPreflight(bootloader)) {
-        rejectUnapprovedPendingImage();
-        Serial.println("MIGRATOR_PREFLIGHT_FAILED");
-        return;
-    }
-    if (!confirmMigrationImage()) {
-        Serial.println("MIGRATOR_IMAGE_CONFIRM_FAILED");
-        return;
-    }
     runMigration();
 }
 

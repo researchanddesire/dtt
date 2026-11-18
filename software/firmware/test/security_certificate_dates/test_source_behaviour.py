@@ -38,7 +38,7 @@ class CertificateDateTests(unittest.TestCase):
         header = (ROOT / "lib/FirmwareUpdateProtocol/src/CertificateDateClient.h").read_text()
         self.assertIn("DashboardClient<firmware::CertificateDateClient>", wifi)
         self.assertNotIn("DashboardClient<WiFiClientSecure>", wifi)
-        self.assertEqual(updater.count("firmware::CertificateDateClient secureClient;"), 2)
+        self.assertEqual(updater.count("firmware::CertificateDateClient secureClient;"), 3)
         self.assertNotIn("WiFiClientSecure secureClient;", updater)
         self.assertIn("firmware::CertificateDateClient &secureClient", updater)
         for consumer in (wifi, updater):
