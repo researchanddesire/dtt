@@ -62,5 +62,33 @@ inline MigrationAction nextMigrationAction(const bool legacyLayout,
                : MigrationAction::writePartitionTable;
 }
 
+// What the bridge does before it gives up the firmware it replaced. Every
+// step that can fail runs first, while that firmware can still be booted.
+enum class PreparationStep {
+    refuse,
+    stageFinalFirmware,
+    proceed,
+};
+
+inline PreparationStep nextPreparationStep(const MigrationAction action,
+                                           const bool legacyLayout,
+                                           const bool identityValid,
+                                           const bool finalFirmwareStaged) {
+    if (action == MigrationAction::failClosed) return PreparationStep::refuse;
+    // Under the 16 MiB table the old firmware is already gone; only the final
+    // install is left.
+    if (!legacyLayout) return PreparationStep::proceed;
+    if (!identityValid) return PreparationStep::refuse;
+    return finalFirmwareStaged ? PreparationStep::proceed
+                               : PreparationStep::stageFinalFirmware;
+}
+
+// The staged final image lives in the future second application slot, below
+// the sectors the bridge uses to stage the bootloader.
+inline bool stagedFinalFirmwareFits(const std::uint32_t sizeBytes,
+                                    const std::uint32_t stagingLimitBytes) {
+    return sizeBytes > 0 && sizeBytes <= stagingLimitBytes;
+}
+
 }  // namespace dtt
 }  // namespace firmware
