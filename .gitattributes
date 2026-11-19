@@ -8,6 +8,7 @@
 
 # Keep the released DTT assembly downloadable without Git LFS.
 hardware/cad/DTT.step -filter -diff -merge -text
+hardware/production-exports/cad/snap-backplate/* -filter -diff -merge -text
 
 # Keep the editable PCB and browser preview directly downloadable.
 hardware/pcb/kicad-rev4/217A_dttrainer_rev4/*.kicad_pcb -filter -diff -merge -text
