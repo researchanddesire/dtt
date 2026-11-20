@@ -72,6 +72,7 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 - PRs into `staging` or `main` that change the firmware directory, or the validation tooling (`software/scripts/hil/`, `pr-firmware.yml`, `hardware-run.yml`, `.github/scripts/hil_evidence.py`), build every hardware variant and run the exact staging bundle for the PR merge SHA on the shared Test Rig. Other PRs skip both; `Build validation` and `Hardware validation` then pass without work.
 - `PR target policy`, `Build validation` and `Hardware validation` are required on `staging` and `main`.
 - The rig records the product's camera for the whole run; `Hardware evidence` comments on the PR with each device's video and result, pass or fail. Video never decides a result.
+- PR hardware runs take precedence on the Test Rig: they take a fixture from a bench session and have the OSSM guard clear its own latch before flashing. Hold fixtures only through `rig_lock`, and expect a bench session to be stopped when a PR run arrives.
 - Merging a firmware change into `main` allocates the next version and publishes a signed candidate through `publish_firmware.yml`; staging merges do not.
 - `pr-firmware.yml` calls the reviewed wrapper
   `.github/workflows/hardware-run.yml` pinned by commit SHA. The org runner

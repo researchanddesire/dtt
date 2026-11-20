@@ -226,7 +226,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     # Use the exact reviewed wrapper commit allowed by the runner group.
     # Runner-group access is restricted to this full workflow path and ref.
-    uses: researchanddesire/Open-Source-Deepthroat-Trainer_DTT/.github/workflows/hardware-run.yml@bfa30392c62ac9bc1f24a423d2f0245a11915c9c
+    uses: researchanddesire/dtt/.github/workflows/hardware-run.yml@dd16c3be675bd02c192bd8fae5aa23f3bc3a9084
   hardware_required:
     name: Hardware validation
     if: always()
