@@ -1,5 +1,16 @@
 # DT Trainer
 
+<p align="center">
+  <a href="https://www.researchanddesire.com/products/deepthroat-trainer">
+    <img src=".github/readme/deepthroat-trainer.jpg" alt="The Deepthroat Trainer held in one hand, its screen reading Welcome to Deepthroat Trainer" width="420">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.researchanddesire.com/products/deepthroat-trainer"><b>Get the Deepthroat Trainer</b></a><br>
+  Black Friday: use code <code>BLACK_FRIDAY_2026</code> at checkout.
+</p>
+
 ESP32 firmware and hardware for the V1 (4 MiB) and V2 (16 MiB) DT Trainer.
 Firmware: MPL-2.0. Hardware: CERN-OHL-S v2. User guides:
 [CC BY-SA 4.0](https://github.com/researchanddesire/simple-docs/blob/main/LICENSE).
