@@ -11,6 +11,7 @@
 #include "endurance.h"
 #include "freeform.h"
 #include "repetition.h"
+#include "services/rad_ble_events.h"
 #include "services/vibrator.h"
 #include "state/state.h"
 #include "wifiSettings.h"
@@ -330,6 +331,11 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
         TrainingGuard guard(trainingMutex);
         if (!trainingLifecycle.activate(generation)) return;
         currentSegment = running;
+        const Segment& definition = context->definition;
+        radBleSegmentStarted(definition.idx, static_cast<int>(definition.type),
+                             definition.params.target,
+                             definition.params.startPosition,
+                             definition.params.endPosition);
         running->train(0);
         notify = trainingLifecycle.reserveNotification(generation, context->sessionId.c_str());
         firstDraw = true;

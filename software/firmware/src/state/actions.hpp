@@ -21,6 +21,7 @@
 #include "input.h"
 #include "pages/play/page.h"
 #include "services/leds.h"
+#include "services/rad_ble_events.h"
 #include "services/vibrator.h"
 #include "utils.h"
 #endif
@@ -668,8 +669,18 @@ constexpr auto drawGradeOrFailure = []() {
         return;
     }
     int grade = currentSegment->grade();
+    const bool failed =
+        segment->passFail.enabled && grade < segment->passFail.threshold;
+#if DTT_ENABLE_RAD_BLE
+    // Builds without Bluetooth skip the lookup as well as the call.
+    radBleSegmentCompleted(
+        session.segmentIdx, grade,
+        segment->passFail.enabled ? (failed ? 0 : 1) : -1,
+        segment->passFail.enabled ? session.segmentFailureCounts[segment->id]
+                                  : 0);
+#endif
 
-    if (segment->passFail.enabled && grade < segment->passFail.threshold) {
+    if (failed) {
         drawFailureScreen();
     } else {
         drawGrade();
