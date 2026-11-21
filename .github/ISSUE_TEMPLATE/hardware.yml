@@ -1,0 +1,17 @@
+name: Hardware design
+description: PCB, CAD, mechanical, or BOM questions
+title: "[Hardware] "
+labels: ["hardware"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hardware designs under `hardware/cad` and `hardware/pcb` are **CERN-OHL-S v2**. The PCB source is KiCad (`hardware/pcb/kicad-rev4/217A_dttrainer_rev4/`) and the assembly is FreeCAD (`hardware/cad/DTT.FCStd`).
+
+        BOM changes (`hardware/bom.csv`) must follow the [BOM standard](https://dev.researchanddesire.com/meta/bom-standard/) — fixed columns, closed category codes, `–` for empty cells. PCB components belong in `hardware/pcb/production/pcb-bom.csv`, which is generated from the KiCad source.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

@@ -55,3 +55,5 @@ pio run -e development-v1 -t upload
 Keep deployed partition offsets and stored device identity intact.
 See [AGENTS.md](AGENTS.md), [software/firmware/README.md](software/firmware/README.md), and
 [CI](.github/workflows/) for checks.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
