@@ -1,0 +1,36 @@
+name: Firmware bug or feature
+description: Report a firmware issue or request a behavior change
+title: "[Firmware] "
+labels: ["firmware"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Include the firmware version (shown on the startup screen) and hardware variant when known.
+
+        Do not post Wi-Fi passwords, account details, device IDs, MAC addresses or unredacted serial logs. Report security problems privately as described in [SECURITY.md](https://github.com/researchanddesire/dtt/blob/main/SECURITY.md).
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened or what should change?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Firmware version
+      placeholder: e.g. 2.0.106
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Hardware variant
+      options:
+        - V1 (4 MB)
+        - V2 (16 MB)
+        - Not sure
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the screen or device state (Wi-Fi setup, pairing, calibration, training), any error code shown (e.g. E-DTT-1), and Wi-Fi status if relevant
