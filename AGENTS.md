@@ -64,7 +64,13 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
   Release builds read it from the environment. Never commit it, local
   settings, test result dumps, or compiled images.
 - CI scans source and history with gitleaks; keep the credential rule in
-  `.gitleaks.toml`.
+  `.gitleaks.toml`. Allowlist only verified false positives, with a comment.
+- `.github/scripts/firmware_provenance_test_vector.json` is signed by a
+  throwaway key (kid `rd-fw-test-vector-2026-11-04`, private half destroyed),
+  never a release key, and is identical to the LKBX copy. Tests trust its
+  `publicKeyPem` explicitly; the release trust maps in the scripts and
+  `FirmwareProvenance.h` must never list it. Never sign test data with a
+  release key.
 - Do not change physical flash sizes or partition offsets for deployed hardware.
 
 ## Hardware validation

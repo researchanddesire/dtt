@@ -10,14 +10,15 @@ still active. The `MIGRATOR_LAB_BOOTLOADER_CHECKPOINT` marker is the window for
 a wired readback of both regions. No staging or production environment defines
 this pause.
 
-Build each application with an explicit local resolver origin:
+Build each application with an explicit local resolver origin, where
+`<lab-host-ip>` is the LAN address of the machine running the resolver:
 
 ```sh
-PLATFORMIO_BUILD_FLAGS='-D RAD_SERVER=\"http://192.168.1.149:8765\"' \
+PLATFORMIO_BUILD_FLAGS='-D RAD_SERVER=\"http://<lab-host-ip>:8765\"' \
   RELEASE_BUILD_SHA=1111111111111111 pio run -e lab-ota-v1 -j 1
-PLATFORMIO_BUILD_FLAGS='-D RAD_SERVER=\"http://192.168.1.149:8765\"' \
+PLATFORMIO_BUILD_FLAGS='-D RAD_SERVER=\"http://<lab-host-ip>:8765\"' \
   RELEASE_BUILD_SHA=2222222222222222 pio run -e lab-ota-v2 -j 1
-PLATFORMIO_BUILD_FLAGS='-D RAD_SERVER=\"http://192.168.1.149:8765\"' \
+PLATFORMIO_BUILD_FLAGS='-D RAD_SERVER=\"http://<lab-host-ip>:8765\"' \
   pio run -e migration-lab -j 1
 ```
 
