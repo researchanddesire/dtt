@@ -6,6 +6,7 @@
  */
 #include <Arduino.h>
 #include "services/radHil.h"
+#include "services/hardwareHealth.h"
 #include <DttHardwareVariant.h>
 #if defined(DTT_MIGRATION_LAB_AUTORUN)
 #include <WiFi.h>
@@ -50,6 +51,7 @@ void setup() {
     Serial.begin(115200);
     startSerialIdentity();
     radHilStart();
+    hardwareHealthBoot();
 
     delay(1000);
 
