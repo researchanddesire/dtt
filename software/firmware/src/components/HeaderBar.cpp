@@ -1,5 +1,6 @@
 #include "HeaderBar.h"
 #include "services/TaskStackSizes.h"
+#include "services/hardwareHealth.h"
 
 #include "WiFi.h"
 #include "input.h"
@@ -96,6 +97,9 @@ void headerBarTask(void *pvParameters) {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     long lastLoopTime = millis();
     while (true) {
+        // This loop runs page timeouts on every screen, so it is the UI
+        // progress the health heartbeat reports.
+        hardwareHealthMenuProgress();
         long now = millis();
         long elapsedLoop = now - lastLoopTime;
         lastLoopTime = now;

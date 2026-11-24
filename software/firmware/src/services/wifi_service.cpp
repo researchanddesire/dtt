@@ -6,6 +6,7 @@
 
 #include "pages/TextPages.h"
 #include "state/state.h"
+#include "hardwareHealth.h"
 #include "upload_queue.h"
 #include "wifiSettings.h"
 
@@ -167,6 +168,7 @@ void healthCheckWifi() {
     // Check if WiFi is connected
     if (WiFi.status() != WL_CONNECTED) {
         ESP_LOGW("WIFI_HEALTH", "WiFi not connected, health check failed");
+        hardwareHealthCloudResult(false);
         return;
     }
 
@@ -191,8 +193,10 @@ void healthCheckWifi() {
     if (httpResponseCode != 200) {
         ESP_LOGW("WIFI_HEALTH", "Health check failed with HTTP code: %d",
                  httpResponseCode);
+        hardwareHealthCloudResult(false);
         return;
     }
 
     healthCheckPassed = true;
+    hardwareHealthCloudResult(true);
 }
