@@ -1,9 +1,9 @@
 #ifndef DTT_VERSION_H
 #define DTT_VERSION_H
 
-#define VERSION "2.0.106"
+#define VERSION "2.0.107"
 #define MAJOR_VERSION 2
 #define MINOR_VERSION 0
-#define PATCH_VERSION 106
+#define PATCH_VERSION 107
 
 #endif  // DTT_VERSION_H
