@@ -65,6 +65,13 @@ class FreeformSegment final : public SegmentBase {
         }
     }
 
+    // Freeform only compares pace: the new target rpm is the window.
+    void adjust(const float, const float,
+                const float trainingSpeed) override {
+        params.trainingSpeed = trainingSpeed;
+        startWindow = trainingSpeed;
+    }
+
     // getter for grade
     [[nodiscard]] int grade() const override {
         if (timeOutsideWindow <= 0) {
