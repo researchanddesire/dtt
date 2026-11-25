@@ -86,7 +86,23 @@ void provisionTask(void *pvParameters);
 void checkIfPairedTask(void *pvParameters);
 void notifyTrainingTask(void *pvParameters);
 void sendCalibrationToBackend(float minCm, float maxCm);
-bool applySessionDocument(JsonDocument sessionJson, String &error);
+// controller: the name of a Bluetooth controller app starting this session
+// (for example "E-Stim Bridge"). Such a session is not saved, the trainer shows
+// only the app's name for it, and the trainer's own session comes back once the
+// app lets go of control. Empty for an ordinary session, which is saved.
+bool applySessionDocument(JsonDocument sessionJson, String &error,
+                          const String &controller = String());
+bool controllerSessionActive();
+String controllerSessionName();
+// Called when the control lease ends, from any task.
+void markControllerReleased();
+// True once per release; the caller then redraws the details screen.
+bool takeControllerReleaseNotice();
+// Puts the trainer's own session back if the controller has let go. Only call
+// while no segment is playing.
+void restoreOwnSessionIfReleased();
+// Forgets the controller session without restoring (a new session replaced it).
+void forgetControllerSession();
 SettingsFetchStatus getSettingsFetchStatus();
 #endif  // PROVISION
 

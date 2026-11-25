@@ -112,7 +112,8 @@ const radble::Resource RESOURCES[] = {
     {"calibration_max", "session.calibrationMax", "setting", "float", "cm", R,
      ""},
     {"session_apply", "session.definition", "setting", "object", "", RWP,
-     "{\"operation\":\"session.apply\",\"maxSegmentsPerRequest\":8}"},
+     "{\"operation\":\"session.apply\",\"maxSegmentsPerRequest\":8,"
+     "\"controllerMaxLength\":32}"},
     {"segment_live", "segment.live", "setting", "object", "", RW,
      "{\"operation\":\"segment.adjust\",\"fields\":[\"targetWindow\","
      "\"trainingSpeed\"]}"},
@@ -722,6 +723,18 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
     if (operation == "session.apply" && path == "session.definition") {
         if (!args["session"].is<JsonObjectConst>())
             return radble::Result::failure("invalid_value", "A complete session object is required");
+        // An app that runs the trainer itself names itself here. Its session
+        // isn't saved, and the trainer shows only that name for it.
+        String controller;
+        if (!args["controller"].isNull()) {
+            if (!args["controller"].is<const char*>())
+                return radble::Result::failure("invalid_value", "controller must be text");
+            controller = args["controller"].as<const char*>();
+            controller.trim();
+            if (controller.length() == 0 || controller.length() > 32)
+                return radble::Result::failure("invalid_value",
+                                               "controller must be 1 to 32 characters");
+        }
         JsonDocument replacement;
         replacement.set(args["session"]);
         String applyError = "Stop active training before replacing the session";
@@ -731,7 +744,10 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         const bool accepted =
             stateMachine != nullptr &&
             stateMachine->process_event(session_replace_requested{
-                [&]() { return applySessionDocument(replacement, applyError); },
+                [&]() {
+                    return applySessionDocument(replacement, applyError,
+                                                controller);
+                },
                 applied});
         if (!accepted)
             return radble::Result::failure("invalid_state", applyError.c_str());
@@ -873,7 +889,13 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 String snapshot(radble::Surface surface, void*) {
 #ifndef PROVISION
     // RadBLE reads State from its worker at least every 250 ms.
-    if (surface == radble::Surface::State) publishTrainingEvents();
+    if (surface == radble::Surface::State) {
+        publishTrainingEvents();
+        // Lease releases can come from the Bluetooth host task; the state
+        // machine is driven from this one, as for commands.
+        if (takeControllerReleaseNotice() && stateMachine != nullptr)
+            stateMachine->process_event(controller_released{});
+    }
 #endif
     const String currentState = stateName();
 #ifndef PROVISION
@@ -1014,6 +1036,10 @@ radble::Result prepareOta(bool starting, const char*, void*) {
 }
 
 void releaseDiagnosticOutputs(void*) {
+#ifndef PROVISION
+    // Whoever held control is gone: a controller app's session gives way.
+    markControllerReleased();
+#endif
     ++pulseGeneration[0];
     ++pulseGeneration[1];
     ledcWrite(0, 0);

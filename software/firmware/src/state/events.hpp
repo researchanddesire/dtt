@@ -28,6 +28,9 @@ struct three_strikes {};
 struct restart_training {};
 // Ends the running segment early, without grading it or recalibrating.
 struct end_segment {};
+// A controller app let go of the trainer; its session gives way to the
+// trainer's own on the details screens.
+struct controller_released {};
 struct training_worker_finished { std::uint32_t generation; };
 // outOfMemory: the run could not get memory or a task for itself. The
 // session is fine, so it is kept; any other failure discards it.
