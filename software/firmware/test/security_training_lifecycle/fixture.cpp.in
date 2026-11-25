@@ -58,6 +58,7 @@ struct Machine {
             // ACTUAL_TRANSITIONS
             "play.calibration.min"_s + event<begin_case> = "play.idle"_s,
             "play.grade"_s + event<begin_case> = "play.idle"_s,
+            "play.details.segment"_s + event<begin_case> = "play.idle"_s,
             "play.details.session"_s + event<begin_case> = "play.idle"_s
         );
     }
@@ -117,6 +118,15 @@ int main() {
     machine.process_event(begin_case{});
     activate(workerGeneration, session.id);
     assert(notificationPosts == 2);
+    // Ending early stops the run without grading or saving a result.
+    const auto ended = workerGeneration;
+    assert(machine.process_event(end_segment{}));
+    assert(machine.is("play.details.segment"_s) && !trainingFlag(machine) && !currentSegment);
+    assert(resultSnapshots == 1);
+    assert(!machine.process_event(training_worker_finished{ended}));
+    assert(!machine.process_event(end_segment{}));
+    machine.process_event(begin_case{});
+    activate(workerGeneration, session.id);
     assert(machine.process_event(training_worker_failed{workerGeneration}));
     assert(machine.is("play.details.session"_s) && !trainingFlag(machine) && !currentSegment);
     assert(resultSnapshots == 1); // failure/cancellation never uploads a fabricated completion

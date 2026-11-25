@@ -140,6 +140,7 @@ const radble::Resource RESOURCES[] = {
     {"session_details", "target.sessionDetails", "target", "event", "", RW,
      ""},
     {"play", "target.play", "target", "event", "", RW, ""},
+    {"end_segment", "target.endSegment", "target", "event", "", RW, ""},
 #ifdef BYPASS_PLAY
     {"target_grade", "target.grade", "target", "event", "", RW, ""},
 #endif
@@ -712,6 +713,9 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         else if (path == "target.play")
             handled = stateName().startsWith("play.details") &&
                       stateMachine->process_event(button_long_pressed{});
+        else if (path == "target.endSegment")
+            handled = stateName() == "play.idle" &&
+                      stateMachine->process_event(end_segment{});
 #ifdef BYPASS_PLAY
         else if (path == "target.grade")
             handled = stateName() == "play.idle" &&

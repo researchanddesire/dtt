@@ -189,6 +189,9 @@ struct dtt_state_machine {
             "play.idle"_s + event<training_worker_finished>[completedTrainingWorker] = "play.grade"_s,
             "play.idle"_s + event<training_worker_failed>[currentTrainingWorker] / recoverMissingSegment = "play.details.session"_s,
             "play.idle"_s + event<recalibrate> = "play.calibration.min"_s,
+            // Leaving play.idle stops the run and the vibrator; clear drops the
+            // segment and its LED. The session and calibration stay as they are.
+            "play.idle"_s + event<end_segment> / clear = "play.details.segment"_s,
             #ifdef BYPASS_PLAY
             "play.idle"_s + event<button_long_pressed> = "play.grade"_s,
             #endif
