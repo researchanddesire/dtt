@@ -471,6 +471,12 @@ void test_live_adjust_keeps_values_inside_the_segment() {
     const LiveAdjustValues wide = clampLiveAdjust({8.0f, 50.0f, 40.0f}, limits);
     TEST_ASSERT_EQUAL_FLOAT(11.2f, wide.targetWindow);
     TEST_ASSERT_EQUAL_FLOAT(4.0f, wide.endPosition);
+    // Held at the segment's own end, as segment.adjust does, max depth
+    // never moves and a wider block only takes the room above it.
+    const LiveAdjustLimits held{16.0f, 8.0f, 0.8f};
+    const LiveAdjustValues kept = clampLiveAdjust({8.0f, 50.0f, 40.0f}, held);
+    TEST_ASSERT_EQUAL_FLOAT(8.0f, kept.endPosition);
+    TEST_ASSERT_EQUAL_FLOAT(7.2f, kept.targetWindow);
     // Speed stays in the range session validation allows.
     TEST_ASSERT_EQUAL_FLOAT(
         LIVE_ADJUST_MIN_SPEED,

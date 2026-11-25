@@ -116,8 +116,8 @@ const radble::Resource RESOURCES[] = {
     {"session_apply", "session.definition", "setting", "object", "", RWP,
      "{\"operation\":\"session.apply\",\"maxSegmentsPerRequest\":8}"},
     {"segment_live", "segment.live", "setting", "object", "", RW,
-     "{\"operation\":\"segment.adjust\",\"fields\":[\"endPosition\","
-     "\"targetWindow\",\"trainingSpeed\"]}"},
+     "{\"operation\":\"segment.adjust\",\"fields\":[\"targetWindow\","
+     "\"trainingSpeed\"]}"},
 #endif
     {"trainer_id", "device.trainerId", "setting", "string", "",
      RP,
@@ -407,11 +407,14 @@ radble::Result startPulse(uint8_t output, int value, int durationMs) {
 }
 
 #ifndef PROVISION
-// Changes the playing segment's deep end, block width or speed. Fields left
-// out keep their current value; the reply holds the values now in use.
+// Changes the playing segment's block width or speed. Its deep end (max
+// depth) stays where the segment started. Fields left out keep their
+// current value; the reply holds the values now in use.
 radble::Result adjustPlayingSegment(JsonObjectConst args) {
-    static const char* const FIELDS[] = {"endPosition", "targetWindow",
-                                         "trainingSpeed"};
+    if (!args["endPosition"].isNull())
+        return radble::Result::failure(
+            "unsupported", "Max depth can't be changed while playing");
+    static const char* const FIELDS[] = {"targetWindow", "trainingSpeed"};
     for (const char* field : FIELDS)
         if (!args[field].isNull() && !args[field].is<float>())
             return radble::Result::failure("invalid_value",
@@ -426,25 +429,20 @@ radble::Result adjustPlayingSegment(JsonObjectConst args) {
         return radble::Result::failure(
             "unsupported", "Endurance segments can't be changed while playing");
     const LiveAdjustValues requested{
-        args["endPosition"] | segment.params.endPosition,
+        segment.params.endPosition,
         args["targetWindow"] | segment.params.targetWindow,
         args["trainingSpeed"] | segment.params.trainingSpeed};
     if (!liveAdjustFinite(requested))
         return radble::Result::failure("invalid_value",
                                        "Segment values must be finite");
-    // Never deeper than the calibrated deep position, nor than the segment's
-    // own end when the session has no calibration.
-    float deepest = segment.initialEndPosition;
-    if (session.isCalibrated && session.calibratedMaxPosition > 0.0f)
-        deepest = std::min(deepest, session.calibratedMaxPosition);
-    deepest = std::max(deepest, DEAD_ZONE_CM);
+    // The deep end is held where it is, so a wider block can only take the
+    // room between it and the tip.
     const LiveAdjustValues applied = clampLiveAdjust(
-        requested, {segment.params.startPosition, deepest,
+        requested, {segment.params.startPosition, segment.params.endPosition,
                     MINIMUM_STROKE_LENGTH_CM});
     segment.adjust(applied.endPosition, applied.targetWindow,
                    applied.trainingSpeed);
     JsonDocument document;
-    document["endPosition"] = segment.params.endPosition;
     document["targetWindow"] = segment.params.targetWindow;
     document["trainingSpeed"] = segment.params.trainingSpeed;
     String output;
