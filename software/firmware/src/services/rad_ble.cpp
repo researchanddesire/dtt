@@ -114,6 +114,8 @@ const radble::Resource RESOURCES[] = {
     {"session_apply", "session.definition", "setting", "object", "", RWP,
      "{\"operation\":\"session.apply\",\"maxSegmentsPerRequest\":8,"
      "\"controllerMaxLength\":32}"},
+    {"controller", "device.controller", "setting", "object", "", RW,
+     "{\"operation\":\"controller.claim\",\"maxLength\":32}"},
     {"segment_live", "segment.live", "setting", "object", "", RW,
      "{\"operation\":\"segment.adjust\",\"fields\":[\"targetWindow\","
      "\"trainingSpeed\"]}"},
@@ -406,6 +408,19 @@ radble::Result startPulse(uint8_t output, int value, int durationMs) {
 }
 
 #ifndef PROVISION
+// A controller app's name, as shown on the trainer: 1 to 32 characters.
+bool readControllerName(JsonVariantConst value, String &name) {
+    if (!value.is<const char*>()) return false;
+    name = value.as<const char*>();
+    name.trim();
+    if (name.length() == 0 || name.length() > 32) return false;
+    for (size_t i = 0; i < name.length(); ++i)
+        if (name[i] == '"' || name[i] == '\\' ||
+            static_cast<unsigned char>(name[i]) < 0x20)
+            return false;
+    return true;
+}
+
 // Changes the playing segment's block width or speed. Its deep end (max
 // depth) stays where the segment started. Fields left out keep their
 // current value; the reply holds the values now in use.
@@ -584,7 +599,12 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             return sessionDefinition(args["index"] | session.segmentIdx);
         else if (path == "encoder.live")
             return radble::Result::success(liveFeedJson());
-        else if (path == "device.memory") {
+        else if (path == "device.controller") {
+            if (controllerSessionActive())
+                document["name"] = controllerSessionName();
+            else
+                document["name"] = nullptr;
+        } else if (path == "device.memory") {
             // Internal RAM, where task stacks come from. A segment start needs
             // one block as large as the draw task's stack.
             constexpr uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -726,15 +746,10 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         // An app that runs the trainer itself names itself here. Its session
         // isn't saved, and the trainer shows only that name for it.
         String controller;
-        if (!args["controller"].isNull()) {
-            if (!args["controller"].is<const char*>())
-                return radble::Result::failure("invalid_value", "controller must be text");
-            controller = args["controller"].as<const char*>();
-            controller.trim();
-            if (controller.length() == 0 || controller.length() > 32)
-                return radble::Result::failure("invalid_value",
-                                               "controller must be 1 to 32 characters");
-        }
+        if (!args["controller"].isNull() &&
+            !readControllerName(args["controller"], controller))
+            return radble::Result::failure("invalid_value",
+                                           "controller must be 1 to 32 characters");
         JsonDocument replacement;
         replacement.set(args["session"]);
         String applyError = "Stop active training before replacing the session";
@@ -761,6 +776,16 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
 
     if (operation == "segment.adjust" && path == "segment.live")
         return adjustPlayingSegment(args);
+    if (operation == "controller.claim" && path == "device.controller") {
+        String name;
+        if (!readControllerName(args["name"], name))
+            return radble::Result::failure("invalid_value",
+                                           "name must be 1 to 32 characters");
+        claimController(name);
+        // Show it on the details screens straight away.
+        if (stateMachine != nullptr) stateMachine->process_event(controller_changed{});
+        return radble::Result::success("{\"name\":\"" + name + "\"}");
+    }
 #else
     if (operation == "factory.identity.write" && path == "factory.identity") {
         if (!args["trainerId"].is<const char *>() ||
@@ -894,7 +919,7 @@ String snapshot(radble::Surface surface, void*) {
         // Lease releases can come from the Bluetooth host task; the state
         // machine is driven from this one, as for commands.
         if (takeControllerReleaseNotice() && stateMachine != nullptr)
-            stateMachine->process_event(controller_released{});
+            stateMachine->process_event(controller_changed{});
     }
 #endif
     const String currentState = stateName();

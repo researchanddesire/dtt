@@ -67,6 +67,15 @@ std::atomic<bool> controllerReleaseNotice{false};
 
 bool controllerSessionActive() { return controllerActive.load(); }
 
+void claimController(const String &name) {
+    TrainingGuard guard(trainingMutex);
+    if (!controllerActive.load()) ownSession = session;
+    controllerName = name;
+    controllerActive = true;
+    controllerReleasePending = false;
+    controllerReleaseNotice = false;
+}
+
 String controllerSessionName() {
     TrainingGuard guard(trainingMutex);
     return controllerName;
@@ -89,6 +98,16 @@ void forgetControllerSession() {
     controllerReleaseNotice = false;
     controllerName = "";
     ownSession.reset();
+}
+
+void adoptLoadedSession() {
+    TrainingGuard guard(trainingMutex);
+    if (!controllerActive.load()) return;
+    if (controllerReleasePending.load()) {
+        forgetControllerSession();
+        return;
+    }
+    ownSession = session;
 }
 
 void restoreOwnSessionIfReleased() {
@@ -902,12 +921,7 @@ bool applySessionDocument(JsonDocument sessionJson, String &error,
     if (controller.length() > 0) {
         // A controller app's session is never saved: the trainer's own
         // session is kept to come back to.
-        TrainingGuard guard(trainingMutex);
-        if (!controllerActive.load()) ownSession = session;
-        controllerName = controller;
-        controllerActive = true;
-        controllerReleasePending = false;
-        controllerReleaseNotice = false;
+        claimController(controller);
     } else {
         if (!persistSessionDocument(sessionJson, error)) return false;
         forgetControllerSession();

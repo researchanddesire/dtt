@@ -252,7 +252,7 @@ constexpr auto applyLoadedSession = [](const session_load_ready &request) {
     TrainingGuard guard(trainingMutex);
     request.applied = request.apply();
     // The trainer's own session is back in place of any controller app's.
-    if (request.applied) forgetControllerSession();
+    if (request.applied) adoptLoadedSession();
     sessionLoadComplete = request.applied;
     if (request.applied)
         process_done(false);
@@ -356,7 +356,8 @@ constexpr auto drawSessionDetails = []() {
         .icon = session.iconId.value_or(249),
         .title = controllerSessionActive() ? controllerSessionName() : session.name,
         .tagline = controllerSessionActive() ? String() : session.tagline,
-        .content = controllerSessionActive() ? String() : session.description,
+        .content = controllerSessionActive() ? String(CONTROLLER_CONNECTED)
+                                             : session.description,
         .leftFooter = leftFooter.c_str(),
         .rightFooter = session.hasSeenSessionDetails ? PLAY : NEXT_HOLD_PLAY,
         .timeout = session.handsFreeMode ? DETAIL_TIMEOUT_HANDS_FREE_MS
@@ -431,7 +432,7 @@ constexpr auto drawSegmentDetails = []() {
         .header = SEGMENT_HEADER,
         .icon = controlled ? 249 : icon,
         .title = segmentHeader(*segment),
-        .content = controlled ? String() : content,
+        .content = controlled ? String(CONTROLLER_CONNECTED) : content,
         .leftFooter = leftFooter.c_str(),
         .rightFooter = NEXT_HOLD_PLAY,
         .timeout = session.handsFreeMode ? DETAIL_TIMEOUT_HANDS_FREE_MS
@@ -500,7 +501,7 @@ constexpr auto recoverMissingSegment = []() {
     // Recovery must not reload the same corrupt cache into a countdown loop.
     // A later preflight can fetch validated dashboard settings normally.
     session = Session{};
-    forgetControllerSession();
+    adoptLoadedSession();
     sessionLoadComplete = true;
 };
 

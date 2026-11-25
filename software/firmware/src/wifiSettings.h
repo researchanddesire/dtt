@@ -92,6 +92,9 @@ void sendCalibrationToBackend(float minCm, float maxCm);
 // app lets go of control. Empty for an ordinary session, which is saved.
 bool applySessionDocument(JsonDocument sessionJson, String &error,
                           const String &controller = String());
+// A controller app connected and named itself: the trainer shows it is
+// connected to that app. Its own session is kept to come back to.
+void claimController(const String &name);
 bool controllerSessionActive();
 String controllerSessionName();
 // Called when the control lease ends, from any task.
@@ -103,6 +106,9 @@ bool takeControllerReleaseNotice();
 void restoreOwnSessionIfReleased();
 // Forgets the controller session without restoring (a new session replaced it).
 void forgetControllerSession();
+// The trainer loaded its own session (cache or dashboard): that is now the one
+// to come back to. A connected controller app stays shown as connected.
+void adoptLoadedSession();
 SettingsFetchStatus getSettingsFetchStatus();
 #endif  // PROVISION
 
