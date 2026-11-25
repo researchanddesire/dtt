@@ -529,8 +529,9 @@ static void sessionFromJson(JsonDocument &sessionJson) {
         }
     }
 
-    session.description = sessionJson["description"].as<String>();
-    session.finalText = sessionJson["finalText"].as<String>();
+    // Optional texts: a missing one stays empty instead of reading "null".
+    session.description = sessionJson["description"] | "";
+    session.finalText = sessionJson["finalText"] | "";
 
     // Parse finalColor if present (LED color for final page)
     if (sessionJson["finalColor"].is<int>()) {
@@ -626,7 +627,7 @@ static void sessionFromJson(JsonDocument &sessionJson) {
 
         auto segmentId = segment["id"].as<String>();
         auto segmentName = segment["name"].as<String>();
-        auto segmentDifficulty = segment["difficulty"].as<String>();
+        String segmentDifficulty = segment["difficulty"] | "";
         auto target = segment["params"]["target"].as<int>();
         auto startPos = segment["params"]["startPosition"].as<float>();
         auto endPos = segment["params"]["endPosition"].as<float>();

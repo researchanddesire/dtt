@@ -411,7 +411,8 @@ constexpr auto drawSegmentDetails = []() {
         content += RPM_SHORT;
     }
 
-    content += SLASH + segment->difficulty;
+    // Bluetooth sessions may leave difficulty out; show no "/ " then.
+    if (segment->difficulty.length() > 0) content += SLASH + segment->difficulty;
 
     drawTextPage(TextPage{
         .header = SEGMENT_HEADER,
