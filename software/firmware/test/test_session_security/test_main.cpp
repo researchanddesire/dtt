@@ -5,6 +5,7 @@
 #include <limits>
 #include <string>
 
+#include "LiveAdjust.h"
 #include "SessionSnapshot.h"
 #include "SessionValidation.h"
 #include "TrainingFeed.h"
@@ -448,6 +449,45 @@ namespace {
     }
 }  // namespace
 
+void test_live_adjust_keeps_values_inside_the_segment() {
+    // Tip 16 cm, calibrated deep 4 cm, 0.8 cm kept below the tip.
+    const LiveAdjustLimits limits{16.0f, 4.0f, 0.8f};
+
+    const LiveAdjustValues inside = clampLiveAdjust({8.0f, 3.0f, 40.0f}, limits);
+    TEST_ASSERT_EQUAL_FLOAT(8.0f, inside.endPosition);
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, inside.targetWindow);
+    TEST_ASSERT_EQUAL_FLOAT(40.0f, inside.trainingSpeed);
+
+    // Never deeper than the deepest position.
+    TEST_ASSERT_EQUAL_FLOAT(
+        4.0f, clampLiveAdjust({1.0f, 3.0f, 40.0f}, limits).endPosition);
+    // The block and the shortest stroke always fit below the tip.
+    TEST_ASSERT_EQUAL_FLOAT(
+        12.2f, clampLiveAdjust({15.9f, 3.0f, 40.0f}, limits).endPosition);
+    // Block width stays between its minimum and the whole travel.
+    TEST_ASSERT_EQUAL_FLOAT(
+        LIVE_ADJUST_MIN_WINDOW_CM,
+        clampLiveAdjust({8.0f, 0.0f, 40.0f}, limits).targetWindow);
+    const LiveAdjustValues wide = clampLiveAdjust({8.0f, 50.0f, 40.0f}, limits);
+    TEST_ASSERT_EQUAL_FLOAT(11.2f, wide.targetWindow);
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, wide.endPosition);
+    // Speed stays in the range session validation allows.
+    TEST_ASSERT_EQUAL_FLOAT(
+        LIVE_ADJUST_MIN_SPEED,
+        clampLiveAdjust({8.0f, 3.0f, -5.0f}, limits).trainingSpeed);
+    TEST_ASSERT_EQUAL_FLOAT(
+        LIVE_ADJUST_MAX_SPEED,
+        clampLiveAdjust({8.0f, 3.0f, 5000.0f}, limits).trainingSpeed);
+}
+
+void test_live_adjust_rejects_non_finite_values() {
+    TEST_ASSERT_TRUE(liveAdjustFinite({8.0f, 3.0f, 40.0f}));
+    TEST_ASSERT_FALSE(liveAdjustFinite(
+        {std::numeric_limits<float>::quiet_NaN(), 3.0f, 40.0f}));
+    TEST_ASSERT_FALSE(liveAdjustFinite(
+        {8.0f, std::numeric_limits<float>::infinity(), 40.0f}));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_valid_modes_and_training_types);
@@ -464,5 +504,7 @@ int main() {
     RUN_TEST(test_training_feed_sample_shape);
     RUN_TEST(test_training_feed_sample_fits_one_notification);
     RUN_TEST(test_training_feed_events);
+    RUN_TEST(test_live_adjust_keeps_values_inside_the_segment);
+    RUN_TEST(test_live_adjust_rejects_non_finite_values);
     return UNITY_END();
 }
