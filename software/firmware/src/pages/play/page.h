@@ -16,6 +16,16 @@ extern CircularBuffer<float, SPEED_BUFFER_SIZE> speedBuffer;
 void drawPlayModeTask(void *pvParameters);
 void getDistanceTask(void *pvParameters);
 bool startTrainingTasks(uint32_t drawStackBytes, uint32_t sensorStackBytes);
+
+// Memory as the last failed segment start found it. Read under trainingMutex.
+struct TrainingStartFailure {
+    uint32_t count = 0;        // failed starts since boot
+    uint32_t atMs = 0;         // millis() of the last one
+    const char *step = "";     // what could not be created
+    uint32_t freeInternal = 0;
+    uint32_t largestInternal = 0;
+};
+extern TrainingStartFailure trainingStartFailure;
 void stopTrainingRun();
 
 #endif

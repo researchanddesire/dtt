@@ -187,6 +187,9 @@ struct dtt_state_machine {
             "play.idle"_s + on_entry<_> / (clear, startTrainingRun),
             "play.idle"_s + sml::on_exit<_> / stopTraining,
             "play.idle"_s + event<training_worker_finished>[completedTrainingWorker] = "play.grade"_s,
+            // Short of memory: keep the session and its calibration, and go back
+            // to the segment so it can be started again.
+            "play.idle"_s + event<training_worker_failed>[currentWorkerOutOfMemory] = "play.details.segment"_s,
             "play.idle"_s + event<training_worker_failed>[currentTrainingWorker] / recoverMissingSegment = "play.details.session"_s,
             "play.idle"_s + event<recalibrate> = "play.calibration.min"_s,
             #ifdef BYPASS_PLAY

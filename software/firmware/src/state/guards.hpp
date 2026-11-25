@@ -43,6 +43,12 @@ constexpr auto currentTrainingWorker = [](const training_worker_failed& event) {
     TrainingGuard guard(trainingMutex);
     return trainingLifecycle.current(event.generation);
 };
+constexpr auto currentWorkerOutOfMemory =
+    [](const training_worker_failed& event) {
+        TrainingGuard guard(trainingMutex);
+        return event.outOfMemory &&
+               trainingLifecycle.current(event.generation);
+    };
 
 template <typename Event = done>
 constexpr auto isSessionLoadComplete =
