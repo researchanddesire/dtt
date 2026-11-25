@@ -639,7 +639,8 @@ static void sessionFromJson(JsonDocument &sessionJson) {
             calibration.isCalibrated =
                 calibrationJson["isCalibrated"].as<bool>();
             calibration.minCm = calibrationJson["minCm"].as<float>();
-            calibration.maxCm = calibrationJson["maxCm"].as<float>();
+            calibration.maxCm =
+                calibrationTipCm(calibrationJson["maxCm"].as<float>());
             // Ask for a new calibration instead of training on a stored
             // range the device cannot use (backend minCm is the deep end).
             if (checkCalibration(calibration.maxCm, calibration.minCm) !=

@@ -185,9 +185,22 @@ namespace {
         TEST_ASSERT_TRUE(checkCalibration(12, 10) == CalibrationProblem::None);
         TEST_ASSERT_TRUE(checkCalibration(NAN, 2) == CalibrationProblem::SensorError);
         TEST_ASSERT_TRUE(checkCalibration(16, INFINITY) == CalibrationProblem::SensorError);
-        // Nothing in front of the sensor reads about 22 cm.
-        TEST_ASSERT_TRUE(checkCalibration(21.9f, 2) == CalibrationProblem::OutOfRange);
+        // A tip beyond the sensor's reach reads about 22 cm. It counts as
+        // the longest range, as it did before the range check existed.
+        TEST_ASSERT_TRUE(checkCalibration(22.05f, 6) == CalibrationProblem::None);
+        TEST_ASSERT_TRUE(checkCalibration(21.9f, 2) == CalibrationProblem::None);
+        TEST_ASSERT_EQUAL_FLOAT(CALIBRATION_MAX_CM, calibrationTipCm(22.05f));
+        TEST_ASSERT_EQUAL_FLOAT(16.0f, calibrationTipCm(16.0f));
+        // What the dashboard stores for that calibration is still usable.
+        TEST_ASSERT_TRUE(checkCalibration(CALIBRATION_MAX_CM, 6) == CalibrationProblem::None);
+        // Nothing in front of the sensor on either press.
+        TEST_ASSERT_TRUE(checkCalibration(22.05f, 22.05f) == CalibrationProblem::OutOfRange);
+        TEST_ASSERT_TRUE(checkCalibration(21.0f, 22.05f) == CalibrationProblem::OutOfRange);
         TEST_ASSERT_TRUE(checkCalibration(16, 1) == CalibrationProblem::OutOfRange);
+        // Deep first, then pulled out past the sensor's reach.
+        TEST_ASSERT_TRUE(checkCalibration(6, 22.05f) == CalibrationProblem::Reversed);
+        // A far tip still needs enough movement.
+        TEST_ASSERT_TRUE(checkCalibration(22.05f, 20) == CalibrationProblem::TooShort);
         TEST_ASSERT_TRUE(checkCalibration(2, 16) == CalibrationProblem::Reversed);
         TEST_ASSERT_TRUE(checkCalibration(10, 10) == CalibrationProblem::TooShort);
         TEST_ASSERT_TRUE(checkCalibration(10, 11) == CalibrationProblem::TooShort);
