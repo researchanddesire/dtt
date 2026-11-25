@@ -4,6 +4,8 @@
 #include <math.h>
 #include <services/leds.h>
 
+#include <esp_heap_caps.h>
+
 #include <cstring>
 
 #include "bounce.h"
@@ -11,6 +13,7 @@
 #include "endurance.h"
 #include "freeform.h"
 #include "repetition.h"
+#include "services/rad_ble_events.h"
 #include "services/vibrator.h"
 #include "state/state.h"
 #include "wifiSettings.h"
@@ -26,6 +29,7 @@
 #define PLAY_TAG "PLAY"
 
 CircularBuffer<float, DISTANCE_BUFFER_SIZE> distanceBuffer;
+TrainingStartFailure trainingStartFailure;
 CircularBuffer<float, SPEED_BUFFER_SIZE> speedBuffer;
 static float sum = 21.0 * DISTANCE_BUFFER_SIZE;
 static float speedSum = 0;
@@ -330,6 +334,11 @@ void runDrawPlayModeTask(std::unique_ptr<TrainingWorkerContext> context) {
         TrainingGuard guard(trainingMutex);
         if (!trainingLifecycle.activate(generation)) return;
         currentSegment = running;
+        const Segment& definition = context->definition;
+        radBleSegmentStarted(definition.idx, static_cast<int>(definition.type),
+                             definition.params.target,
+                             definition.params.startPosition,
+                             definition.params.endPosition);
         running->train(0);
         notify = trainingLifecycle.reserveNotification(generation, context->sessionId.c_str());
         firstDraw = true;
@@ -501,6 +510,33 @@ void runDistanceTask(uint32_t generation) {
         pacer.wait();
     }
 }
+// Records and logs why a start found no memory, then fails the run without
+// discarding the session.
+void failStartOutOfMemory(uint32_t generation, const char* step,
+                          uint32_t stackBytes) {
+    const uint32_t freeInternal =
+        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    const uint32_t largestInternal =
+        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    {
+        TrainingGuard guard(trainingMutex);
+        ++trainingStartFailure.count;
+        trainingStartFailure.atMs = millis();
+        trainingStartFailure.step = step;
+        trainingStartFailure.freeInternal = freeInternal;
+        trainingStartFailure.largestInternal = largestInternal;
+    }
+    ESP_LOGE(PLAY_TAG,
+             "Segment start failed at %s (needs %lu): internal free=%lu "
+             "largest=%lu minEver=%lu uptime=%lus",
+             step, static_cast<unsigned long>(stackBytes),
+             static_cast<unsigned long>(freeInternal),
+             static_cast<unsigned long>(largestInternal),
+             static_cast<unsigned long>(heap_caps_get_minimum_free_size(
+                 MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+             static_cast<unsigned long>(millis() / 1000));
+    stateMachine->process_event(training_worker_failed{generation, true});
+}
 }  // namespace
 
 void stopTrainingRun() {
@@ -518,23 +554,28 @@ bool startTrainingTasks(uint32_t drawStackBytes, uint32_t sensorStackBytes) {
         generation = trainingLifecycle.begin();
     }
     const auto definition = copySegmentByIdx(session.segments, session.segmentIdx);
-    auto* draw = definition ? new (std::nothrow) TrainingWorkerContext{generation, *definition, trainerId, session.id} : nullptr;
+    if (!definition) {
+        // The session has no such segment: a session problem, not memory.
+        stateMachine->process_event(training_worker_failed{generation});
+        return false;
+    }
+    auto* draw = new (std::nothrow) TrainingWorkerContext{generation, *definition, trainerId, session.id};
     auto* sensor = new (std::nothrow) uint32_t(generation);
     if (!draw || !sensor) {
         delete draw; delete sensor;
-        stateMachine->process_event(training_worker_failed{generation});
+        failStartOutOfMemory(generation, "context", sizeof(TrainingWorkerContext));
         return false;
     }
     if (xTaskCreatePinnedToCore(getDistanceTask, distanceTaskName, sensorStackBytes,
             sensor, 1, &getDistanceTaskHandle, 0) != pdPASS) {
         delete draw; delete sensor;
-        stateMachine->process_event(training_worker_failed{generation});
+        failStartOutOfMemory(generation, "sensor task", sensorStackBytes);
         return false;
     }
     if (xTaskCreatePinnedToCore(drawPlayModeTask, drawPlayModeTaskName, drawStackBytes,
             draw, 1, &drawPlayModeTaskHandle, 1) != pdPASS) {
         delete draw;
-        stateMachine->process_event(training_worker_failed{generation});
+        failStartOutOfMemory(generation, "draw task", drawStackBytes);
         return false;
     }
     return true;

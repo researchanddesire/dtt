@@ -21,6 +21,7 @@
 #include "input.h"
 #include "pages/play/page.h"
 #include "services/leds.h"
+#include "services/rad_ble_events.h"
 #include "services/vibrator.h"
 #include "utils.h"
 #endif
@@ -250,6 +251,8 @@ constexpr auto failSessionLoad = []() { process_fail(); };
 constexpr auto applyLoadedSession = [](const session_load_ready &request) {
     TrainingGuard guard(trainingMutex);
     request.applied = request.apply();
+    // The trainer's own session is back in place of any controller app's.
+    if (request.applied) adoptLoadedSession();
     sessionLoadComplete = request.applied;
     if (request.applied)
         process_done(false);
@@ -335,7 +338,14 @@ constexpr auto drawCalibrationProblem = []() {
         .center = true});
 };
 
+// While a controller app (such as E-Stim Bridge) runs the session, the
+// trainer shows only the app's name: the game is picked in the app.
+inline String segmentHeader(const Segment &segment) {
+    return controllerSessionActive() ? controllerSessionName() : segment.name;
+}
+
 constexpr auto drawSessionDetails = []() {
+    restoreOwnSessionIfReleased();
     String leftFooter = EMPTY_STRING;
 
     leftFooter =
@@ -344,9 +354,10 @@ constexpr auto drawSessionDetails = []() {
     drawTextPage(TextPage{
         .header = SESSION_HEADER,
         .icon = session.iconId.value_or(249),
-        .title = session.name,
-        .tagline = session.tagline,
-        .content = session.description,
+        .title = controllerSessionActive() ? controllerSessionName() : session.name,
+        .tagline = controllerSessionActive() ? String() : session.tagline,
+        .content = controllerSessionActive() ? String(CONTROLLER_CONNECTED)
+                                             : session.description,
         .leftFooter = leftFooter.c_str(),
         .rightFooter = session.hasSeenSessionDetails ? PLAY : NEXT_HOLD_PLAY,
         .timeout = session.handsFreeMode ? DETAIL_TIMEOUT_HANDS_FREE_MS
@@ -356,6 +367,7 @@ constexpr auto drawSessionDetails = []() {
 };
 
 constexpr auto drawToyDetails = []() {
+    restoreOwnSessionIfReleased();
     String leftFooter = EMPTY_STRING;
     bool hasSeenSessionDetails = false;
 
@@ -378,6 +390,7 @@ constexpr auto drawToyDetails = []() {
 };
 
 constexpr auto drawSegmentDetails = []() {
+    restoreOwnSessionIfReleased();
     TrainingGuard guard(trainingMutex);
     const Segment *segment = getSegmentByIdx(session.segmentIdx);
     if (segment == nullptr) {
@@ -410,13 +423,16 @@ constexpr auto drawSegmentDetails = []() {
         content += RPM_SHORT;
     }
 
-    content += SLASH + segment->difficulty;
+    // Bluetooth sessions may leave difficulty out; show no "/ " then.
+    if (segment->difficulty.length() > 0) content += SLASH + segment->difficulty;
 
+    // A controller app picks the game; the trainer doesn't show it.
+    const bool controlled = controllerSessionActive();
     drawTextPage(TextPage{
         .header = SEGMENT_HEADER,
-        .icon = icon,
-        .title = segment->name,
-        .content = content.c_str(),
+        .icon = controlled ? 249 : icon,
+        .title = segmentHeader(*segment),
+        .content = controlled ? String(CONTROLLER_CONNECTED) : content,
         .leftFooter = leftFooter.c_str(),
         .rightFooter = NEXT_HOLD_PLAY,
         .timeout = session.handsFreeMode ? DETAIL_TIMEOUT_HANDS_FREE_MS
@@ -435,7 +451,7 @@ constexpr auto drawBegin = []() {
 
     ESP_LOGD(ACTIONS_TAG, "Drawing begin 3");
 
-    drawTextPage(TextPage{.header = segment->name,
+    drawTextPage(TextPage{.header = segmentHeader(*segment),
                           .icon = 296,
                           .content = STARTING_IN_3,
                           .center = true,
@@ -444,7 +460,7 @@ constexpr auto drawBegin = []() {
 
     ESP_LOGD(ACTIONS_TAG, "Drawing 2");
     drawTextPage(TextPage{
-        .header = segment->name,
+        .header = segmentHeader(*segment),
         .icon = 284,
         .content = STARTING_IN_2,
         .center = true,
@@ -454,7 +470,7 @@ constexpr auto drawBegin = []() {
 
     ESP_LOGD(ACTIONS_TAG, "Drawing 1");
     drawTextPage(TextPage{
-        .header = segment->name,
+        .header = segmentHeader(*segment),
         .icon = 295,
         .content = STARTING_IN_1,
         .center = true,
@@ -462,7 +478,7 @@ constexpr auto drawBegin = []() {
     });
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     drawTextPage(TextPage{
-        .header = segment->name,
+        .header = segmentHeader(*segment),
         .icon = 282,
         .content = STARTING_IN_0,
         .center = true,
@@ -485,6 +501,7 @@ constexpr auto recoverMissingSegment = []() {
     // Recovery must not reload the same corrupt cache into a countdown loop.
     // A later preflight can fetch validated dashboard settings normally.
     session = Session{};
+    adoptLoadedSession();
     sessionLoadComplete = true;
 };
 
@@ -548,7 +565,7 @@ constexpr auto drawGrade = []() {
         return;
     }
 
-    drawTextPage(TextPage{.header = segment->name,
+    drawTextPage(TextPage{.header = segmentHeader(*segment),
                           .icon = icon,
                           .title = title.c_str(),
                           .content = content.c_str(),
@@ -643,7 +660,7 @@ constexpr auto drawFailureScreen = []() {
     String title = String(grade) + "% - " + attemptText;
 
     drawTextPage(TextPage{
-        .header = segment->name,
+        .header = segmentHeader(*segment),
         .icon = 323,
         .title = title.c_str(),
         .content = failureText.c_str(),
@@ -668,8 +685,18 @@ constexpr auto drawGradeOrFailure = []() {
         return;
     }
     int grade = currentSegment->grade();
+    const bool failed =
+        segment->passFail.enabled && grade < segment->passFail.threshold;
+#if DTT_ENABLE_RAD_BLE
+    // Builds without Bluetooth skip the lookup as well as the call.
+    radBleSegmentCompleted(
+        session.segmentIdx, grade,
+        segment->passFail.enabled ? (failed ? 0 : 1) : -1,
+        segment->passFail.enabled ? session.segmentFailureCounts[segment->id]
+                                  : 0);
+#endif
 
-    if (segment->passFail.enabled && grade < segment->passFail.threshold) {
+    if (failed) {
         drawFailureScreen();
     } else {
         drawGrade();

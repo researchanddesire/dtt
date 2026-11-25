@@ -78,6 +78,15 @@ class RepetitionSegment final : public SegmentBase {
                       getCurrentEffectiveStartPosition());
     }
 
+    // The block only takes its width when a rep restarts it, so resize it
+    // here. Its top stays where it is.
+    void adjust(const float endPosition, const float targetWindow,
+                const float trainingSpeed) override {
+        SegmentBase::adjust(endPosition, targetWindow, trainingSpeed);
+        endWindow = std::max(getCurrentEffectiveEndPosition(),
+                             startWindow - params.targetWindow);
+    }
+
     // getter for grade
     [[nodiscard]] int grade() const override {
         if (timeOutsideWindow <= 0) {

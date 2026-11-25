@@ -73,6 +73,7 @@ constexpr char SKIP PROGMEM[] = "Skip";
 constexpr char HOLD PROGMEM[] = "Hold";
 constexpr char WIFI PROGMEM[] = "Wi-Fi";
 constexpr char SLASH PROGMEM[] = " / ";
+constexpr char CONTROLLER_CONNECTED PROGMEM[] = "Connected";
 constexpr char SPACE PROGMEM[] = " ";
 constexpr char PLAY PROGMEM[] = "PLAY!";
 

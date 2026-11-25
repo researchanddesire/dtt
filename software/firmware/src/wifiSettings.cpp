@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <algorithm>
+#include <atomic>
+#include <optional>
 #include <memory>
 
 #include "SPIFFS.h"
@@ -52,6 +54,83 @@ namespace {
 }  // namespace
 
 std::shared_ptr<SegmentBase> currentSegment;
+
+namespace {
+// Set while a Bluetooth controller app's session is in place of the trainer's
+// own. Guarded by trainingMutex, except the two flags.
+String controllerName;
+std::optional<Session> ownSession;
+std::atomic<bool> controllerActive{false};
+std::atomic<bool> controllerReleasePending{false};
+std::atomic<bool> controllerReleaseNotice{false};
+}  // namespace
+
+bool controllerSessionActive() { return controllerActive.load(); }
+
+void claimController(const String &name) {
+    TrainingGuard guard(trainingMutex);
+    if (!controllerActive.load()) ownSession = session;
+    controllerName = name;
+    controllerActive = true;
+    controllerReleasePending = false;
+    controllerReleaseNotice = false;
+}
+
+String controllerSessionName() {
+    TrainingGuard guard(trainingMutex);
+    return controllerName;
+}
+
+void markControllerReleased() {
+    if (!controllerActive.load()) return;
+    controllerReleasePending = true;
+    controllerReleaseNotice = true;
+}
+
+bool takeControllerReleaseNotice() {
+    return controllerReleaseNotice.exchange(false);
+}
+
+void forgetControllerSession() {
+    TrainingGuard guard(trainingMutex);
+    controllerActive = false;
+    controllerReleasePending = false;
+    controllerReleaseNotice = false;
+    controllerName = "";
+    ownSession.reset();
+}
+
+void adoptLoadedSession() {
+    TrainingGuard guard(trainingMutex);
+    if (!controllerActive.load()) return;
+    if (controllerReleasePending.load()) {
+        forgetControllerSession();
+        return;
+    }
+    ownSession = session;
+}
+
+void restoreOwnSessionIfReleased() {
+    TrainingGuard guard(trainingMutex);
+    if (!controllerActive.load() || !controllerReleasePending.load()) return;
+    if (trainingLifecycle.active()) return;
+    if (ownSession.has_value()) {
+        // Calibration belongs to the toy in use, not to either session.
+        const bool isCalibrated = session.isCalibrated;
+        const float minPosition = session.calibratedMinPosition;
+        const float maxPosition = session.calibratedMaxPosition;
+        session = *ownSession;
+        session.isCalibrated = isCalibrated;
+        session.calibratedMinPosition = minPosition;
+        session.calibratedMaxPosition = maxPosition;
+        currentSegment.reset();
+    }
+    ESP_LOGI(WIFI_TAG, "controller let go; own session restored");
+    controllerActive = false;
+    controllerReleasePending = false;
+    controllerName = "";
+    ownSession.reset();
+}
 ESP32RecursiveMutex trainingMutex;
 TrainingLifecycle trainingLifecycle;
 
@@ -529,8 +608,9 @@ static void sessionFromJson(JsonDocument &sessionJson) {
         }
     }
 
-    session.description = sessionJson["description"].as<String>();
-    session.finalText = sessionJson["finalText"].as<String>();
+    // Optional texts: a missing one stays empty instead of reading "null".
+    session.description = sessionJson["description"] | "";
+    session.finalText = sessionJson["finalText"] | "";
 
     // Parse finalColor if present (LED color for final page)
     if (sessionJson["finalColor"].is<int>()) {
@@ -626,7 +706,7 @@ static void sessionFromJson(JsonDocument &sessionJson) {
 
         auto segmentId = segment["id"].as<String>();
         auto segmentName = segment["name"].as<String>();
-        auto segmentDifficulty = segment["difficulty"].as<String>();
+        String segmentDifficulty = segment["difficulty"] | "";
         auto target = segment["params"]["target"].as<int>();
         auto startPos = segment["params"]["startPosition"].as<float>();
         auto endPos = segment["params"]["endPosition"].as<float>();
@@ -829,7 +909,8 @@ bool persistSessionDocument(
 }
 }  // namespace
 
-bool applySessionDocument(JsonDocument sessionJson, String &error) {
+bool applySessionDocument(JsonDocument sessionJson, String &error,
+                          const String &controller) {
     if (sessionJson.overflowed() ||
         !validateSessionDocument(sessionJson.as<JsonObjectConst>(), error,
                                  SessionDocumentMode::Complete))
@@ -837,7 +918,14 @@ bool applySessionDocument(JsonDocument sessionJson, String &error) {
     sessionJson["segmentCount"] = sessionJson["segments"].size();
     sessionJson["segmentIdx"] = 0;
     sessionJson["pageIdx"] = 0;
-    if (!persistSessionDocument(sessionJson, error)) return false;
+    if (controller.length() > 0) {
+        // A controller app's session is never saved: the trainer's own
+        // session is kept to come back to.
+        claimController(controller);
+    } else {
+        if (!persistSessionDocument(sessionJson, error)) return false;
+        forgetControllerSession();
+    }
 
     // The state-machine adapter serializes this callback while no segment is
     // active. Validation and durable replacement precede live-state mutation.

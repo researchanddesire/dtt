@@ -148,6 +148,7 @@ struct dtt_state_machine {
 
             "play.details.session"_s + on_entry<_> / (drawSessionDetails),
             "play.details.session"_s + event<session_replace_requested> / applyRequestedSession,
+            "play.details.session"_s + event<controller_changed> = "play.details.session"_s,
             "play.details.session"_s + event<button_long_pressed> = "play"_s,
             "play.details.session"_s + event<timeout_expired>[isHandsFreeMode<timeout_expired>] = "play"_s,
             "play.details.session"_s + event<button_pressed>[hasSeenSessionDetails<button_pressed>] = "play"_s,
@@ -162,11 +163,13 @@ struct dtt_state_machine {
             "play.details.toy"_s + event<button_long_pressed> = "play"_s,
             "play.details.toy"_s + event<button_pressed>[hasSeenSessionDetails<button_pressed>] = "play"_s,
             "play.details.toy"_s + event<button_pressed> = "play.details.segment"_s,
+            "play.details.toy"_s + event<controller_changed> = "play.details.session"_s,
             "play.details.toy"_s + event<timeout_expired> = "play.details.segment"_s,
             "play.details.toy"_s + event<force_update> = "update"_s,
 
             "play.details.segment"_s + on_entry<_> / (drawSegmentDetails),
             "play.details.segment"_s + event<session_replace_requested> / applyRequestedSession,
+            "play.details.segment"_s + event<controller_changed> = "play.details.session"_s,
             "play.details.segment"_s + event<fail> / recoverMissingSegment = "play.details.session"_s,
             "play.details.segment"_s + event<button_long_pressed> = "play"_s,
             "play.details.segment"_s + event<button_pressed> = "play"_s,
@@ -187,8 +190,14 @@ struct dtt_state_machine {
             "play.idle"_s + on_entry<_> / (clear, startTrainingRun),
             "play.idle"_s + sml::on_exit<_> / stopTraining,
             "play.idle"_s + event<training_worker_finished>[completedTrainingWorker] = "play.grade"_s,
+            // Short of memory: keep the session and its calibration, and go back
+            // to the segment so it can be started again.
+            "play.idle"_s + event<training_worker_failed>[currentWorkerOutOfMemory] = "play.details.segment"_s,
             "play.idle"_s + event<training_worker_failed>[currentTrainingWorker] / recoverMissingSegment = "play.details.session"_s,
             "play.idle"_s + event<recalibrate> = "play.calibration.min"_s,
+            // Leaving play.idle stops the run and the vibrator; clear drops the
+            // segment and its LED. The session and calibration stay as they are.
+            "play.idle"_s + event<end_segment> / clear = "play.details.segment"_s,
             #ifdef BYPASS_PLAY
             "play.idle"_s + event<button_long_pressed> = "play.grade"_s,
             #endif

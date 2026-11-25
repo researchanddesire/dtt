@@ -127,6 +127,10 @@ class SegmentBase {
     float currentEffectiveEndPosition = 0.0f;
     float freeformRepDetectionThreshold = 0.0f;
 
+    // The end position the segment started with: live changes never go deeper
+    // unless the session's calibration allows it.
+    float initialEndPosition = 0.0f;
+
     explicit SegmentBase(const TrainingType initialType,
                          const TrainingParams& initialParams) {
         type = initialType;
@@ -137,6 +141,7 @@ class SegmentBase {
             params.endPosition = DEAD_ZONE_CM;
         }
 
+        initialEndPosition = params.endPosition;
         currentPosition = params.startPosition;
         directionBounds[0] = params.startPosition - DIRECTION_BOUNDS_WIDTH / 2;
         directionBounds[1] = params.startPosition + DIRECTION_BOUNDS_WIDTH / 2;
@@ -356,6 +361,17 @@ class SegmentBase {
     // Update dynamic training boundaries based on progress and
     // trainingDepthIncrease - must be implemented by child classes
     virtual void updateDynamicBoundaries() = 0;
+
+    // Changes a playing segment's deep end, block width and speed. Callers
+    // bound the values first (LiveAdjust.h). The windows follow on the next
+    // tick, as they do when the dynamic boundaries move.
+    virtual void adjust(const float endPosition, const float targetWindow,
+                        const float trainingSpeed) {
+        params.endPosition = endPosition;
+        params.targetWindow = targetWindow;
+        params.trainingSpeed = trainingSpeed;
+        updateDynamicBoundaries();
+    }
 
     // Get the current effective start position (for dynamic boundary
     // calculations)
