@@ -282,7 +282,7 @@ constexpr auto captureMaxPosition = []() {
         const float deepCm = getDistance(100);
         calibrationProblem = checkCalibration(pendingTipCm, deepCm);
         if (calibrationProblem == CalibrationProblem::None) {
-            session.calibratedMinPosition = pendingTipCm;
+            session.calibratedMinPosition = calibrationTipCm(pendingTipCm);
             session.calibratedMaxPosition = deepCm;
 
             for (auto &segment : session.segments) {
