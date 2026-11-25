@@ -5,6 +5,8 @@
 
 #define VIBRATOR_TAG "Vibrator"
 
+#include <atomic>
+
 #include "services/board.hpp"
 class SegmentBase;
 
@@ -26,6 +28,11 @@ class Vibrator {
 };
 
 extern Vibrator vibratorInstance;
+
+// Off by default: the vibrator runs at full power while in the window. A
+// Bluetooth client may turn it on so freeform power follows the pace. It is
+// not saved, and goes back to off when that client disconnects.
+extern std::atomic<bool> vibratorFollowsPace;
 
 void initVibratorService();
 
