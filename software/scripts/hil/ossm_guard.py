@@ -2,9 +2,14 @@
 
 The independent guard (C:\\rad-hil\\rs485-guard, host-only) samples the 57AIM30
 motor over RS-485 and owns the verified stop. Homing needs the motor handed back
-to the OSSM, where the guard enforces its collision-only contact limits. A
-latched guard means a fault awaits human review, so this harness never clears
-it or re-arms the motor: the run fails before anything is written.
+to the OSSM, where the guard enforces its collision-only contact limits.
+
+Pull-request runs take precedence over the bench's own state. When the guard
+is missing, latched or not handed back, the run asks it to recover: the guard
+(started by the rig watchdog if needed) checks the motor is idle, healthy and
+between its measured stops, moves it slowly to mid-rail and hands it back. The
+fault it cleared is kept in the evidence and shown on the pull request. If the
+guard refuses or cannot recover, the run fails before anything is written.
 """
 from __future__ import annotations
 
@@ -17,10 +22,33 @@ import time
 MAX_STATUS_AGE_S = 5.0
 MIN_RATE_HZ = 30.0
 MAX_SAMPLE_AGE_MS = 500.0
+# A recovery moves the carriage up to the rail's length at 20 mm/s, then settles.
+RECOVERY_WAIT_S = 180.0
+RECOVERY_SETTLE_S = 20.0
+# The guard allows two hard-stop contacts (lower, upper) per homing session and
+# ends a session only after SESSION_IDLE_S without motion (hat_guard.py). A second
+# homing inside an open session trips "Unexpected repeated hard-stop contact".
+SESSION_IDLE_S = 10.0
+SESSION_CLEAR_WAIT_S = 30.0
+COUNTS_PER_MM = 32768 / 40
+LOADED_A = 1.5
+# The guard's quiet carriage moves under 1 mm/s; this is half a second of that.
+STILL_COUNTS = int(0.5 * COUNTS_PER_MM)
 
 
 def read_status(path):
-    status = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    path = Path(path)
+    # Windows can deny an open while the guard atomically replaces the file.
+    # Limit the wait to 50 ms and check the returned sample's age as usual.
+    for attempt in range(3):
+        try:
+            raw = path.read_text(encoding='utf-8-sig')
+            break
+        except PermissionError:
+            if attempt == 2:
+                raise
+            time.sleep(0.025)
+    status = json.loads(raw)
     written = datetime.fromisoformat(status['time'])
     status['status_age_s'] = (datetime.now(timezone.utc) - written).total_seconds()
     return status
@@ -53,32 +81,118 @@ def unsafe_reason(status):
 class GuardWatch:
     """Preflight plus continuous checks while an OSSM run is in progress."""
 
-    def __init__(self, path, output):
+    def __init__(self, path, output, request_path=None, requester=''):
         self.path = Path(path)
         self.output = Path(output)
+        # Where a recovery request is left for the guard; None never asks.
+        self.request_path = Path(request_path) if request_path else None
+        self.requester = requester
         self.failure = None
         self.record = dict(schema=1, preflight=None, motion=None, before=None, after=None,
-                           faults=[], contacts=[])
+                           faults=[], contacts=[], recovery=None)
         self._stop = threading.Event()
         self._thread = None
         self._faults = None
 
-    def require(self):
+    def _inspect(self):
+        """Return (status, reason); status is None when the guard left no readable status."""
         try:
             status = read_status(self.path)
         except (OSError, ValueError, KeyError) as error:
-            self.record['preflight'] = f'guard status unavailable: {error}'
-            raise RuntimeError('RS-485 safety guard is not running; refusing to flash the OSSM') from error
+            return None, f'guard status unavailable: {error}'
+        return status, unsafe_reason(status)
+
+    def _recover(self, reason, quiet, wait_s, settle_s):
+        """Ask the guard to clear its own state for this run. Returns the final (status, reason)."""
+        request_id = f'{self.requester}@{time.time():.3f}'
+        recovery = dict(requested=reason, id=request_id, outcome='no answer from the guard')
+        self.record['recovery'] = recovery
+        if quiet:
+            # Stored STEP pulses run when the motor is handed back: silence the OSSM first.
+            quiet()
+        self.request_path.parent.mkdir(parents=True, exist_ok=True)
+        self.request_path.write_text(json.dumps(dict(id=request_id, by=self.requester, time=time.time())),
+                                     encoding='utf-8')
+        try:
+            deadline = time.monotonic() + wait_s
+            answer = None
+            while time.monotonic() < deadline:
+                status, _ = self._inspect()
+                answer = (status or {}).get('recovery') or {}
+                if answer.get('id') == request_id and answer.get('outcome') in ('cleared', 'not-needed', 'failed'):
+                    recovery.update(outcome=answer['outcome'], clearedFault=answer.get('clearedFault'),
+                                    error=answer.get('error'), position=answer.get('position'))
+                    break
+                time.sleep(0.5)
+            # The guard's rate window refills after a restart or a recovery.
+            deadline = time.monotonic() + settle_s
+            while True:
+                status, reason = self._inspect()
+                if not reason or time.monotonic() >= deadline:
+                    return status, reason
+                time.sleep(0.5)
+        finally:
+            try:
+                self.request_path.unlink()
+            except OSError:
+                pass
+
+    def require(self, quiet=None, wait_s=RECOVERY_WAIT_S, settle_s=RECOVERY_SETTLE_S):
+        status, reason = self._inspect()
+        if reason and self.request_path:
+            status, reason = self._recover(reason, quiet, wait_s, settle_s)
+        recovery = self.record['recovery']
+        note = ''
+        if recovery:
+            note = f"; recovered automatically before this run from: {recovery['requested']}"
+        if status is None:
+            self.record['preflight'] = reason
+            raise RuntimeError('RS-485 safety guard is not running; refusing to flash the OSSM')
         self.record['before'] = status
-        reason = unsafe_reason(status)
-        self.record['preflight'] = reason or (
-            f"guard running at {status['rateHz']:.0f} Hz with a verified stop path")
         if reason:
-            raise RuntimeError('RS-485 safety guard: ' + reason)
+            detail = ''
+            if recovery:
+                detail = f" (automatic recovery: {recovery['outcome']}" + (
+                    f", {recovery['error']}" if recovery.get('error') else '') + ')'
+            self.record['preflight'] = reason + detail
+            raise RuntimeError('RS-485 safety guard: ' + reason + detail)
+        self.record['preflight'] = f"guard running at {status['rateHz']:.0f} Hz with a verified stop path" + note
         self.record['motion'] = 'handed back to the OSSM; guard enforcing collision-only limits'
         self._faults = status.get('faultCount', 0)
         self._thread = threading.Thread(target=self._watch, daemon=True)
         self._thread.start()
+
+    def wait_session_clear(self, timeout=SESSION_CLEAR_WAIT_S, idle=SESSION_IDLE_S + 1.0,
+                           clock=time.monotonic, sleep=time.sleep):
+        """Before an OSSM boot that homes: wait until the guard's homing session is empty.
+
+        The OSSM must already be parked in its ROM loader. Returns once the guard
+        reports no contacts and the carriage has been still for longer than the
+        guard's idle limit; raises RuntimeError after `timeout`.
+        """
+        started = clock()
+        last = quiet_since = None
+        while True:
+            self.check()
+            status, reason = self._inspect()
+            if status is None:
+                raise RuntimeError('RS-485 safety guard: ' + reason)
+            now = clock()
+            sample = status.get('latest') or {}
+            position = sample.get('position')
+            current = abs(sample.get('current') or 0)
+            still = (isinstance(position, (int, float)) and last is not None and abs(position - last) <= STILL_COUNTS
+                     and current <= LOADED_A and not status.get('activeContact'))
+            last = position if isinstance(position, (int, float)) else None
+            quiet_since = (quiet_since if quiet_since is not None else now) if still else None
+            contacts = status.get('contacts') or []
+            if still and not contacts and now - quiet_since >= idle:
+                return
+            if now - started >= timeout:
+                raise RuntimeError(
+                    f"RS-485 safety guard: its homing session did not clear within {timeout:.0f} s of parking the OSSM "
+                    f"(contacts: {', '.join(map(str, contacts)) or 'none'}; carriage {'still' if still else 'moving'})")
+            sleep(0.5)
 
     def _watch(self):
         while not self._stop.wait(1.0):

@@ -4,11 +4,13 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
+import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ossm_guard import GuardWatch, unsafe_reason  # noqa: E402
+from ossm_guard import GuardWatch, read_status, unsafe_reason  # noqa: E402
 from video import Recorder, view_filter  # noqa: E402
 
 
@@ -47,6 +49,99 @@ class GuardTests(unittest.TestCase):
             watch.close()
             self.assertIn('unavailable', json.loads((Path(root) / 'rs485-guard.json').read_text())['preflight'])
 
+    def recover(self, before, answer, after, **kwargs):
+        """Run require() against a stand-in guard that answers the request file."""
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            path, request = root / 'status.json', root / 'locks' / 'ossm-guard.request'
+            if before is not None:
+                path.write_text(json.dumps(before))
+            seen = {}
+
+            def guard():
+                for _ in range(200):
+                    if request.exists():
+                        try:
+                            seen.update(json.loads(request.read_text()))
+                        except ValueError:
+                            time.sleep(0.01)
+                            continue
+                        if answer is not None:
+                            status = dict(after, recovery=dict(answer, id=seen['id']))
+                            path.write_text(json.dumps(status))
+                        return
+                    time.sleep(0.01)
+            thread = threading.Thread(target=guard); thread.start()
+            quiet = MagicMock()
+            watch = GuardWatch(path, root, request, 'researchanddesire/OSSM run 7-1')
+            error = None
+            try:
+                watch.require(quiet=quiet, **kwargs)
+            except RuntimeError as raised:
+                error = str(raised)
+            thread.join(); watch.close()
+            record = json.loads((root / 'rs485-guard.json').read_text())
+            return error, record, seen, quiet, request.exists()
+
+    def test_latched_guard_is_recovered_before_the_run(self):
+        latched = guard_status(activeFault='Hard-stop contact exceeds 200 ms', rail=dict(critical=True),
+                               mode='strict', handback=None, safe=False)
+        error, record, seen, quiet, left = self.recover(
+            latched, dict(outcome='cleared', clearedFault='Hard-stop contact exceeds 200 ms'), guard_status())
+        self.assertIsNone(error)
+        quiet.assert_called_once()
+        self.assertEqual(seen['by'], 'researchanddesire/OSSM run 7-1')
+        self.assertEqual(record['recovery']['outcome'], 'cleared')
+        self.assertIn('recovered automatically', record['preflight'])
+        self.assertIn('Hard-stop contact exceeds 200 ms', record['preflight'])
+        self.assertFalse(left)
+
+    def test_missing_guard_is_waited_for(self):
+        error, record, _, _, _ = self.recover(None, dict(outcome='not-needed'), guard_status())
+        self.assertIsNone(error)
+        self.assertEqual(record['recovery']['outcome'], 'not-needed')
+
+    def test_refused_recovery_fails_before_any_write(self):
+        latched = guard_status(activeFault='Motor alarm 4', rail=dict(critical=True), mode='strict',
+                               handback=None, safe=False)
+        error, record, _, _, left = self.recover(
+            latched, dict(outcome='failed', error='motor not idle and healthy'), latched, settle_s=0.2)
+        self.assertIn('Motor alarm 4', error)
+        self.assertIn('automatic recovery: failed, motor not idle and healthy', error)
+        self.assertEqual(record['recovery']['outcome'], 'failed')
+        self.assertFalse(left)
+
+    def test_silent_guard_fails_before_any_write(self):
+        error, record, _, _, left = self.recover(None, None, None, wait_s=0.3, settle_s=0.2)
+        self.assertIn('not running', error)
+        self.assertEqual(record['recovery']['outcome'], 'no answer from the guard')
+        self.assertFalse(left)
+
+    def test_healthy_guard_is_never_asked_to_recover(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            (root / 'status.json').write_text(json.dumps(guard_status()))
+            quiet = MagicMock()
+            watch = GuardWatch(root / 'status.json', root, root / 'ossm-guard.request', 'run')
+            watch.require(quiet=quiet); watch.close()
+            quiet.assert_not_called()
+            self.assertFalse((root / 'ossm-guard.request').exists())
+            self.assertIsNone(json.loads((root / 'rs485-guard.json').read_text())['recovery'])
+
+    def test_status_file_contention_retries_and_still_rejects_stale_samples(self):
+        old = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+        snapshot = json.dumps(guard_status(time=old))
+        with patch.object(Path, 'read_text', side_effect=[PermissionError(), snapshot]) as reader:
+            status = read_status('status.json')
+        self.assertEqual(reader.call_count, 2)
+        self.assertIn('guard is not running', unsafe_reason(status))
+
+    def test_persistent_status_file_denial_fails(self):
+        with patch.object(Path, 'read_text', side_effect=PermissionError()) as reader:
+            with self.assertRaises(PermissionError):
+                read_status('status.json')
+        self.assertEqual(reader.call_count, 3)
+
     def test_fault_during_the_run_fails_it(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'status.json'
@@ -61,6 +156,58 @@ class GuardTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 watch.check()
             watch.close()
+
+
+class SessionClearTests(unittest.TestCase):
+    """Before an OSSM boot that homes, the guard's homing session must be empty and the carriage still."""
+    def wait(self, statuses, timeout=30.0, idle=11.0):
+        clock = iter(i * 0.5 for i in range(10_000))
+        watch = GuardWatch(Path('status.json'), '.')
+        samples = iter(statuses)
+        def inspect():
+            status = guard_status(**next(samples))
+            return status, None
+        with patch.object(watch, '_inspect', side_effect=inspect):
+            now = []
+            def tick():
+                now.append(next(clock))
+                return now[-1]
+            watch.wait_session_clear(timeout=timeout, idle=idle, clock=tick, sleep=lambda s: None)
+        return now[-1]
+
+    @staticmethod
+    def still(contacts=(), position=-83000, current=0.01, **changes):
+        return {'contacts': list(contacts), 'latest': dict(position=position, current=current),
+                'activeContact': None, **changes}
+
+    def test_waits_for_the_session_reset_and_more_than_the_idle_time(self):
+        # Contacts from an interrupted homing until the guard resets the session, then still.
+        statuses = [self.still(['lower'])] * 21 + [self.still()] * 40
+        # Samples every 0.5 s from 0.5 s. The first cannot show stillness, so the
+        # still window starts at 1.0 s; the session resets at 11.0 s; done at 12.0 s.
+        self.assertEqual(self.wait(statuses), 12.0)
+
+    def test_motion_restarts_the_still_window(self):
+        moving = [self.still(position=-83000 + 2000 * i) for i in range(10)]
+        finished = self.wait(moving + [self.still()] * 40)
+        self.assertGreaterEqual(finished, 5.0 + 11.0)
+
+    def test_a_loaded_motor_or_open_contact_is_not_still(self):
+        statuses = ([self.still(current=2.0)] * 10 + [self.still(activeContact=dict(end='lower'))] * 10
+                    + [self.still()] * 40)
+        self.assertGreaterEqual(self.wait(statuses), 10.0 + 11.0)
+
+    def test_a_session_that_never_clears_fails_with_its_contacts(self):
+        with self.assertRaisesRegex(RuntimeError, r'did not clear within 30 s of parking the OSSM \(contacts: lower'):
+            self.wait([self.still(['lower'])] * 100)
+        with self.assertRaisesRegex(RuntimeError, 'carriage moving'):
+            self.wait([self.still(position=-83000 + 2000 * i) for i in range(100)])
+
+    def test_a_guard_fault_ends_the_wait(self):
+        watch = GuardWatch(Path('status.json'), '.')
+        watch.failure = 'RS-485 safety guard: guard stopped the motor'
+        with self.assertRaisesRegex(RuntimeError, 'guard stopped the motor'):
+            watch.wait_session_clear(clock=lambda: 0.0, sleep=lambda s: None)
 
 
 class VideoTests(unittest.TestCase):

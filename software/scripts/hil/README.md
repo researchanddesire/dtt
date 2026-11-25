@@ -57,6 +57,10 @@ OSSM's 4 MB profiles use the standard 4 MB min_spiffs layout and size optimizati
 Measured capacity alone does not authorize a partition migration. A 16 MB fixture
 still carrying the older 4 MB table fails preflight until a separately reviewed,
 storage-preserving migration has been completed. Never relabel it as a 4 MB board.
+The one exception is the dual-lane OSSM below: release V1 jobs leave the reviewed
+4 MB OSSM table on it, and the next 16 MB write puts its own table back. Both
+tables keep NVS, otadata and app0 at the same offsets, the write verifies NVS
+byte for byte, and the OSSM stores nothing in its filesystem or coredump partitions.
 
 ## Interfaces and trust boundary
 
@@ -100,7 +104,10 @@ reading its factory MAC/chip/flash, and verifying PSRAM where relevant. The owne
 has authorized a 16 MB Trainer to exercise the 4 MB V1 image/partition profile.
 That V1 fixture must retain `flash_bytes: 16777216` and explicitly set
 `allow_larger_flash: true`; boot evidence still verifies the actual 16 MB chip.
-This is profile coverage, not evidence of testing a physically 4 MB chip. The
+This is profile coverage, not evidence of testing a physically 4 MB chip.
+The single enrolled 16 MB OSSM may set `allow_larger_flash: true` too. It stays
+the one `16mb` OSSM fixture (one capacity, one guard) and then serves both
+release lanes, `ossm:v1` and `ossm:v2`; PR runs still flash it as `16mb`. The
 exception is refused for every other product/variant or capacity. Missing, duplicate, ambiguous,
 or incompatible fixtures fail before writes. Every write rechecks chip, MAC,
 flash and PSRAM and reads the installed partition table. A different table
@@ -176,9 +183,56 @@ be under 5 s old, stream bench telemetry at 30 Hz or more, hold a verified stop
 path, report no fault, and be in `collision-only` mode with a verified handback,
 which lets the firmware home within the guard's hard-stop contact limits. The
 harness watches the guard throughout the run and fails it on any guard fault,
-latch or stale status. It never clears a latch or hands the motor back; a latched
-guard waits for human review. The guard's before/after state is
+latch or stale status. The guard's before/after state is
 `results/rs485-guard.json`, and the comment shows motor stills from camera 2.
+
+The rig's Radar is held in its ROM loader for the whole OSSM run. A running
+Radar connects to a booting OSSM over BLE and asks for a mode, which starts a
+second homing that the guard latches on. The run takes `radr.lock` with the
+usual PR precedence and holds the enrolled Radar before any OSSM is flashed or
+reset, checking its factory MAC; a Radar that cannot be held fails the run
+before any write. At the end, on every path, each OSSM is parked in its ROM
+loader first and the Radar is then reset into its application; if an OSSM cannot
+be parked, the Radar stays held. The timeline and `results.json` (`radar`) record
+each step, and `results/radar-hold.log` keeps the esptool output. A rig without
+an enrolled Radar skips the hold and says so in the log.
+
+The guard allows one homing (two hard-stop contacts, lower and upper) per homing
+session, and ends a session only after 10 seconds without motion. Two homings
+inside one session trip "Unexpected repeated hard-stop contact". Flashing leaves
+the OSSM in its loader; before its observed boot the run waits, for 30 seconds
+at most, until the guard reports no contacts and the carriage has been still for
+longer than that. The boot's homing is then the only one in its session. If the
+session never clears, the run fails before the reset.
+
+### Shared queue and fixture ownership
+
+The dashboard orders PR and release jobs together. Critical jobs can move ahead
+of queued jobs. A started run keeps its fixture until cleanup and no queue
+reorder interrupts a flash. After queue cutover, the installed launcher
+checks a fresh host receipt for the exact repository, run, attempt and SHA.
+Manual bench sessions still yield to a reviewed PR. The release queue uses
+the same fixture locks as the PR harness and protects a started release run
+from watchdog preemption.
+
+- **Fixture.** `rig_lock` records its holder in `<lock>.holder`. A pull-request
+  run that finds a fixture taken leaves `<lock>.preempt` and waits up to five
+  minutes. The rig watchdog (`C:\rad-hil\watchdog`, scheduled task
+  `RAD Rig Watchdog`) terminates a preemptible manual holder. PR and release jobs mark
+  their owned fixture as protected. Manual sessions must hold the fixture
+  through `rig_lock` and expect to be stopped.
+- **Guard.** When the OSSM guard is missing, latched or not handed back, the run
+  first holds every OSSM in its ROM loader, so none sends pulses, then leaves
+  `locks\ossm-guard.request`. The watchdog starts a missing guard. The guard
+  checks that the motor is idle, healthy and between its measured stops, moves
+  it slowly to mid-rail, hands it back and clears its latch. It refuses, and the
+  run fails before any write, if those checks fail.
+- **Record.** The fault that was cleared stays in the guard's `events.jsonl` and
+  `latch.cleared.json`, in `results/rs485-guard.json`, and in the "Before
+  flashing" line of the PR comment.
+
+The firmware's own stop latch on a guarded bus is not stored, so the reset that
+follows flashing clears it.
 
 ## Installation and runner migration
 
@@ -205,7 +259,8 @@ guard waits for human review. The guard's before/after state is
    lock directories; grant read/execute access to the harness and fixture.
 5. Hardware jobs do not cancel in-progress flashing. One worker serializes jobs
    across repositories; OS locks additionally cover shared product families and
-   the legacy Lockbox `C:\lkbx-hil\fixture.lock`. Within a job both required
+   the legacy Lockbox `C:\lkbx-hil\fixture.lock`, and a pull-request run takes
+   them from a bench session (see above). Within a job both required
    variants flash and observe in parallel. A killed flash is a failure and needs
    explicit recovery; it never becomes a passing run on retry.
 6. Run real PRs against both persistent branches for each product, plus a

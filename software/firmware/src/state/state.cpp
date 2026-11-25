@@ -1,5 +1,6 @@
 #include "state.h"
 #include "services/radHil.h"
+#include "services/hardwareHealth.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,10 +15,12 @@ sml::sm<dtt_state_machine, sml::thread_safe<ESP32RecursiveMutex>,
         vTaskDelay(pdMS_TO_TICKS(500));
         // Pairing and session-detail pages wait for user input without running
         // training. Querying the ordinary state monitor also exercises its mutex.
-        radHilProgress(stateMachine->is("pairing"_s) ||
-                       stateMachine->is("play.details.session"_s) ||
-                       stateMachine->is("play.details.segment"_s) ||
-                       stateMachine->is("play.details.toy"_s));
+        const bool idleAndReady = stateMachine->is("pairing"_s) ||
+                                  stateMachine->is("play.details.session"_s) ||
+                                  stateMachine->is("play.details.segment"_s) ||
+                                  stateMachine->is("play.details.toy"_s);
+        radHilProgress(idleAndReady);
+        hardwareHealthHeartbeat(idleAndReady);
 #ifdef RAD_HIL_VARIANT
         // Emit only constant state names, never session or calibration values.
         // This makes startup failures diagnosable in quiet staging builds.

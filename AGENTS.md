@@ -72,13 +72,13 @@ LICENSES, and third-party notices. This is the canonical DTT repository;
 - PRs into `staging` or `main` that change the firmware directory, or the validation tooling (`software/scripts/hil/`, `pr-firmware.yml`, `hardware-run.yml`, `.github/scripts/hil_evidence.py`), build every hardware variant and run the exact staging bundle for the PR merge SHA on the shared Test Rig. Other PRs skip both; `Build validation` and `Hardware validation` then pass without work.
 - `PR target policy`, `Build validation` and `Hardware validation` are required on `staging` and `main`.
 - The rig records the product's camera for the whole run; `Hardware evidence` comments on the PR with each device's video and result, pass or fail. Video never decides a result.
+- When dashboard admission is enabled, PRs and merged firmware candidates share one priority queue. The rig finishes the active run before starting the next. Hold fixtures through `rig_lock`. A reviewed PR can still preempt a manual bench session. Its OSSM guard checks, including latch recovery before flashing, still apply.
 - Merging a firmware change into `main` allocates the next version and publishes a signed candidate through `publish_firmware.yml`; staging merges do not.
 - `pr-firmware.yml` calls the reviewed wrapper
   `.github/workflows/hardware-run.yml` pinned by commit SHA. The org runner
   group `rad-firmware-validation` allows only that exact ref, and
   `software/scripts/hil/reviewed-workflows.json` must match it.
-- The shared rig harness is installed from the LKBX repository's
-  `software/scripts/hil/`; keep DTT's `software/scripts/hil/` byte-identical to it.
+- Install the reviewed PR harness from the LKBX repository. Mirror the shared PR harness files in `software/scripts/hil/` across LKBX, DTT, OSSM and RADR. Install the dedicated release queue worker from LKBX with `install-release-queue.ps1`.
 - Changing `hardware-run.yml` needs a new pin in all three places.
 
 ## Documentation

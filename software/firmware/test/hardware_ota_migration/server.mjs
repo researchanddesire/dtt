@@ -26,15 +26,37 @@ const v2Build = required("--v2-build");
 const version = args.get("--version") ?? "2.0.76";
 const bridge = readFileSync(bridgePath);
 const v2 = readFileSync(v2Path);
+// Optional second legacy-layout application, offered in "legacy-update" mode
+// so a device can be moved into its other OTA slot before it migrates.
+const v1Path = args.get("--v1") ? resolve(args.get("--v1")) : null;
+const v1 = v1Path ? readFileSync(v1Path) : null;
+const v1Build = args.get("--v1-build") ?? "";
+// Bootloader-region hashes the bridge accepts. With the gate on, a device
+// that reports any other bootloader is not offered the bridge, as the
+// dashboard resolver does.
+const approvedBootloaders = new Set(
+  (args.get("--approved-bootloaders") ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
 const digest = (content) => createHash("sha256").update(content).digest("hex");
 const bridgeSha = digest(bridge);
 const v2Sha = digest(v2);
+const v1Sha = v1 ? digest(v1) : "";
 const bucketPrefix =
   "/storage/v1/object/public/dtt-firmware/releases/lab";
-const bridgeUrl = `${publicBase}${bucketPrefix}/bridge/firmware.bin`;
-const v2Url = `${publicBase}${bucketPrefix}/v2/firmware.bin`;
+// Artifacts may be served from another origin (for example HTTPS storage) by
+// passing their full URLs; the bytes must match the local files.
+const bridgeUrl =
+  args.get("--bridge-url") ??
+  `${publicBase}${bucketPrefix}/bridge/firmware.bin`;
+const v2Url =
+  args.get("--v2-url") ?? `${publicBase}${bucketPrefix}/v2/firmware.bin`;
+const v1Url = `${publicBase}${bucketPrefix}/v1/firmware.bin`;
 const events = [];
 let mode = "hold";
+let gate = false;
 
 const record = (event) => {
   events.push({ at: new Date().toISOString(), ...event });
@@ -121,21 +143,37 @@ const server = createServer(async (request, response) => {
       const body = await readJson(request);
       const allowed = new Set([
         "hold",
+        "legacy-update",
         "corrupt-migration",
         "corrupt-final",
         "pause-final",
         "migrate",
+        "unreachable",
       ]);
-      if (!allowed.has(body.mode)) {
+      if (body.mode !== undefined && !allowed.has(body.mode)) {
         return sendJson(response, 400, { error: "invalid mode" });
       }
-      mode = body.mode;
-      record({ type: "control", mode });
-      return sendJson(response, 200, { mode });
+      if (body.mode === "legacy-update" && !v1) {
+        return sendJson(response, 400, { error: "no --v1 image" });
+      }
+      if (body.gate !== undefined && typeof body.gate !== "boolean") {
+        return sendJson(response, 400, { error: "invalid gate" });
+      }
+      mode = body.mode ?? mode;
+      gate = body.gate ?? gate;
+      record({ type: "control", mode, gate });
+      return sendJson(response, 200, { mode, gate });
     }
 
     if (request.method === "GET" && url.pathname === "/__lab/events") {
-      return sendJson(response, 200, { mode, events });
+      return sendJson(response, 200, { mode, gate, events });
+    }
+
+    if (mode === "unreachable") {
+      // Looks like an outage to the device: the connection drops unanswered.
+      record({ type: "dropped", path: url.pathname });
+      request.socket.destroy();
+      return;
     }
 
     if (
@@ -147,6 +185,8 @@ const server = createServer(async (request, response) => {
         type: "check",
         mode,
         report: {
+          // Enough to tell devices apart without logging their identity.
+          deviceIdDigest: digest(String(report.deviceId ?? "")).slice(0, 12),
           currentBuild: report.currentBuild,
           currentVersion: report.currentVersion,
           flashSizeBytes: report.flashSizeBytes,
@@ -159,7 +199,41 @@ const server = createServer(async (request, response) => {
       if (mode === "hold") {
         return sendJson(response, 200, noUpdate(report));
       }
+      if (mode === "legacy-update") {
+        if (
+          report.partitionLayout !== "legacy-v1" ||
+          report.currentBuild === v1Build
+        ) {
+          return sendJson(response, 200, noUpdate(report, "already-current"));
+        }
+        return sendJson(response, 200, {
+          ...update({
+            report,
+            kind: "firmware",
+            buildSha: v1Build,
+            artifactUrl: v1Url,
+            artifactSha: v1Sha,
+            artifactSize: v1.length,
+            releaseId: "00000000-0000-4000-8000-000000000003",
+          }),
+          detectedHardwareVariant: "v2",
+          selectedHardwareVariant: "v1",
+        });
+      }
       if (report.partitionLayout === "legacy-v1") {
+        if (
+          gate &&
+          !approvedBootloaders.has(
+            String(report.bootloaderHash ?? "").toLowerCase(),
+          )
+        ) {
+          record({ type: "migration-withheld", reason: "bootloader" });
+          return sendJson(
+            response,
+            200,
+            noUpdate(report, "incompatible-device"),
+          );
+        }
         const migration = update({
           report,
           kind: "migration",
@@ -215,7 +289,9 @@ const server = createServer(async (request, response) => {
         ? bridge
         : url.pathname === `${bucketPrefix}/v2/firmware.bin`
           ? v2
-          : null;
+          : url.pathname === `${bucketPrefix}/v1/firmware.bin`
+            ? v1
+            : null;
     if (request.method === "GET" && artifact) {
       record({ type: "artifact", path: url.pathname, bytes: artifact.length });
       response.writeHead(200, {

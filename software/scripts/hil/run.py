@@ -17,32 +17,76 @@ import time
 import xml.etree.ElementTree as ET
 
 from bundle import validate, partition_rows
-from catalog import PRODUCTS, REPOSITORIES, policy, regions, physical_flash_allowed
-from monitor import Monitor, PREFIX
+from catalog import PRODUCTS, REPOSITORIES, installed_layout_allowed, policy, regions, physical_flash_allowed
+from monitor import HAT_PREFIX, Monitor, PREFIX, parse_hat_status
 from ossm_guard import GuardWatch
 from video import Recorder
 
 
+# A pull-request run waits this long for the rig watchdog to free a fixture.
+PRIORITY_WAIT_S = 300.0
+
+
+def _note(path, **data):
+    """Best-effort sidecar beside a fixture lock; the OS lock alone decides ownership."""
+    try:
+        path.write_text(json.dumps(data), encoding='utf-8')
+    except OSError:
+        pass
+
+
+def _forget(path):
+    try:
+        path.unlink()
+    except OSError:
+        pass
+
+
 @contextmanager
-def rig_lock(path):
+def rig_lock(path, *, priority=False, owner='manual', wait_s=0.0):
+    """Hold one physical fixture for the duration of the block.
+
+    Pull-request runs pass priority=True and take precedence. Finding the
+    fixture taken, such a run leaves <lock>.preempt; the rig watchdog then
+    terminates the holder named in <lock>.holder unless that holder is itself a
+    pull-request run, and the run waits up to wait_s for the lock. Everything
+    else fails at once, as before.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    holder = path.with_name(path.name + '.holder')
+    preempt = path.with_name(path.name + '.preempt')
     with path.open('a+b') as stream:
         stream.seek(0)
         if os.fstat(stream.fileno()).st_size == 0:
             stream.write(b'\0'); stream.flush()
-        stream.seek(0)
+        deadline = time.monotonic() + wait_s
+        announced = False
         try:
-            if os.name == 'nt':
-                import msvcrt
-                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            raise RuntimeError('another process owns this physical fixture') from error
+            while True:
+                stream.seek(0)
+                try:
+                    if os.name == 'nt':
+                        import msvcrt
+                        msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError as error:
+                    if not priority or time.monotonic() >= deadline:
+                        raise RuntimeError('another process owns this physical fixture') from error
+                    if not announced:
+                        _note(preempt, pid=os.getpid(), owner=owner, since=time.time())
+                        announced = True
+                    time.sleep(0.5)
+        finally:
+            if announced:
+                _forget(preempt)
+        _note(holder, pid=os.getpid(), owner=owner, priority=priority, since=time.time())
         try:
             yield
         finally:
+            _forget(holder)
             stream.seek(0)
             if os.name == 'nt':
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
@@ -79,26 +123,107 @@ def load_fixture(path, repository):
     return devices
 
 
+def usb_path(location):
+    """Physical hub/port path of a USB location, without the interface suffix.
+
+    Windows reports the same port as '1-4.3.4.2' or '1-4.3.4.2:x.0' depending on
+    how the device enumerated at boot. The path identifies the socket; the
+    suffix names an interface of whatever is plugged into it.
+    """
+    return location.split(':', 1)[0] if isinstance(location, str) else location
+
+
 def find_port(device):
     from serial.tools import list_ports
     matches = [p.device for p in list_ports.comports()
                if p.vid == device['usb_vid'] and p.pid == device['usb_pid']
                and (p.serial_number == device['usb_serial'] if device.get('usb_serial')
-                    else p.location == device['usb_location'])]
+                    else usb_path(p.location) is not None
+                    and usb_path(p.location) == usb_path(device['usb_location']))]
     if len(matches) != 1:
         raise RuntimeError('expected exactly one USB identity match')
     return matches[0]
 
 
-def esptool(port, spec, args, log, timeout=90):
+def esptool(port, spec, args, log, timeout=90, after='no_reset'):
     command = [sys.executable, '-m', 'esptool', '--chip', spec['chip'], '--port', port,
-               '--baud', '460800', '--after', 'no_reset', *args]
+               '--baud', '460800', '--after', after, *args]
     completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, encoding='utf-8', errors='replace', timeout=timeout)
     log.write(completed.stdout); log.flush()
     if completed.returncode:
         raise RuntimeError('esptool failed: '+args[0])
     return completed.stdout
+
+
+def answered_mac(output):
+    macs = re.findall(r'MAC:\s*([0-9a-fA-F:]{17})', output)
+    return macs[-1].replace(':', '').upper() if macs else None
+
+
+def park(device, spec, log):
+    """Hold an enrolled board in its ROM loader (no pulses, no radio) and check it answered."""
+    if answered_mac(esptool(find_port(device), spec, ['read_mac'], log)) != device['device_id']:
+        raise RuntimeError('the board on the enrolled port did not answer with its factory MAC')
+
+
+RADAR = 'researchanddesire/radr'
+
+
+def enrolled_radar(fixture):
+    """The rig's Radar fixture, or None where it is not enrolled."""
+    try:
+        return next(iter(load_fixture(fixture, RADAR).values()))
+    except (KeyError, ValueError, OSError, StopIteration):
+        return None
+
+
+class RadarHold:
+    """Keep the rig's Radar in its ROM loader for a whole OSSM run.
+
+    A running Radar connects to a booting OSSM over BLE and asks for a mode,
+    which starts a second homing that the RS-485 guard latches on. At the end
+    every OSSM is parked in its ROM loader first, so the Radar, reset into its
+    application afterwards, has nothing to connect to. If an OSSM cannot be
+    parked, the Radar stays held.
+    """
+    FAILURES = (RuntimeError, OSError, subprocess.SubprocessError)
+
+    def __init__(self, radar, ossm, repository, output, event):
+        self.radar, self.ossm, self.repository = radar, ossm, repository
+        self.log_path = output/'radar-hold.log'
+        self.event = event
+        self.attempted = self.done = False
+        self.record = dict(enrolled=True, held=False, ossm_parked=False, released=False, errors=[])
+
+    def hold(self):
+        self.attempted = True
+        with self.log_path.open('a', encoding='utf-8') as log:
+            park(self.radar, policy(RADAR, 'r8'), log)
+        self.record['held'] = True
+        self.event('radr', 'held in its ROM loader so it cannot connect to the OSSM')
+
+    def release(self):
+        """Idempotent and never raises, so the rest of the cleanup still runs."""
+        if self.done or not self.attempted:
+            return
+        self.done = True
+        with self.log_path.open('a', encoding='utf-8') as log:
+            try:
+                for variant, device in self.ossm.items():
+                    park(device, policy(self.repository, variant), log)
+                    self.event(variant, 'parked in its ROM loader before the Radar was released')
+                self.record['ossm_parked'] = True
+            except self.FAILURES as error:
+                self.record['errors'].append(f'OSSM not parked, so the Radar stays held: {error}')
+                self.event('radr', 'left in its ROM loader: the OSSM could not be parked')
+                return
+            try:
+                esptool(find_port(self.radar), policy(RADAR, 'r8'), ['read_mac'], log, after='hard_reset')
+                self.record['released'] = True
+                self.event('radr', 'released into its application')
+            except self.FAILURES as error:
+                self.record['errors'].append(f'Radar not reset into its application: {error}')
 
 
 def probe(port, spec, device, log):
@@ -127,7 +252,7 @@ def probe(port, spec, device, log):
         esptool(port, spec, ['read_flash', '0x8000', '0x1000', str(path)], log)
         # Never overwrite an existing layout implicitly. Enrollment/migration
         # is a separate reviewed operation that preserves persistent storage.
-        if partition_rows(path.read_bytes()) != spec['partitions']:
+        if not installed_layout_allowed(spec, partition_rows(path.read_bytes()), device.get('allow_larger_flash', False)):
             raise RuntimeError('installed partition layout differs; enrollment/migration required')
 
 
@@ -148,6 +273,51 @@ def flash(port, spec, device, bundle, log):
         raise RuntimeError('verified flash failed; no retry is permitted')
 
 
+# Ordinary production health lines (always compiled in) and the staging-only
+# RAD_HEALTH line. Only these fields, with these shapes, are kept in logs.
+PRODUCTION_PREFIXES = ('LKBX_HEALTH ', 'OSSM_HEALTH ', 'DTT_HEALTH ', 'RADR_HEALTH ')
+TRACKS = 'staging|main'
+HEALTH_FIELDS = {
+    PREFIX: (
+        {'event': 'boot|heartbeat', 'product': 'lockbox|dtt|ossm|radr',
+         'variant': 'r2|r8|v1|v2|4mb|16mb', 'build_sha': '[0-9a-f]{40}',
+         'image_sha256': '[0-9a-f]{64}', 'device_id': '[0-9A-F]{12}', 'track': TRACKS},
+        {'boot_id', 'uptime_ms', 'schema', 'flash_bytes', 'app_age_ms', 'network_age_ms', 'disconnects'},
+        {'ready', 'wifi', 'bench_wifi', 'internet'}),
+    'production': (
+        {'event': 'boot|wifi_connected|mqtt_connected|cloud_ok|heartbeat',
+         'variant': 'r2|r8|v1|v2|4mb|16mb', 'build_sha': '[0-9a-f]{40}',
+         'image_sha256': '[0-9a-f]{64}', 'device_id': '[0-9A-F]{12}', 'track': TRACKS,
+         'hat_mode': 'auto|off',
+         # A broker URL without credentials, as the firmware configures it.
+         'broker': r'mqtts?://[a-z0-9.-]+(?::[0-9]{1,5})?'},
+        {'boot_id', 'uptime_ms', 'reset_reason', 'menu_age_ms', 'ram_free', 'ram_largest'},
+        {'main_menu', 'hat', 'homed'}),
+}
+
+
+def _safe_health(line, prefix, fields):
+    patterns, numeric, boolean = fields
+    try:
+        record = json.loads(line.split(prefix, 1)[1])
+        def safe_value(key, value):
+            if key in patterns:
+                return isinstance(value, str) and re.fullmatch(patterns[key], value)
+            if key in numeric:
+                return type(value) is int and 0 <= value < 2**64
+            if key in boolean:
+                return type(value) is bool
+            if key == 'ip' and isinstance(value, str):
+                ipaddress.IPv4Address(value)
+                return True
+            return False
+        if isinstance(record, dict) and all(safe_value(k, v) for k, v in record.items()):
+            return prefix+json.dumps(record, separators=(',', ':'))
+    except ValueError:
+        pass
+    return '[malformed or unexpected health record redacted]'
+
+
 def safe_line(line):
     # Staging Trainer diagnostics contain only fixed application state names.
     states = {'init', 'init.idle', 'init.preflight', 'pairing', 'play',
@@ -160,34 +330,28 @@ def safe_line(line):
               'provisioning.wifiSettings', 'update', 'wifiSettings'}
     if line.startswith('RAD_STATE ') and line[10:] in states:
         return line
-    # Only the structured, credential-free health protocol is retained verbatim.
+    if line.startswith(HAT_PREFIX):
+        hat = parse_hat_status(line)
+        try:
+            data = json.loads(line[len(HAT_PREFIX):])
+        except ValueError:
+            data = None
+        mode = data.get('mode') if isinstance(data, dict) else None
+        if hat is not None:
+            if mode in ('auto', 'off'):
+                hat['mode'] = mode
+            return HAT_PREFIX+json.dumps(hat, separators=(',', ':'))
+        # The OSSM's reply to `hat auto` / `hat off`.
+        if isinstance(data, dict) and mode in ('auto', 'off') and data == {'mode': mode, 'applies': 'next_boot'}:
+            return HAT_PREFIX+json.dumps(data, separators=(',', ':'))
+        return '[malformed or unexpected HAT record redacted]'
+    # Retain the structured, credential-free health protocols.
     # Normal firmware logs may contain request bodies, Wi-Fi keys or pairing codes.
     if PREFIX in line:
-        try:
-            record = json.loads(line.split(PREFIX, 1)[1])
-            patterns = {'event': 'boot|heartbeat', 'product': 'lockbox|dtt|ossm|radr',
-                        'variant': 'r2|r8|v1|v2|4mb|16mb', 'build_sha': '[0-9a-f]{40}',
-                        'image_sha256': '[0-9a-f]{64}', 'device_id': '[0-9A-F]{12}',
-                        'track': 'staging'}
-            numeric = {'boot_id', 'uptime_ms', 'schema', 'flash_bytes', 'app_age_ms',
-                       'network_age_ms', 'disconnects'}
-            boolean = {'ready', 'wifi', 'bench_wifi', 'internet'}
-            def safe_value(key, value):
-                if key in patterns:
-                    return isinstance(value, str) and re.fullmatch(patterns[key], value)
-                if key in numeric:
-                    return type(value) is int and 0 <= value < 2**64
-                if key in boolean:
-                    return type(value) is bool
-                if key == 'ip' and isinstance(value, str):
-                    ipaddress.IPv4Address(value)
-                    return True
-                return False
-            if isinstance(record, dict) and all(safe_value(k, v) for k, v in record.items()):
-                return PREFIX+json.dumps(record, separators=(',', ':'))
-        except ValueError:
-            pass
-        return '[malformed or unexpected health record redacted]'
+        return _safe_health(line, PREFIX, HEALTH_FIELDS[PREFIX])
+    for prefix in PRODUCTION_PREFIXES:
+        if prefix in line:
+            return _safe_health(line, prefix, HEALTH_FIELDS['production'])
     categories = ['ESP-ROM:', 'rst:0x', 'Guru Meditation', 'panic', 'watchdog', 'Brownout', 'Rebooting']
     hits = [term for term in categories if term.lower() in line.lower()]
     return '[device log redacted'+(': '+', '.join(hits) if hits else '')+']'
@@ -196,17 +360,23 @@ def safe_line(line):
 def observe(device, port_name, monitor, log, guard=None):
     import serial
     from esptool.reset import HardReset
-    port = serial.Serial(port=None, baudrate=115200, timeout=.25)
+    port = serial.Serial(port=None, baudrate=115200, timeout=.25, write_timeout=1)
     port.dtr = False; port.rts = False; port.port = port_name
     port.open()
     try:
         port.reset_input_buffer()
         HardReset(port, uses_usb=device['usb_vid'] == 0x303a and device['usb_pid'] == 0x1001)()
         pending = bytearray()
+        next_hat_poll = 0.0
         while not monitor.passed:
-            monitor.tick(time.monotonic())
+            now = time.monotonic()
+            monitor.tick(now)
             if guard:
                 guard.check()
+            if (monitor.expected['product'] == 'ossm' and monitor.boot_id is not None
+                    and now >= next_hat_poll):
+                port.write(b'\nhat\n')
+                next_hat_poll = now + 5
             pending.extend(port.read(port.in_waiting or 1))
             if len(pending) > 65536:
                 raise RuntimeError('serial line exceeded bounded framing')
@@ -237,6 +407,11 @@ def test_device(variant, device, manifest, bundle, output, recorder=None, guard=
                         build_sha=manifest['build_sha'], track='staging',
                         image_sha256=manifest['variants'][variant]['image_sha256'])
         monitor = Monitor(expected, time.monotonic())
+        if guard:
+            # The OSSM is still in its loader after flashing. Its boot must be the
+            # only homing in the guard's session, so wait for an earlier one to end.
+            guard.wait_session_clear()
+            event(variant, 'guard homing session clear')
         event(variant, 'reset and observe')
         with (output/(variant+'-serial.log')).open('w', encoding='utf-8') as log:
             observe(device, port, monitor, log, guard)
@@ -261,15 +436,26 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     results = []
     recorder = guard = None
+    radar_record = None
     try:
         manifest = validate(args.bundle, args.repository, args.build_sha, args.run_id, args.run_attempt)
         devices = load_fixture(args.fixture, args.repository)
         product = manifest['product']
         with ExitStack() as stack:
-            stack.enter_context(rig_lock(args.lock_directory/(product+'.lock')))
+            # Pull-request runs take the fixture from any other holder.
+            owner = f'{args.repository} run {args.run_id}-{args.run_attempt}'
+            claim = dict(priority=True, owner=owner, wait_s=PRIORITY_WAIT_S)
+            stack.enter_context(rig_lock(args.lock_directory/(product+'.lock'), **claim))
             # Cooperate with the existing Lockbox runner during migration.
             if product == 'lockbox' and os.name == 'nt':
-                stack.enter_context(rig_lock(Path('C:/lkbx-hil/fixture.lock')))
+                stack.enter_context(rig_lock(Path('C:/lkbx-hil/fixture.lock'), **claim))
+            radar = enrolled_radar(args.fixture) if product == 'ossm' else None
+            if product == 'ossm' and radar is None:
+                radar_record = dict(enrolled=False)
+                print('radar: not enrolled on this rig, so it is not held during the OSSM run', flush=True)
+            elif radar is not None:
+                # The same precedence as the product lock: a PR run takes it from a manual holder.
+                stack.enter_context(rig_lock(args.lock_directory/'radr.lock', **claim))
             # Resolve every target before any board is touched.
             ports = [find_port(d) for d in devices.values()]
             if len(set(ports)) != len(ports):
@@ -277,10 +463,28 @@ def main():
             # Evidence video never decides a result; the camera map is host-only.
             recorder = Recorder(args.fixture.with_name('cameras.json'), product, list(devices), args.output)
             recorder.start()
+            if radar is not None:
+                # Before any OSSM is flashed or reset; released after every OSSM is parked.
+                radar_hold = RadarHold(radar, devices, manifest['repository'], args.output, recorder.event)
+                radar_record = radar_hold.record
+                stack.callback(radar_hold.release)
+                try:
+                    radar_hold.hold()
+                except RadarHold.FAILURES as error:
+                    radar_record['errors'].append(str(error))
+                    raise RuntimeError(f'the rig Radar could not be held in its ROM loader ({error}); '
+                                       'refusing to run the OSSM beside it') from error
             if product == 'ossm':
                 # No OSSM image is written unless the RS-485 guard protects the motor.
-                guard = GuardWatch(args.fixture.with_name('rs485-guard')/'status.json', args.output)
-                guard.require()
+                guard = GuardWatch(args.fixture.with_name('rs485-guard')/'status.json', args.output,
+                                   args.lock_directory/'ossm-guard.request', owner)
+
+                def hold_in_loader():
+                    # A guard recovery hands the motor back: no OSSM may be sending pulses.
+                    for variant, device in devices.items():
+                        with (args.output/(variant+'-hold.log')).open('w', encoding='utf-8') as log:
+                            esptool(find_port(device), policy(manifest['repository'], variant), ['read_mac'], log)
+                guard.require(quiet=hold_in_loader)
             with ThreadPoolExecutor(max_workers=len(devices)) as pool:
                 futures = [pool.submit(test_device, v, d, manifest, args.bundle, args.output, recorder, guard)
                            for v, d in devices.items()]
@@ -292,9 +496,13 @@ def main():
             guard.close()
         if recorder:
             recorder.stop()
+    if radar_record is not None:
+        print('radar: ' + json.dumps(radar_record), flush=True)
     report = dict(schema=2, repository=args.repository, build_sha=args.build_sha,
                   run_id=args.run_id, run_attempt=args.run_attempt,
                   completed_at=datetime.now(timezone.utc).isoformat(), devices=results)
+    if radar_record is not None:
+        report['radar'] = radar_record
     (args.output/'results.json').write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')
     failures = sum(r['status'] != 'passed' for r in results)
     suite = ET.Element('testsuite', name='Hardware validation', tests=str(len(results)), failures=str(failures))
