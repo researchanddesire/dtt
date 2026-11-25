@@ -104,8 +104,6 @@ const radble::Resource RESOURCES[] = {
      "{\"diagnosticOnly\":true}"},
     {"session", "session.current", "setting", "object", "", R, ""},
     {"hands_free", "session.handsFree", "setting", "bool", "", RW, ""},
-    {"vibrator_follows_pace", "session.vibratorFollowsPace", "setting", "bool",
-     "", RW, ""},
     {"session_name", "session.name", "setting", "string", "", R, ""},
     {"session_segment", "session.segmentIndex", "setting", "int", "index", R,
      ""},
@@ -577,8 +575,6 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             document["value"] = session.name;
         else if (path == "session.segmentIndex")
             document["value"] = session.segmentIdx;
-        else if (path == "session.vibratorFollowsPace")
-            document["value"] = vibratorFollowsPace.load();
         else if (path == "session.calibrationMin")
             document["value"] = session.calibratedMinPosition;
         else if (path == "session.calibrationMax")
@@ -678,21 +674,6 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
         Serial.printf("[RAD BLE][DTT] handsFree=%d\n", session.handsFreeMode);
         return radble::Result::success(
             session.handsFreeMode ? "{\"value\":true}" : "{\"value\":false}");
-#else
-        return radble::Result::failure("unsupported", "No session in provisioning firmware");
-#endif
-    }
-
-    if (operation == "setting.write" && path == "session.vibratorFollowsPace") {
-#ifndef PROVISION
-        if (!args["value"].is<bool>())
-            return radble::Result::failure("invalid_value",
-                                           "A boolean value is required");
-        vibratorFollowsPace = args["value"].as<bool>();
-        Serial.printf("[RAD BLE][DTT] vibratorFollowsPace=%d\n",
-                      vibratorFollowsPace.load());
-        return radble::Result::success(vibratorFollowsPace ? "{\"value\":true}"
-                                                           : "{\"value\":false}");
 #else
         return radble::Result::failure("unsupported", "No session in provisioning firmware");
 #endif
@@ -1048,11 +1029,6 @@ class ServerCallbacks final : public NimBLEServerCallbacks {
     void onDisconnect(NimBLEServer* server, NimBLEConnInfo& connection,
                       int) override {
         radBleServer.onDisconnect(connection.getConnHandle());
-#ifndef PROVISION
-        // The client that asked for it is gone: back to the trainer's own
-        // vibrator behaviour.
-        vibratorFollowsPace = false;
-#endif
         server->startAdvertising();
     }
 };

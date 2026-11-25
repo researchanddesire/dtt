@@ -7,7 +7,6 @@
 
 // Initialize the global vibrator instance
 Vibrator vibratorInstance;
-std::atomic<bool> vibratorFollowsPace{false};
 
 // Service initialization function
 void initVibratorService() {
@@ -22,29 +21,12 @@ void Vibrator::off() {
 
 void Vibrator::tick(const SegmentBase& segment) {
     unsigned long currentTime = millis();
-    const unsigned long sinceLastTick =
-        currentTime - vibratorInstance.previousTickTime;
 
     // Record the previous tick timestamp
     vibratorInstance.previousTickTime = currentTime;
 
-    // Freeform, when a Bluetooth client asks for it: power follows the pace.
-    // At or above the target RPM it is 100%; below it, it is the share of the
-    // target reached (half the target pace gives 50%). The measured RPM steps
-    // once per stroke, so glide towards it rather than jumping.
-    if (vibratorFollowsPace && segment.type == TrainingType::FREEFORM &&
-        segment.params.trainingSpeed > 0.0f) {
-        const double share = constrain(
-            segment.currentRpm / segment.params.trainingSpeed, 0.0f, 1.0f);
-        const double target = 100.0 * share;
-        // Roughly a 300 ms glide, whatever the loop rate.
-        const double step = constrain(sinceLastTick / 300.0, 0.0, 1.0);
-        vibratorInstance.currentPercentagePower +=
-            (target - vibratorInstance.currentPercentagePower) * step;
-        vibratorInstance.targetPercentagePower = target;
-        vibratorInstance.isFading = false;
-    } else if (segment.positionState == TrainingPosition::IN_WINDOW) {
-        // Other segments: 100% power when IN_WINDOW, gradual fade when out
+    // Simple logic: 100% power when IN_WINDOW, gradual fade when out of window
+    if (segment.positionState == TrainingPosition::IN_WINDOW) {
         // Immediately set target to 100% when in window
         vibratorInstance.targetPercentagePower = 100.0;
         vibratorInstance.currentPercentagePower = 100.0;
