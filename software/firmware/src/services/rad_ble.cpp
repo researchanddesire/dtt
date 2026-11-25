@@ -27,7 +27,9 @@
 #ifndef PROVISION
 #include <LiveAdjust.h>
 #include <TrainingFeed.h>
+#include <esp_heap_caps.h>
 
+#include "pages/play/page.h"
 #include "services/vibrator.h"
 #endif
 
@@ -98,6 +100,8 @@ const radble::Resource RESOURCES[] = {
     // compact live feed, so it streams without changing the motion payload.
     {"live", "encoder.live", "encoder", "object", "", RS,
      "{\"maxBytes\":160}"},
+    {"memory", "device.memory", "setting", "object", "", R,
+     "{\"diagnosticOnly\":true}"},
     {"session", "session.current", "setting", "object", "", R, ""},
     {"hands_free", "session.handsFree", "setting", "bool", "", RW, ""},
     {"vibrator_follows_pace", "session.vibratorFollowsPace", "setting", "bool",
@@ -585,6 +589,25 @@ radble::Result handleCommand(JsonObjectConst request, void*) {
             return sessionDefinition(args["index"] | session.segmentIdx);
         else if (path == "encoder.live")
             return radble::Result::success(liveFeedJson());
+        else if (path == "device.memory") {
+            // Internal RAM, where task stacks come from. A segment start needs
+            // one block as large as the draw task's stack.
+            constexpr uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+            document["uptimeS"] = millis() / 1000;
+            document["freeInternal"] = heap_caps_get_free_size(caps);
+            document["largestInternal"] =
+                heap_caps_get_largest_free_block(caps);
+            document["minFreeInternal"] = heap_caps_get_minimum_free_size(caps);
+            JsonObject failed = document["failedStarts"].to<JsonObject>();
+            failed["count"] = trainingStartFailure.count;
+            if (trainingStartFailure.count > 0) {
+                failed["atS"] = trainingStartFailure.atMs / 1000;
+                failed["step"] = trainingStartFailure.step;
+                failed["freeInternal"] = trainingStartFailure.freeInternal;
+                failed["largestInternal"] =
+                    trainingStartFailure.largestInternal;
+            }
+        }
 #endif
         else if (path == "device.trainerId")
             document["value"] = trainerId;

@@ -127,6 +127,14 @@ int main() {
     assert(!machine.process_event(end_segment{}));
     machine.process_event(begin_case{});
     activate(workerGeneration, session.id);
+    // Out of memory keeps the session: back to its segment, not recovery.
+    const auto starved = workerGeneration;
+    assert(machine.process_event(training_worker_failed{starved, true}));
+    assert(machine.is("play.details.segment"_s) && !trainingFlag(machine));
+    assert(session.id == "session-b");
+    assert(!machine.process_event(training_worker_failed{starved, true}));
+    machine.process_event(begin_case{});
+    activate(workerGeneration, session.id);
     assert(machine.process_event(training_worker_failed{workerGeneration}));
     assert(machine.is("play.details.session"_s) && !trainingFlag(machine) && !currentSegment);
     assert(resultSnapshots == 1); // failure/cancellation never uploads a fabricated completion

@@ -29,7 +29,12 @@ struct restart_training {};
 // Ends the running segment early, without grading it or recalibrating.
 struct end_segment {};
 struct training_worker_finished { std::uint32_t generation; };
-struct training_worker_failed { std::uint32_t generation; };
+// outOfMemory: the run could not get memory or a task for itself. The
+// session is fine, so it is kept; any other failure discards it.
+struct training_worker_failed {
+    std::uint32_t generation;
+    bool outOfMemory = false;
+};
 struct request_pairing {};
 struct force_update {};
 
