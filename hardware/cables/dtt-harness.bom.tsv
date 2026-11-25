@@ -1,0 +1,11 @@
+Id	Description	Qty	Unit	Designators	P/N	Manufacturer
+1	Connector, DuPont 2.54 mm 1x4, black, female, 4 pins	1		X_OLED	DuPont 1x4P 2.54 (generic)	
+2	Connector, JST ZH 1.5 mm housing, female, 3 pins	1		X_SNS	ZHR-3	JST (or equiv.)
+3	Connector, JST ZH 1.5 mm housing, female, 7 pins	1		J2	ZHR-7	JST (or equiv.)
+4	Crimp terminal, DuPont 2.54 female, 22-28 AWG	4		X_OLED	Generic DuPont female	
+5	Crimp terminal, ZH, 26-28 AWG	10		J2, X_SNS	SZH-002T-P0.5	JST (or equiv.)
+6	Wire, UL1571 28 AWG, 28 AWG, BK	100	mm	W1, W2		
+7	Wire, UL1571 28 AWG, 28 AWG, BU	50	mm	W2		
+8	Wire, UL1571 28 AWG, 28 AWG, GN	50	mm	W1		
+9	Wire, UL1571 28 AWG, 28 AWG, RD	100	mm	W1, W2		
+10	Wire, UL1571 28 AWG, 28 AWG, YE	50	mm	W1		
