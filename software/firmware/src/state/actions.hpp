@@ -267,9 +267,11 @@ constexpr auto clearSegmentIndex = []() {
 };
 
 // The tip reading waits for the deep reading to pass the range check, so a
-// failed recalibration keeps the previous calibration.
-static float pendingTipCm = 0.0f;
-static CalibrationProblem calibrationProblem = CalibrationProblem::None;
+// failed recalibration keeps the previous calibration. One shared instance:
+// the state machine runs these actions from more than one source file, and a
+// per-file copy left the problem page reading a value nothing had set.
+inline float pendingTipCm = 0.0f;
+inline CalibrationProblem calibrationProblem = CalibrationProblem::None;
 
 constexpr auto captureMinPosition = []() {
     TrainingGuard guard(trainingMutex);
@@ -282,7 +284,7 @@ constexpr auto captureMaxPosition = []() {
         const float deepCm = getDistance(100);
         calibrationProblem = checkCalibration(pendingTipCm, deepCm);
         if (calibrationProblem == CalibrationProblem::None) {
-            session.calibratedMinPosition = pendingTipCm;
+            session.calibratedMinPosition = calibrationTipCm(pendingTipCm);
             session.calibratedMaxPosition = deepCm;
 
             for (auto &segment : session.segments) {
@@ -311,7 +313,7 @@ constexpr auto drawCalibrationProblem = []() {
     String content;
     switch (calibrationProblem) {
         case CalibrationProblem::OutOfRange:
-            content = "Toy not detected. Check it faces the sensor and try again";
+            content = "Toy not detected. Point it at the sensor";
             break;
         case CalibrationProblem::Reversed:
             content = "Tip first, then as deep as you can. Try again";
