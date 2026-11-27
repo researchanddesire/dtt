@@ -1,0 +1,27 @@
+name: Documentation
+description: User guides (simple-docs), the assembly guide (assembly-docs) or developer docs (developer-docs / dev-docs)
+title: "[Docs] "
+labels: ["documentation"]
+body:
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation type
+      options:
+        - User guide → simple-docs
+        - Assembly guide or BOM → dtt/assembly-docs/
+        - Developer docs → dtt/developer-docs/
+        - Cross-product → dev-docs repo
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      placeholder: Link or file path, if known
+  - type: textarea
+    id: description
+    attributes:
+      label: What should change?
+    validations:
+      required: true
